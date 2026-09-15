@@ -25,6 +25,14 @@ export interface CalculatorFormData {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  country?: string;
+  city?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  vin?: string;
+  lotNumber?: string;
+  listingUrl?: string;
   notes?: string;
   idempotencyKey?: string;
 }
