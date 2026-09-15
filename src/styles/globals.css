@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-navy-primary: #0a192f;
+    --brand-navy-dark: #071224;
+    --brand-orange-primary: #f97316;
+    --brand-whatsapp-primary: #25d366;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  [dir='rtl'] {
+    font-family:
+      'Tajawal',
+      'Cairo',
+      system-ui,
+      -apple-system,
+      sans-serif;
+  }
+
+  [dir='ltr'] {
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      sans-serif;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Touch-friendly utility */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
