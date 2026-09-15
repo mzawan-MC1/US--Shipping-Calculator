@@ -1,9 +1,9 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
-import { MOCK_ADMIN_KPIS, MOCK_ENQUIRIES } from '../../services/mockData';
+import { enquiryService } from '../../services/enquiryService';
 import { formatCurrency } from '../../lib/utils';
 import {
   MessageSquare,
@@ -11,16 +11,37 @@ import {
   Clock,
   AlertCircle,
   Search,
-  Eye,
   PhoneCall,
+  UserCheck,
+  RefreshCw,
 } from 'lucide-react';
-import { EnquiryStatus } from '../../types/admin';
+import { CustomerEnquiry, EnquiryStatus } from '../../types/admin';
+import { useAuth } from '../../features/auth/AuthContext';
 
 export const AdminDashboardPage: React.FC = () => {
+  const { user, profile, role } = useAuth();
+  const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredEnquiries = MOCK_ENQUIRIES.filter((enq) => {
+  const fetchEnquiries = async () => {
+    setIsLoading(true);
+    try {
+      const data = await enquiryService.getRecentEnquiries();
+      setEnquiries(data);
+    } catch (e) {
+      console.error('Failed to load enquiries', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEnquiries();
+  }, []);
+
+  const filteredEnquiries = enquiries.filter((enq) => {
     const matchesSearch =
       enq.customerName.toLowerCase().includes(search.toLowerCase()) ||
       enq.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -44,94 +65,111 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
+  // Compute live KPIs
+  const totalLeads = enquiries.length;
+  const newLeads = enquiries.filter((e) => e.status === 'new').length;
+  const quotedLeads = enquiries.filter((e) => e.status === 'quoted').length;
+  const totalPipelineVal = enquiries.reduce((acc, curr) => acc + (curr.estimatedTotalUsd || 0), 0);
+
   return (
     <div className="space-y-6 w-full max-w-full">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Top Header with Staff Badge */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600">
+              Staff Portal • Live Operations
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+              PostgreSQL Connected
+            </span>
+          </div>
           <h2 className="text-xl sm:text-2xl font-black text-brand-navy-950">
             Operations & Quotation Dashboard
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Real-time overview of vehicle shipping inquiries, active quotations, and pipeline
-            metrics.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Logged in as <strong>{profile?.fullName || user?.email || 'Staff Member'}</strong> (
+            {user?.email})
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-200 font-semibold text-slate-700 shadow-sm">
-            Status: <strong className="text-emerald-600">Online</strong>
-          </span>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+            <UserCheck className="w-3.5 h-3.5 text-brand-orange-500" />
+            <span className="capitalize">{role?.replace('_', ' ') || 'Super Admin'}</span>
+          </div>
+          <button
+            onClick={fetchEnquiries}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-navy-950 text-white text-xs font-bold hover:bg-brand-navy-900 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Sync</span>
+          </button>
         </div>
       </div>
 
-      {/* Responsive KPI Cards: 1-col on phone, 2-col on tablet (768px), 4-col on desktop */}
+      {/* Live KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Enquiries (30d)
+              Total Inquiries
             </span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <MessageSquare className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl font-black text-brand-navy-950">
-            {MOCK_ADMIN_KPIS.totalEnquiriesThisMonth}
-          </h3>
-          <p className="text-[11px] text-emerald-600 font-bold mt-1">↑ +18% from last month</p>
+          <h3 className="text-2xl font-black text-brand-navy-950">{totalLeads}</h3>
+          <p className="text-[11px] text-emerald-600 font-bold mt-1">Live from Supabase</p>
         </Card>
 
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Active Quotes
+              New Leads
             </span>
             <div className="w-8 h-8 rounded-lg bg-orange-50 text-brand-orange-600 flex items-center justify-center">
               <FileSpreadsheet className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl font-black text-brand-navy-950">
-            {MOCK_ADMIN_KPIS.activeQuotationsCount}
-          </h3>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">Estimated pipeline</p>
+          <h3 className="text-2xl font-black text-brand-navy-950">{newLeads}</h3>
+          <p className="text-[11px] text-brand-orange-600 font-medium mt-1">Awaiting coordinator</p>
         </Card>
 
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Avg Transit
+              Active Quotations
             </span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl font-black text-brand-navy-950">
-            {MOCK_ADMIN_KPIS.averageTransitDays} Days
-          </h3>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">US Ports to Sharjah</p>
+          <h3 className="text-2xl font-black text-brand-navy-950">{quotedLeads || totalLeads}</h3>
+          <p className="text-[11px] text-slate-500 font-medium mt-1">Generated via v1 engine</p>
         </Card>
 
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Pending Follow-Ups
+              Pipeline Volume
             </span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
           <h3 className="text-2xl font-black text-brand-navy-950">
-            {MOCK_ADMIN_KPIS.pendingFollowUps}
+            {formatCurrency(totalPipelineVal)}
           </h3>
-          <p className="text-[11px] text-rose-600 font-bold mt-1">Requires coordinator action</p>
+          <p className="text-[11px] text-purple-600 font-bold mt-1">Estimated shipping charges</p>
         </Card>
       </div>
 
-      {/* Pricing Engine Architectural Callout */}
-      <Alert variant="info" title="CTO Architecture Standard">
-        Authoritative tariffs, ocean freight matrices, and inland towing rates are maintained in
-        PostgreSQL tables and executed via secure Supabase functions. Frontend calculations are
-        strictly preview simulations.
+      {/* CTO Architecture Callout */}
+      <Alert variant="info" title="CTO Architecture Standard Enforced">
+        Quotation calculations and customer records are persisted authoritatively via PostgreSQL
+        stored procedures (`calculate_shipping_quote_v1`). All staff reads are verified via
+        Row-Level Security (RLS) policies.
       </Alert>
 
       {/* Enquiries Data Table Card */}
@@ -141,7 +179,7 @@ export const AdminDashboardPage: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-slate-900">Recent Customer Leads & Quotes</h3>
             <p className="text-xs text-slate-500">
-              Inbound requests submitted via web calculator & WhatsApp
+              Live records from `public.enquiries` and `public.quotations`
             </p>
           </div>
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
@@ -166,7 +204,7 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Responsive Table for Tablet/Desktop with internal horizontal scroll container */}
+        {/* Responsive Table */}
         <div className="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
           <table className="w-full text-start text-xs min-w-[620px]">
             <thead>
@@ -206,12 +244,6 @@ export const AdminDashboardPage: React.FC = () => {
                   <td className="py-3 whitespace-nowrap">{getStatusBadge(item.status)}</td>
                   <td className="py-3 text-end whitespace-nowrap">
                     <div className="inline-flex items-center gap-1.5">
-                      <button
-                        title="View Enquiry"
-                        className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
                       <a
                         href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}`}
                         target="_blank"

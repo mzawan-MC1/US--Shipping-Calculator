@@ -1,4 +1,4 @@
-﻿# Fakher Alam Used Cars Shipping — System Foundation
+# Fakher Alam Used Cars Shipping — System Foundation
 
 > **Mobile-First Shipping Quotation & Lead Management Platform**  
 > Direct USA vehicle auction & port logistics to the United Arab Emirates (Sharjah / Dubai).  

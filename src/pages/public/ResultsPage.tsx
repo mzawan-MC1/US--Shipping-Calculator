@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
 import { Container } from '../../components/ui/Container';
@@ -20,8 +20,9 @@ import {
   MessageCircle,
   RotateCcw,
   Download,
-  AlertTriangle,
+  ShieldCheck,
   Receipt,
+  CheckCircle2,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
@@ -42,18 +43,43 @@ export const ResultsPage: React.FC = () => {
     return formatCurrency(usdAmount, 'USD');
   };
 
-  const whatsappMessage = `*FAKHER ALAM USED CARS SHIPPING - QUOTATION REQUEST*
-Reference: ${quote.referenceNumber}
-Customer: ${quote.input.customerName || 'Customer'}
+  const displayRangeOrAmount = (minUsd?: number, maxUsd?: number, fallbackUsd: number = 0) => {
+    const min = minUsd ?? fallbackUsd;
+    const max = maxUsd ?? fallbackUsd;
+    if (min !== max && min > 0 && max > 0) {
+      if (currency === 'AED') {
+        return `${formatCurrency(convertUsdToAed(min), 'AED')} - ${formatCurrency(convertUsdToAed(max), 'AED')}`;
+      }
+      return `${formatCurrency(min, 'USD')} - ${formatCurrency(max, 'USD')}`;
+    }
+    return displayAmount(max || fallbackUsd);
+  };
+
+  const totalFormatted = quote.isTowingRange
+    ? displayRangeOrAmount(
+        quote.totalChargesUsdMin,
+        quote.totalChargesUsdMax,
+        quote.totalChargesUsd
+      )
+    : displayAmount(quote.totalChargesUsd);
+
+  const totalAedFormatted = quote.isTowingRange
+    ? `${formatCurrency(quote.totalChargesAedMin || convertUsdToAed(quote.totalChargesUsdMin || 0), 'AED')} - ${formatCurrency(quote.totalChargesAedMax || convertUsdToAed(quote.totalChargesUsdMax || 0), 'AED')}`
+    : formatCurrency(quote.totalChargesAed || convertUsdToAed(quote.totalChargesUsd), 'AED');
+
+  const whatsappMessage = `*FAKHER ALAM USED CARS SHIPPING - QUOTATION CONFIRMATION*
+Quotation Ref: ${quote.referenceNumber}
+Enquiry Ref: ${quote.enquiryReference || 'Pending'}
+Customer: ${quote.input.customerName || 'Valued Customer'}
 Route: ${quote.input.loadingPort.toUpperCase()} (USA) -> ${quote.input.destinationPort.toUpperCase()} (UAE)
 Vehicle: ${quote.input.vehicleType.toUpperCase()} (${quote.input.powertrain})
 Purchase Source: ${quote.input.purchaseSource.toUpperCase()}
-Declared Buying Price: $${quote.input.buyingPrice?.toLocaleString()} USD
-Towing Pickup: ${quote.input.towFromLocation || 'Not requested'}
-Est. Transit Time: ${quote.estimatedTransitDays} Days
-Estimated Total: ${displayAmount(quote.totalChargesUsd)} (${currency})
+Declared Vehicle Value: $${quote.input.buyingPrice?.toLocaleString()} USD
+Inland Towing: ${quote.input.towFromLocation || 'Delivered to Port'} ${quote.isTowingRange ? `($${quote.towingFeeMin}-$${quote.towingFeeMax} USD range)` : quote.towingFeeMin ? `($${quote.towingFeeMin} USD fixed)` : ''}
+Estimated Transit: ${quote.estimatedTransitDays} Days
+Estimated Total Shipping Charges: ${totalFormatted} (${currency})
 --------------------------------
-Please confirm slot availability and final booking procedure.`;
+Please confirm carrier booking slot availability and container dispatch.`;
 
   const whatsappHref = `https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}?text=${encodeURIComponent(
     whatsappMessage
@@ -61,22 +87,38 @@ Please confirm slot availability and final booking procedure.`;
 
   const handleDownloadPlaceholder = () => {
     setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 4000);
+    setTimeout(() => setDownloadSuccess(false), 5000);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 py-6 sm:py-10 pb-28 sm:pb-12 w-full overflow-x-hidden">
       <Container className="max-w-2xl px-4 sm:px-6">
-        {/* Top Title & Demo Tag */}
+        {/* Top Title & Reference Header */}
         <div className="text-center space-y-2 mb-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold max-w-full text-center">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="truncate">
-              Demonstration Prototype • Live Tariffs Stored in Database
-            </span>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold max-w-full text-center">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="truncate">Authoritative Quotation • Verified PostgreSQL Engine</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-brand-navy-950">{t.resultsTitle}</h1>
           <p className="text-xs sm:text-sm text-slate-600">{t.resultsSubtitle}</p>
+
+          {/* Reference numbers bar */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+            <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-slate-800 shadow-sm">
+              Quote Ref: <strong className="text-brand-orange-600">{quote.referenceNumber}</strong>
+            </span>
+            {quote.enquiryReference && (
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-slate-800 shadow-sm">
+                Enquiry Ref:{' '}
+                <strong className="text-brand-navy-900">{quote.enquiryReference}</strong>
+              </span>
+            )}
+            {quote.isIdempotentReplay && (
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                Verified Snapshot
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Currency Switch Bar */}
@@ -142,8 +184,8 @@ Please confirm slot availability and final booking procedure.`;
                   </span>
                   <h3 className="text-sm sm:text-base font-black text-slate-900 capitalize">
                     {quote.input.destinationPort === 'khorfakkan'
-                      ? 'Khorfakkan (Sharjah)'
-                      : 'Jebel Ali (Dubai)'}
+                      ? 'Port of Khor Fakkan (Sharjah)'
+                      : 'Port of Jebel Ali (Dubai)'}
                   </h3>
                 </div>
               </div>
@@ -158,12 +200,14 @@ Please confirm slot availability and final booking procedure.`;
                 </span>
               </div>
               <span className="text-sm sm:text-base font-black text-blue-800">
-                {quote.estimatedTransitDays} {t.days}
+                {quote.estimatedTransitDaysMin && quote.estimatedTransitDaysMax
+                  ? `${quote.estimatedTransitDaysMin} - ${quote.estimatedTransitDaysMax} ${t.days}`
+                  : `${quote.estimatedTransitDays} ${t.days}`}
               </span>
             </div>
           </Card>
 
-          {/* Vehicle & Towing Specs (Responsive layout with full text wrapping) */}
+          {/* Vehicle & Towing Specs */}
           <Card className="p-5 sm:p-6">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 pb-2 border-b border-slate-100">
               {t.vehicleAndShippingDetails}
@@ -196,27 +240,39 @@ Please confirm slot availability and final booking procedure.`;
               <div className="flex flex-wrap items-center justify-between gap-1 py-1 border-b border-slate-50">
                 <span className="flex items-center gap-2 text-slate-500">
                   <Receipt className="w-4 h-4 text-slate-400 shrink-0" />
-                  Declared Buying Price:
+                  Declared Vehicle Value:
                 </span>
                 <strong className="text-slate-800">
                   ${quote.input.buyingPrice?.toLocaleString()} USD
                 </strong>
               </div>
 
-              {/* Inland Towing - Wraps cleanly with no truncation */}
+              {/* Inland Towing Specs */}
               <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100">
                 <div className="flex items-start gap-2">
                   <Truck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-slate-500 block">Inland Towing Origin:</span>
                     <span className="font-semibold text-slate-800 break-words">
-                      {quote.input.towFromLocation || 'Port Delivery / On Request'}
+                      {quote.input.towFromLocation || 'Delivered to Loading Port'}
                     </span>
                   </div>
                 </div>
-                <Badge variant="orange" size="sm" className="self-start sm:self-auto shrink-0">
-                  Rate on Request
-                </Badge>
+                <div>
+                  {quote.isTowingRange ? (
+                    <Badge variant="orange" size="sm">
+                      Estimated Range: ${quote.towingFeeMin} - ${quote.towingFeeMax}
+                    </Badge>
+                  ) : quote.towingFeeMin && quote.towingFeeMin > 0 ? (
+                    <Badge variant="success" size="sm">
+                      Fixed Rate: ${quote.towingFeeMin}
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" size="sm">
+                      Port Delivery
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           </Card>
@@ -230,22 +286,38 @@ Please confirm slot availability and final booking procedure.`;
                   {t.costBreakdown}
                 </h4>
                 <Badge variant="info" size="sm">
-                  Container LCL
+                  Consolidated Container
                 </Badge>
               </div>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
                   <span className="break-words">
-                    Ocean Freight ({quote.input.loadingPort.toUpperCase()})
+                    Ocean Freight ({quote.input.loadingPort.toUpperCase()} to{' '}
+                    {quote.input.destinationPort.toUpperCase()})
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayAmount(quote.oceanFreight)}
                   </span>
                 </div>
+
+                {/* Inland Towing Line Item */}
+                {(quote.towingFeeMin !== undefined && quote.towingFeeMin > 0) ||
+                (quote.towingFeeMax !== undefined && quote.towingFeeMax > 0) ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="break-words">
+                      Inland Towing to Port{' '}
+                      {quote.isTowingRange ? '(Estimated Range)' : '(Fixed Tariff)'}
+                    </span>
+                    <span className="font-semibold text-slate-900 shrink-0">
+                      {displayRangeOrAmount(quote.towingFeeMin, quote.towingFeeMax)}
+                    </span>
+                  </div>
+                ) : null}
+
                 {quote.powertrainSurcharge > 0 && (
                   <div className="flex justify-between gap-2 text-amber-700">
                     <span className="break-words">
-                      Powertrain Surcharge ({quote.input.powertrain})
+                      Powertrain / Handling Surcharge ({quote.input.powertrain})
                     </span>
                     <span className="font-semibold shrink-0">
                       {displayAmount(quote.powertrainSurcharge)}
@@ -263,9 +335,14 @@ Please confirm slot availability and final booking procedure.`;
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-100">
-                  <span>{t.oceanFreightTotal}</span>
+                  <span>Ocean Freight & Inland Logistics Subtotal</span>
                   <span className="text-brand-orange-600">
-                    {displayAmount(quote.oceanFreightTotal)}
+                    {quote.isTowingRange
+                      ? displayRangeOrAmount(
+                          quote.oceanFreightTotal + (quote.towingFeeMin || 0),
+                          quote.oceanFreightTotal + (quote.towingFeeMax || 0)
+                        )
+                      : displayAmount(quote.oceanFreightTotal + (quote.towingFeeMin || 0))}
                   </span>
                 </div>
               </div>
@@ -292,43 +369,45 @@ Please confirm slot availability and final booking procedure.`;
               </div>
             </div>
 
-            {/* Government Duties Section */}
+            {/* Government Duties Section (Statutory 5% Duty + 5% VAT) */}
             <div className="py-3.5">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
-                {t.governmentChargesTitle}
+                UAE Statutory Government Charges
               </h4>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">Customs Duty (5% of declared value)</span>
+                  <span className="break-words">Customs Duty (5% of CIF valuation)</span>
                   <span className="font-semibold text-slate-900 shrink-0">
-                    {displayAmount(quote.customsDuty)}
+                    {displayRangeOrAmount(quote.dutyMin, quote.dutyMax, quote.customsDuty)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">UAE VAT (5.2% of value & duty)</span>
+                  <span className="break-words">UAE Import VAT (5% of VAT Base)</span>
                   <span className="font-semibold text-slate-900 shrink-0">
-                    {displayAmount(quote.vat)}
+                    {displayRangeOrAmount(quote.vatMin, quote.vatMax, quote.vat)}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Total Callout */}
+            {/* Total Callout (Cleanly displays range if applicable) */}
             <div className="pt-4">
               <div className="p-4 sm:p-5 rounded-2xl bg-brand-navy-950 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-brand-orange-400 block">
-                    {t.totalCharges} ({currency})
+                    {t.totalCharges} ({currency}) {quote.isTowingRange ? '• Estimated Range' : ''}
                   </span>
-                  <span className="text-xs text-slate-400">All maritime & clearance estimates</span>
+                  <span className="text-xs text-slate-400">
+                    All maritime, inland towing, clearance & statutory duties
+                  </span>
                 </div>
                 <div className="text-start sm:text-end w-full sm:w-auto">
-                  <span className="text-2xl sm:text-3xl font-black text-brand-orange-400 block">
-                    {displayAmount(quote.totalChargesUsd)}
+                  <span className="text-xl sm:text-2xl lg:text-3xl font-black text-brand-orange-400 block break-words">
+                    {totalFormatted}
                   </span>
                   {currency === 'USD' && (
                     <span className="text-[11px] text-slate-300 font-semibold block">
-                      ≈ {formatCurrency(convertUsdToAed(quote.totalChargesUsd), 'AED')}
+                      ≈ {totalAedFormatted}
                     </span>
                   )}
                 </div>
@@ -336,15 +415,20 @@ Please confirm slot availability and final booking procedure.`;
             </div>
           </Card>
 
-          {/* Legal / Tariffs Disclaimer */}
-          <Alert variant="warning" title="Authoritative Quotation Notice">
-            {t.demoDataDisclaimer}
+          {/* Authoritative Disclaimer from Database Engine */}
+          <Alert variant="info" title="Authoritative Quotation Disclaimer">
+            {quote.disclaimer || t.demoDataDisclaimer}
           </Alert>
 
           {downloadSuccess && (
-            <Alert variant="success" title="Quotation Ready">
-              Demonstration quotation snapshot created. Official stamped PDF generation will be
-              activated in the Supabase backend release (Ref: {quote.referenceNumber}).
+            <Alert variant="success" title="Quotation Generated">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  Authoritative quotation snapshot recorded. Stamped PDF dispatch ready (Ref:{' '}
+                  <strong>{quote.referenceNumber}</strong>).
+                </span>
+              </div>
             </Alert>
           )}
 

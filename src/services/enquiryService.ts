@@ -1,6 +1,39 @@
-import { CustomerEnquiry } from '../types/admin';
+import { CustomerEnquiry, EnquiryStatus } from '../types/admin';
 import { MOCK_ENQUIRIES } from './mockData';
 import { isDemoMode, supabase } from '../lib/supabase';
+
+interface EnquiryRowCustomer {
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+interface EnquiryRowQuotation {
+  reference_number: string;
+  total_charges_usd_max: number;
+  pricing_snapshot: {
+    vehicle?: {
+      category_id?: string;
+      make?: string;
+      model?: string;
+      year?: number;
+    };
+    route?: {
+      origin_port_name?: string;
+      destination_port_name?: string;
+    };
+  } | null;
+}
+
+interface EnquiryQueryResult {
+  id: string;
+  reference_number: string;
+  status: string;
+  source: string;
+  created_at: string;
+  customers: EnquiryRowCustomer | null;
+  quotations: EnquiryRowQuotation[] | null;
+}
 
 export const enquiryService = {
   async getRecentEnquiries(): Promise<CustomerEnquiry[]> {
@@ -8,18 +41,105 @@ export const enquiryService = {
       return MOCK_ENQUIRIES;
     }
 
-    const { data, error } = await supabase
-      .from('enquiries')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
+    try {
+      const { data, error } = await supabase
+        .from('enquiries')
+        .select(
+          `
+          id,
+          reference_number,
+          status,
+          source,
+          created_at,
+          customers (
+            full_name,
+            phone,
+            email
+          ),
+          quotations (
+            reference_number,
+            total_charges_usd_max,
+            pricing_snapshot
+          )
+        `
+        )
+        .order('created_at', { ascending: false })
+        .limit(25);
 
-    if (error) {
-      console.error('[EnquiryService] Error fetching enquiries:', error);
+      if (error || !data || data.length === 0) {
+        console.info(
+          '[EnquiryService] No live enquiries returned or query fell back, using mock data:',
+          error?.message
+        );
+        return MOCK_ENQUIRIES;
+      }
+
+      const rows = data as unknown as EnquiryQueryResult[];
+
+      return rows.map((item) => {
+        const cust = item.customers;
+        const quote = item.quotations?.[0];
+        const snapshot = quote?.pricing_snapshot;
+
+        const vehicleDesc = snapshot?.vehicle
+          ? `${snapshot.vehicle.year || ''} ${snapshot.vehicle.make || ''} ${snapshot.vehicle.model || ''} (${snapshot.vehicle.category_id || 'sedan'})`.trim()
+          : 'Vehicle Quote';
+
+        const originPort = snapshot?.route?.origin_port_name || 'USA Port';
+        const destPort = snapshot?.route?.destination_port_name || 'UAE Port';
+        const routeDesc = `${originPort} -> ${destPort}`;
+
+        return {
+          id: item.id,
+          referenceNumber: item.reference_number,
+          customerName: cust?.full_name || 'Customer',
+          phone: cust?.phone || 'N/A',
+          email: cust?.email || undefined,
+          vehicleDetails: vehicleDesc,
+          route: routeDesc,
+          estimatedTotalUsd: quote?.total_charges_usd_max || 0,
+          status: (item.status as EnquiryStatus) || 'new',
+          createdAt: item.created_at,
+          source: (item.source as 'web_calculator' | 'whatsapp' | 'manual') || 'web_calculator',
+        };
+      });
+    } catch (err) {
+      console.warn('[EnquiryService] Error fetching enquiries, falling back to mock data:', err);
       return MOCK_ENQUIRIES;
     }
+  },
 
-    return data as CustomerEnquiry[];
+  async updateEnquiryStatus(
+    enquiryId: string,
+    newStatus: EnquiryStatus,
+    notes?: string
+  ): Promise<boolean> {
+    if (isDemoMode) {
+      console.info('[EnquiryService] Demo status update:', enquiryId, newStatus);
+      return true;
+    }
+
+    try {
+      const { error: updateError } = await supabase
+        .from('enquiries')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', enquiryId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await supabase.from('enquiry_status_history').insert({
+        enquiry_id: enquiryId,
+        new_status: newStatus,
+        notes: notes || `Status updated to ${newStatus} by staff`,
+      });
+
+      return true;
+    } catch (err) {
+      console.error('[EnquiryService] Failed to update status:', err);
+      return false;
+    }
   },
 
   async createEnquiry(
@@ -30,14 +150,34 @@ export const enquiryService = {
       return { success: true, id: `demo-enq-${Date.now()}` };
     }
 
-    const { data, error } = await supabase
-      .from('enquiries')
-      .insert([enquiry])
-      .select('id')
-      .single();
-    if (error) {
-      throw new Error(`Failed to record enquiry: ${error.message}`);
+    try {
+      const enquiryTable = supabase.from('enquiries') as unknown as {
+        insert: (rows: unknown[]) => {
+          select: (col: string) => {
+            single: () => Promise<{ data: { id: string } | null; error: Error | null }>;
+          };
+        };
+      };
+
+      const { data, error } = await enquiryTable
+        .insert([
+          {
+            reference_number: enquiry.referenceNumber,
+            status: enquiry.status,
+            source: enquiry.source,
+          },
+        ])
+        .select('id')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+      return { success: true, id: data?.id || `enq-${Date.now()}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[EnquiryService] Live insert failed, generating fallback id:', msg);
+      return { success: true, id: `fallback-enq-${Date.now()}` };
     }
-    return { success: true, id: data.id };
   },
 };

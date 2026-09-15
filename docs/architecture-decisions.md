@@ -1,4 +1,4 @@
-﻿# Architecture Decision Records (ADRs)
+# Architecture Decision Records (ADRs)
 
 ## Project: Fakher Alam Used Cars Shipping
 **Date:** September 2026  

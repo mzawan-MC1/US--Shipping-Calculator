@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -131,18 +131,21 @@ export const CalculatorPage: React.FC = () => {
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
+      const idempotencyKey = `quote-client-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const calcData: CalculatorFormData = {
         vehicleType: data.vehicleType,
         powertrain: data.powertrain,
         purchaseSource: data.purchaseSource,
         loadingPort: data.loadingPort,
         destinationPort: data.destinationPort,
+        shippingMethod: data.shippingMethod,
         buyingPrice: data.buyingPrice,
         towFromLocation: data.towFromLocation,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail,
         notes: data.notes,
+        idempotencyKey,
       };
 
       await quotationService.calculateQuote(calcData);

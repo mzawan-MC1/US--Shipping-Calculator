@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Centralized Unverified Content Configuration
  *
  * IMPORTANT: The values below are placeholder marketing claims and contact details

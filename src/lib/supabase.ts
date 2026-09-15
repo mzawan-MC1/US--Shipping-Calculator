@@ -1,15 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
-import { env, isSupabaseConfigured, isDemoMode } from './env';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { env, isSupabaseConfigured, isDemoMode, supabasePublishableKey } from './env';
+import type { Database } from '../types/database';
 
 if (!isSupabaseConfigured) {
   console.info(
-    '[Supabase] Operating in DEMO MODE with typed mock services. To connect a live backend, provide valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local.'
+    '[Supabase] Operating in DEMO MODE with typed fallback mock services. Provide valid VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local to use the live backend.'
   );
 }
 
-// Single public browser client instance
-export const supabase = isSupabaseConfigured
-  ? createClient(env.VITE_SUPABASE_URL!, env.VITE_SUPABASE_ANON_KEY!)
-  : (null as unknown as ReturnType<typeof createClient>);
+export const supabase: SupabaseClient<Database> = isSupabaseConfigured
+  ? createClient<Database>(env.VITE_SUPABASE_URL!, supabasePublishableKey!, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
+  : (null as unknown as SupabaseClient<Database>);
 
 export { isDemoMode, isSupabaseConfigured };

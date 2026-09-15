@@ -1,9 +1,10 @@
-﻿import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { Spinner } from '../components/ui/Spinner';
+import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 
 // Direct import for fast first-paint of the public home page
 import { HomePage } from '../pages/public/HomePage';
@@ -107,122 +108,142 @@ export const AppRoutes: React.FC = () => {
         {/* Admin Auth Route */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
 
-        {/* Admin Shell Routes */}
+        {/* Admin Protected Routes */}
         <Route
           path="/admin"
           element={
-            <AdminLayout>
-              <AdminDashboardPage />
-            </AdminLayout>
+            <ProtectedRoute>
+              <AdminLayout>
+                <AdminDashboardPage />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/enquiries"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Customer Enquiries"
-                description="Manage all inbound inquiries from the web calculator and WhatsApp."
-                moduleName="Enquiries"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="enquiries.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Customer Enquiries"
+                  description="Manage all inbound inquiries from the web calculator and WhatsApp."
+                  moduleName="Enquiries"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/quotations"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Quotations & Revisions"
-                description="Review quotation snapshots, revisions, and customer booking approvals."
-                moduleName="Quotations"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="quotations.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Quotations & Revisions"
+                  description="Review quotation snapshots, revisions, and customer booking approvals."
+                  moduleName="Quotations"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/customers"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Customer Directory"
-                description="Manage customer profiles, previous shipments, and contact preferences."
-                moduleName="Customers"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="customers.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Customer Directory"
+                  description="Manage customer profiles, previous shipments, and contact preferences."
+                  moduleName="Customers"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/routes"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Countries, Ports & Routes"
-                description="Manage loading origin ports, destination terminals, and transit durations."
-                moduleName="Routes"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="routes.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Countries, Ports & Routes"
+                  description="Manage loading origin ports, destination terminals, and transit durations."
+                  moduleName="Routes"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/pricing"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Freight, Towing & Surcharge Tariffs"
-                description="Central tariff engine for base ocean freight, vehicle surcharges, and state towing rates."
-                moduleName="Tariffs"
-                architectureNote="CRITICAL ARCHITECTURE: Pricing tables and tariff updates are stored in PostgreSQL and calculated authoritatively through secure Supabase RPC functions."
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="pricing.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Freight, Towing & Surcharge Tariffs"
+                  description="Central tariff engine for base ocean freight, vehicle surcharges, and state towing rates."
+                  moduleName="Tariffs"
+                  architectureNote="CRITICAL ARCHITECTURE: Pricing tables and tariff updates are stored in PostgreSQL and calculated authoritatively through secure Supabase RPC functions."
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/content"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Website Content Management"
-                description="Manage banners, promotional notices, and business hours."
-                moduleName="Content"
-              />
-            </AdminLayout>
+            <ProtectedRoute>
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Website Content Management"
+                  description="Manage banners, promotional notices, and business hours."
+                  moduleName="Content"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/staff"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Staff Accounts & Role-Based Access Control"
-                description="Configure staff user roles (Super Admin, Operations, Sales, Customs Officer)."
-                moduleName="Staff"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="staff.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Staff Accounts & Role-Based Access Control"
+                  description="Configure staff user roles (Super Admin, Operations, Sales, Customs Officer)."
+                  moduleName="Staff"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/reports"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="Reports & Analytics"
-                description="Shipping volume trends, port efficiency, and financial conversion metrics."
-                moduleName="Reports"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="reports.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="Reports & Analytics"
+                  description="Shipping volume trends, port efficiency, and financial conversion metrics."
+                  moduleName="Reports"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/settings"
           element={
-            <AdminLayout>
-              <AdminPlaceholderPage
-                title="System Settings"
-                description="Exchange rates, WhatsApp routing numbers, and default customs parameters."
-                moduleName="Settings"
-              />
-            </AdminLayout>
+            <ProtectedRoute requiredPermission="settings.view">
+              <AdminLayout>
+                <AdminPlaceholderPage
+                  title="System Settings"
+                  description="Exchange rates, WhatsApp routing numbers, and default customs parameters."
+                  moduleName="Settings"
+                />
+              </AdminLayout>
+            </ProtectedRoute>
           }
         />
 

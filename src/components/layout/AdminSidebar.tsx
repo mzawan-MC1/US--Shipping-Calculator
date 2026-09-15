@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -23,6 +24,7 @@ export interface AdminSidebarProps {
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
   const { t } = useI18n();
   const location = useLocation();
+  const { role } = useAuth();
 
   const navItems = [
     { label: t.adminDashboardTitle, path: '/admin', icon: LayoutDashboard },
@@ -36,6 +38,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
     { label: t.adminReports, path: '/admin/reports', icon: BarChart3 },
     { label: t.adminSettings, path: '/admin/settings', icon: Settings },
   ];
+
+  const formattedRole = role
+    ? role
+        .split('_')
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ')
+    : 'Super Admin';
 
   return (
     <aside className="w-64 bg-brand-navy-950 text-slate-300 flex flex-col min-h-screen border-e border-brand-navy-800">
@@ -57,10 +66,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
       {/* RBAC notice badge */}
       <div className="px-4 py-2 bg-brand-navy-900/60 border-b border-brand-navy-800/40 text-[11px] text-slate-400 flex items-center justify-between">
         <span>
-          Role: <strong className="text-slate-200">Super Admin</strong>
+          Role: <strong className="text-slate-200">{formattedRole}</strong>
         </span>
         <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-          Demo Shell
+          Verified
         </span>
       </div>
 

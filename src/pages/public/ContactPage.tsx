@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useI18n } from '../../i18n/I18nContext';
 import { Container } from '../../components/ui/Container';
 import { Card } from '../../components/ui/Card';
