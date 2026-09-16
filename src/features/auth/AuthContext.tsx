@@ -72,15 +72,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // 1. Fetch staff profile (querying without is_active filter to distinguish inactive vs not found)
-      const { data: profile, error: profileErr } = await supabase
+      const { data: initialProfile, error: profileErr } = await supabase
         .from('staff_profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
+      let profile = initialProfile;
+
       if (profileErr) {
         console.error('[AuthContext] Error loading staff profile:', profileErr);
         throw new Error('Failed to verify staff credentials.');
+      }
+
+      // If profile does not exist yet, check if user has a valid pending invitation to accept
+      if (!profile) {
+        const { data: acceptData, error: acceptErr } =
+          await supabase.rpc('accept_staff_invitation');
+
+        if (!acceptErr && (acceptData as { success?: boolean } | null)?.success) {
+          const { data: newProfile } = await supabase
+            .from('staff_profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+          profile = newProfile;
+        }
       }
 
       if (!profile) {

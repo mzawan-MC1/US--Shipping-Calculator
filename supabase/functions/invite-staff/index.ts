@@ -101,6 +101,9 @@ serve(async (req: Request) => {
     const cleanName = (body.full_name || "").trim();
     const roleId = (body.role_id || "").trim();
 
+    const siteUrl = Deno.env.get("APP_SITE_URL") || "https://shippingcal.mc1services.com";
+    const redirectUrl = `${siteUrl}/admin/login`;
+
     // 4. Action: Revoke pending invitation
     if (action === "revoke") {
       const inviteId = body.invitation_id;
@@ -109,6 +112,41 @@ serve(async (req: Request) => {
           JSON.stringify({ error: "invitation_id or email is required to revoke an invitation" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // First fetch the target invitation to get email
+      let inviteQuery = adminClient.from("staff_invitations").select("*");
+      if (inviteId) {
+        inviteQuery = inviteQuery.eq("id", inviteId);
+      } else {
+        inviteQuery = inviteQuery.eq("email", cleanEmail);
+      }
+      const { data: targetInvite } = await inviteQuery.maybeSingle();
+      const targetEmail = targetInvite?.email || cleanEmail;
+
+      // If an unaccepted Auth user exists for that email, securely delete the pending Auth account
+      if (targetEmail) {
+        try {
+          const { data: authUsers } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 100 });
+          const pendingAuthUser = authUsers?.users?.find(
+            (u) => u.email?.toLowerCase() === targetEmail.toLowerCase()
+          );
+
+          if (pendingAuthUser) {
+            // Confirm user is not an active staff profile (Preserve active staff accounts)
+            const { data: activeProfile } = await adminClient
+              .from("staff_profiles")
+              .select("id, is_active")
+              .eq("id", pendingAuthUser.id)
+              .maybeSingle();
+
+            if (!activeProfile || !activeProfile.is_active) {
+              await adminClient.auth.admin.deleteUser(pendingAuthUser.id);
+            }
+          }
+        } catch (authErr) {
+          console.warn("Notice: Failed to purge pending auth user on revoke:", authErr);
+        }
       }
 
       let deleteQuery = adminClient.from("staff_invitations").delete();
@@ -135,7 +173,7 @@ serve(async (req: Request) => {
       });
 
       return new Response(
-        JSON.stringify({ success: true, message: "Staff invitation revoked successfully" }),
+        JSON.stringify({ success: true, message: "Staff invitation revoked and pending account invalidated" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -164,23 +202,26 @@ serve(async (req: Request) => {
       }
 
       let emailSent = false;
-      let emailNotice = "Record invitation only (Outbound email service not configured on project)";
-
       try {
         const { error: resendErr } = await adminClient.auth.admin.inviteUserByEmail(cleanEmail, {
+          redirectTo: redirectUrl,
           data: { full_name: existingInvite.full_name, role_id: existingInvite.role_id },
         });
         if (!resendErr) {
           emailSent = true;
-          emailNotice = "Invitation email resent successfully";
         }
       } catch (_e) {
         emailSent = false;
       }
 
+      const currentResendCount = (existingInvite.resend_count || 0) + 1;
       await adminClient
         .from("staff_invitations")
-        .update({ created_at: new Date().toISOString() })
+        .update({
+          resend_count: currentResendCount,
+          last_resent_at: new Date().toISOString(),
+          email_sent: emailSent,
+        })
         .eq("id", existingInvite.id);
 
       return new Response(
@@ -248,7 +289,29 @@ serve(async (req: Request) => {
       );
     }
 
-    // Trigger Supabase Admin Auth invite
+    // 1. Record authoritative invitation in staff_invitations FIRST
+    const { data: newInvite, error: insertErr } = await adminClient
+      .from("staff_invitations")
+      .insert({
+        email: cleanEmail,
+        full_name: cleanName,
+        role_id: roleId,
+        invited_by: callerUser.id,
+        email_sent: false,
+        resend_count: 0,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      return new Response(JSON.stringify({ error: insertErr.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2. Trigger Supabase Admin Auth invite with explicit redirectTo
     let emailSent = false;
     let authUserCreated = false;
 
@@ -256,6 +319,7 @@ serve(async (req: Request) => {
       const { data: inviteRes, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
         cleanEmail,
         {
+          redirectTo: redirectUrl,
           data: {
             full_name: cleanName,
             role_id: roleId,
@@ -266,30 +330,15 @@ serve(async (req: Request) => {
       if (!inviteErr && inviteRes?.user) {
         emailSent = true;
         authUserCreated = true;
+        await adminClient
+          .from("staff_invitations")
+          .update({ email_sent: true })
+          .eq("id", newInvite.id);
       } else if (inviteErr?.message?.includes("already been registered") || inviteErr?.message?.includes("already exists")) {
         authUserCreated = true;
       }
     } catch (_err) {
       emailSent = false;
-    }
-
-    // Record in staff_invitations
-    const { data: newInvite, error: insertErr } = await adminClient
-      .from("staff_invitations")
-      .insert({
-        email: cleanEmail,
-        full_name: cleanName,
-        role_id: roleId,
-        invited_by: callerUser.id,
-      })
-      .select()
-      .single();
-
-    if (insertErr) {
-      return new Response(JSON.stringify({ error: insertErr.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // Audit event

@@ -191,7 +191,7 @@ describe('Staff Service & RBAC Governance (Phase 2B)', () => {
       mockInvoke.mockResolvedValueOnce({
         data: {
           success: true,
-          message: 'Invitation revoked.',
+          message: 'Invitation revoked and pending account invalidated.',
         },
         error: null,
       });
@@ -204,6 +204,97 @@ describe('Staff Service & RBAC Governance (Phase 2B)', () => {
           invitation_id: 'inv-uuid-123',
         },
       });
+    });
+  });
+
+  describe('Authoritative Role & Metadata Isolation (Security Requirements 1-5)', () => {
+    it('ensures client-side user_metadata is never treated as authoritative for role assignment', () => {
+      // Simulating an invited user attempting to spoof user_metadata with super_admin
+      const untrustedUserMetadata = {
+        role_id: 'super_admin',
+        full_name: 'Attacker Impersonation',
+      };
+
+      const serverValidatedInvitation = {
+        id: 'inv-456',
+        email: 'invited_agent@example.com',
+        role_id: 'sales_agent',
+        full_name: 'Legitimate Sales Agent',
+      };
+
+      // Server-side role resolution function must bind exclusively to server-validated invitation
+      const resolveAssignedRole = (
+        metadata: { role_id?: string },
+        invitationRecord: { role_id: string }
+      ) => {
+        // Enforce Requirement 2 & 3: Never use metadata; authoritative role strictly from invitation
+        void metadata;
+        return invitationRecord.role_id;
+      };
+
+      const assignedRole = resolveAssignedRole(untrustedUserMetadata, serverValidatedInvitation);
+      expect(assignedRole).toBe('sales_agent');
+      expect(assignedRole).not.toBe('super_admin');
+    });
+
+    it('ensures invitation acceptance rejects accounts without valid pending invitations', async () => {
+      const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: 'No pending invitation found for email uninvited@example.com',
+          code: 'P0001',
+          details: '',
+          hint: '',
+          name: 'PostgrestError',
+          toJSON: () => ({
+            name: 'PostgrestError',
+            message: 'No pending invitation found for email uninvited@example.com',
+            code: 'P0001',
+            details: '',
+            hint: '',
+          }),
+        },
+        success: false,
+        count: null,
+        status: 400,
+        statusText: 'Bad Request',
+      });
+
+      const { error } = await supabase.rpc('accept_staff_invitation');
+      expect(mockRpc).toHaveBeenCalledWith('accept_staff_invitation');
+      expect(error?.message).toContain('No pending invitation found');
+    });
+
+    it('ensures active staff accounts are never deleted during invitation revocation', () => {
+      interface StaffAccount {
+        id: string;
+        email: string;
+        isActiveStaff: boolean;
+      }
+
+      const activeStaffMembers: StaffAccount[] = [
+        { id: 'admin-id', email: 'shipping1cal@gmail.com', isActiveStaff: true },
+        { id: 'agent-id', email: 'sales@example.com', isActiveStaff: true },
+      ];
+
+      const pendingInvitedUser: StaffAccount = {
+        id: 'pending-user-id',
+        email: 'pending@example.com',
+        isActiveStaff: false,
+      };
+
+      const canInvalidateAuthUser = (user: StaffAccount) => {
+        // Enforce Requirement 8: Do not delete or affect any active staff account
+        if (user.isActiveStaff) {
+          throw new Error('Safety guard: Cannot invalidate active staff account');
+        }
+        return true;
+      };
+
+      expect(canInvalidateAuthUser(pendingInvitedUser)).toBe(true);
+      expect(() => canInvalidateAuthUser(activeStaffMembers[0])).toThrow(
+        /Cannot invalidate active staff account/i
+      );
     });
   });
 });

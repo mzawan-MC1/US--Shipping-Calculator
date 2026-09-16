@@ -1249,6 +1249,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_staff_invitation: { Args: never; Returns: Json };
       admin_invite_or_create_staff: {
         Args: { p_email: string; p_full_name: string; p_role_id: string };
         Returns: Json;
