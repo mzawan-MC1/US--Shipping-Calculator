@@ -1,7 +1,5 @@
 import { CalculatorFormData, QuotationBreakdown, QuotationLineItem } from '../types/calculator';
-import { SAMPLE_QUOTATION_BREAKDOWN } from './mockData';
-import { isDemoMode, supabase } from '../lib/supabase';
-import { USD_TO_AED_EXCHANGE_RATE } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 import { PORT_SLUG_TO_UUID } from './referenceDataService';
 
 const STORAGE_KEY = 'fakher_alam_active_quote';
@@ -9,17 +7,11 @@ const STORAGE_KEY = 'fakher_alam_active_quote';
 /**
  * Quotation Service
  *
- * NOTE (CTO Architecture Rule): Authoritative pricing, tariffs, port fees,
- * and surcharge business logic are strictly encapsulated in PostgreSQL / Supabase
- * RPC functions (`calculate_shipping_quote_v1`). Frontend components never perform
- * authoritative financial calculations.
+ * All pricing, tariffs, port fees, and statutory duties are calculated
+ * authoritatively via database RPC functions (calculate_shipping_quote_v1).
  */
 export const quotationService = {
   async calculateQuote(input: CalculatorFormData): Promise<QuotationBreakdown> {
-    if (isDemoMode) {
-      return this.calculateDemoQuote(input);
-    }
-
     try {
       // Map loading port & destination port slugs to UUIDs
       const originPortId =
@@ -180,152 +172,23 @@ export const quotationService = {
 
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(liveQuote));
       return liveQuote;
-    } catch (err) {
-      console.warn(
-        '[QuotationService] Error invoking live RPC, falling back to prototype engine',
-        err
-      );
-      return this.calculateDemoQuote(input);
+    } catch (err: unknown) {
+      console.error('[QuotationService] Calculation error:', err);
+      const message =
+        err instanceof Error ? err.message : 'Unable to calculate quotation from tariff schedule.';
+      throw new Error(message);
     }
   },
 
-  calculateDemoQuote(input: CalculatorFormData): QuotationBreakdown {
-    const baseFreightMap: Record<string, number> = {
-      savannah: 1050,
-      houston: 1100,
-      newark: 980,
-      baltimore: 1020,
-      los_angeles: 1350,
-    };
-
-    const oceanFreight = baseFreightMap[input.loadingPort] || 1050;
-    const powertrainSurcharge =
-      input.powertrain === 'electric' ? 200 : input.powertrain === 'hybrid' ? 100 : 0;
-    const vehicleTypeSurcharge =
-      input.vehicleType === 'pickup'
-        ? 200
-        : input.vehicleType === 'van'
-          ? 150
-          : input.vehicleType === 'suv'
-            ? 100
-            : 0;
-    const oceanFreightTotal = oceanFreight + powertrainSurcharge + vehicleTypeSurcharge;
-
-    const customsClearance = 150;
-    const destinationCharges = 200;
-
-    // Towing check
-    let towingMin = 0;
-    let towingMax = 0;
-    let isTowingRange = false;
-    if (input.towFromLocation && input.towFromLocation.trim() !== '') {
-      towingMin = 300;
-      towingMax = 480;
-      isTowingRange = true;
-    }
-
-    // CIF = declared value + ocean freight + surcharges + towing
-    const cifMin = input.buyingPrice + oceanFreightTotal + towingMin;
-    const cifMax = input.buyingPrice + oceanFreightTotal + towingMax;
-
-    // Customs Duty = 5% CIF
-    const customsDutyMin = Math.round(cifMin * 0.05 * 100) / 100;
-    const customsDutyMax = Math.round(cifMax * 0.05 * 100) / 100;
-
-    // VAT Base = CIF + Duty + vatable port charges (200)
-    const vatBaseMin = cifMin + customsDutyMin + 200;
-    const vatBaseMax = cifMax + customsDutyMax + 200;
-
-    // Import VAT = 5% VAT base
-    const vatMin = Math.round(vatBaseMin * 0.05 * 100) / 100;
-    const vatMax = Math.round(vatBaseMax * 0.05 * 100) / 100;
-
-    const totalChargesUsdMin =
-      Math.round(
-        (oceanFreightTotal +
-          towingMin +
-          customsClearance +
-          destinationCharges +
-          customsDutyMin +
-          vatMin) *
-          100
-      ) / 100;
-    const totalChargesUsdMax =
-      Math.round(
-        (oceanFreightTotal +
-          towingMax +
-          customsClearance +
-          destinationCharges +
-          customsDutyMax +
-          vatMax) *
-          100
-      ) / 100;
-
-    const totalChargesAedMin =
-      Math.round(totalChargesUsdMin * USD_TO_AED_EXCHANGE_RATE * 100) / 100;
-    const totalChargesAedMax =
-      Math.round(totalChargesUsdMax * USD_TO_AED_EXCHANGE_RATE * 100) / 100;
-
-    const transitDaysMap: Record<string, number> = {
-      savannah: 60,
-      houston: 55,
-      newark: 50,
-      baltimore: 52,
-      los_angeles: 68,
-    };
-
-    const quote: QuotationBreakdown = {
-      id: `quote-${Date.now()}`,
-      referenceNumber: `QT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-      enquiryReference: `ENQ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: new Date().toISOString(),
-      input,
-      estimatedTransitDays: transitDaysMap[input.loadingPort] || 55,
-      estimatedTransitDaysMin: (transitDaysMap[input.loadingPort] || 55) - 5,
-      estimatedTransitDaysMax: transitDaysMap[input.loadingPort] || 55,
-      oceanFreight,
-      powertrainSurcharge,
-      vehicleTypeSurcharge,
-      oceanFreightTotal,
-      customsClearance,
-      destinationCharges,
-      customsDuty: customsDutyMax,
-      dutyMin: customsDutyMin,
-      dutyMax: customsDutyMax,
-      vat: vatMax,
-      vatMin,
-      vatMax,
-      cifMin,
-      cifMax,
-      towingFeeMin: towingMin,
-      towingFeeMax: towingMax,
-      isTowingRange,
-      totalChargesUsd: totalChargesUsdMax,
-      totalChargesUsdMin,
-      totalChargesUsdMax,
-      totalChargesAed: totalChargesAedMax,
-      totalChargesAedMin,
-      totalChargesAedMax,
-      towChargeStatus: isTowingRange ? 'range' : towingMin > 0 ? 'included' : 'quote_on_request',
-      isEstimate: true,
-      disclaimer: isTowingRange
-        ? 'Final quotation includes estimated inland towing range. Exact towing amount is confirmed upon auction dispatch. Customs duty (5%) and Import VAT (5%) are statutory government charges calculated on CIF valuation.'
-        : 'Statutory UAE Customs Duty (5%) and Import VAT (5%) are calculated on CIF valuation. Quotation is valid for 14 days and subject to carrier bunker adjustments.',
-    };
-
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(quote));
-    return quote;
-  },
-
-  getActiveQuote(): QuotationBreakdown {
+  getActiveQuote(): QuotationBreakdown | null {
     try {
       const stored = sessionStorage.getItem(STORAGE_KEY);
       if (stored) {
         return JSON.parse(stored);
       }
     } catch (e) {
-      console.warn('Failed to parse active quote from session, returning default', e);
+      console.warn('Failed to parse active quote from session', e);
     }
-    return SAMPLE_QUOTATION_BREAKDOWN;
+    return null;
   },
 };

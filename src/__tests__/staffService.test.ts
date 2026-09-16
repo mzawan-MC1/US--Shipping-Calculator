@@ -9,6 +9,75 @@ describe('Staff Service & RBAC Governance (Phase 2B)', () => {
 
   describe('Role Metadata & Inspection', () => {
     it('loads available system roles with complete metadata', async () => {
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'roles') {
+          return {
+            select: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: 'super_admin',
+                    name: 'Super Admin',
+                    description: 'Full access',
+                    is_system: true,
+                    is_active: true,
+                  },
+                  {
+                    id: 'sales_agent',
+                    name: 'Sales Coordinator',
+                    description: 'Sales operations',
+                    is_system: true,
+                    is_active: true,
+                  },
+                  {
+                    id: 'pricing_manager',
+                    name: 'Pricing & Tariffs Manager',
+                    description: 'Tariffs',
+                    is_system: true,
+                    is_active: true,
+                  },
+                  {
+                    id: 'support_agent',
+                    name: 'Support Agent',
+                    description: 'Customer support',
+                    is_system: true,
+                    is_active: true,
+                  },
+                  {
+                    id: 'viewer',
+                    name: 'Auditor & Viewer',
+                    description: 'Read only',
+                    is_system: true,
+                    is_active: true,
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          } as unknown as ReturnType<typeof supabase.from>;
+        }
+        if (table === 'role_permissions') {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [
+                { role_id: 'super_admin', permission_id: 'staff.manage' },
+                { role_id: 'sales_agent', permission_id: 'enquiries.manage' },
+              ],
+              error: null,
+            }),
+          } as unknown as ReturnType<typeof supabase.from>;
+        }
+        if (table === 'staff_role_assignments') {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ role_id: 'super_admin' }],
+              error: null,
+            }),
+          } as unknown as ReturnType<typeof supabase.from>;
+        }
+        return {} as unknown as ReturnType<typeof supabase.from>;
+      });
+
       const roles = await staffService.getRoles();
       expect(roles.length).toBeGreaterThanOrEqual(5);
 
@@ -23,6 +92,38 @@ describe('Staff Service & RBAC Governance (Phase 2B)', () => {
       const pricingRole = roles.find((r) => r.id === 'pricing_manager');
       expect(pricingRole).toBeDefined();
       expect(pricingRole?.name).toBe('Pricing & Tariffs Manager');
+    });
+
+    it('fails cleanly when role query fails and does not fall back to demo data', async () => {
+      vi.spyOn(supabase, 'from').mockImplementation(() => {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'Database query failed' },
+            }),
+          }),
+        } as unknown as ReturnType<typeof supabase.from>;
+      });
+
+      await expect(staffService.getRoles()).rejects.toThrow(/Database query failed/i);
+    });
+
+    it('fails cleanly when staff directory query fails and does not fall back to demo data', async () => {
+      vi.spyOn(supabase, 'from').mockImplementation(() => {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'Connection refused' },
+            }),
+          }),
+        } as unknown as ReturnType<typeof supabase.from>;
+      });
+
+      await expect(staffService.getStaffList()).rejects.toThrow(
+        /unable to retrieve the staff directory/i
+      );
     });
   });
 

@@ -198,8 +198,7 @@ export const AdminLoginPage: React.FC = () => {
           ) : (
             <>
               <div className="text-xs text-slate-600">
-                Sign in with your authorized staff credentials. Sessions are securely persisted and
-                verified via enterprise access control.
+                Sign in with your authorized staff credentials. Sessions are securely verified.
               </div>
 
               <form onSubmit={handleSignIn} className="space-y-4 pt-1">

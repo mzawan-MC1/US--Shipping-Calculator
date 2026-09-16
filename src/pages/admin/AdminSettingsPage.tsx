@@ -292,11 +292,10 @@ export const AdminSettingsPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-brand-navy-950">
-                      Enterprise Access Governance
+                      Staff Access & Security
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Operational permissions are strictly bounded by user roles and security
-                      boundaries.
+                      Staff access and operations are managed through assigned roles.
                     </p>
                   </div>
                 </div>

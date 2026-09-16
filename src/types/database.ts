@@ -1,4 +1,4 @@
-﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -1414,22 +1414,31 @@ export type Database = {
       accept_staff_invitation: { Args: never; Returns: Json };
       admin_clone_role: {
         Args: {
-          p_new_description?: string;
+          p_new_description: string;
+          p_new_name: string;
           p_new_role_id: string;
-          p_new_role_name: string;
           p_source_role_id: string;
         };
         Returns: Json;
       };
-      admin_create_role: {
-        Args: {
-          p_description: string;
-          p_id: string;
-          p_name: string;
-          p_permissions: string[];
-        };
-        Returns: Json;
-      };
+      admin_create_role:
+        | {
+            Args: {
+              p_description: string;
+              p_id: string;
+              p_name: string;
+              p_permissions: string[];
+            };
+            Returns: Json;
+          }
+        | {
+            Args: {
+              p_description: string;
+              p_name: string;
+              p_permissions: string[];
+            };
+            Returns: Json;
+          };
       admin_delete_role: { Args: { p_role_id: string }; Returns: Json };
       admin_invite_or_create_staff: {
         Args: { p_email: string; p_full_name: string; p_role_id: string };

@@ -16,7 +16,7 @@ import {
   VEHICLE_TYPES_CONFIG,
   POWERTRAINS_CONFIG,
   PURCHASE_SOURCES_CONFIG,
-} from '../../services/mockData';
+} from '../../config/calculatorConfig';
 import {
   Car,
   Fuel,
@@ -191,11 +191,6 @@ export const CalculatorPage: React.FC = () => {
             {currentStep === 7 && 'REVIEW YOUR SHIPPING QUOTE'}
           </h1>
         </div>
-
-        {/* Demo Mode Notice Banner */}
-        <Alert variant="info" className="mb-6">
-          {t.demoModeNotice}
-        </Alert>
 
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* STEP 1: Vehicle & Powertrain */}

@@ -25,17 +25,21 @@ export const AdminDashboardPage: React.FC = () => {
   const canManageEnquiries = hasPermission('enquiries.manage');
   const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchEnquiries = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await enquiryService.getRecentEnquiries();
       setEnquiries(data);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error('Failed to load enquiries', e);
+      const msg = e instanceof Error ? e.message : 'Unable to load customer enquiries.';
+      setLoadError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -184,10 +188,23 @@ export const AdminDashboardPage: React.FC = () => {
         </Card>
       </div>
 
+      {loadError && (
+        <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={fetchEnquiries}
+            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Operations Notice */}
-      <Alert variant="info" title="Centralized Rate & Quote Engine Active">
+      <Alert variant="info" title="Shipping Rates & Operations Active">
         Quotation calculations and customer records are verified in real time. Official rate
-        snapshots and towing brackets are automatically locked to customer booking references.
+        snapshots and towing brackets are locked to customer booking references.
       </Alert>
 
       {/* Enquiries Data Table Card */}

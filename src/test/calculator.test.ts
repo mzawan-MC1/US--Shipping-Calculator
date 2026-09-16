@@ -26,9 +26,8 @@ describe('Quotation Service Prototype & Engine', () => {
     expect(quote.isEstimate).toBe(true);
   });
 
-  it('retrieves active quote from session or returns sample default', () => {
-    const active = quotationService.getActiveQuote();
-    expect(active).toBeDefined();
-    expect(active.oceanFreightTotal).toBeGreaterThan(0);
+  it('retrieves active quote from session when stored or null when empty', () => {
+    sessionStorage.clear();
+    expect(quotationService.getActiveQuote()).toBeNull();
   });
 });

@@ -102,19 +102,19 @@ export const AdminTariffsPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600">
-              Pricing Engine
+              Pricing & Shipping Rates
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-              Live Tariff Sync
+              System Online
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-brand-navy-950 flex items-center gap-2">
             <DollarSign className="w-6 h-6 text-brand-orange-500" />
-            Freight & Towing Tariffs
+            Freight & Towing Rates
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Centralized tariff matrix governing ocean container shipping, US inland towing brackets,
-            and currency conversions.
+            Shipping rates governing ocean container shipping, US inland towing brackets, and
+            currency conversions.
           </p>
         </div>
 

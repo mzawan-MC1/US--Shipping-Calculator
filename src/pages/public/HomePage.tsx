@@ -24,7 +24,7 @@ import {
   MapPin,
   AlertTriangle,
 } from 'lucide-react';
-import { US_LOADING_PORTS, UAE_DESTINATION_PORTS } from '../../services/mockData';
+import { US_LOADING_PORTS, UAE_DESTINATION_PORTS } from '../../config/calculatorConfig';
 
 export const HomePage: React.FC = () => {
   const { t, direction } = useI18n();

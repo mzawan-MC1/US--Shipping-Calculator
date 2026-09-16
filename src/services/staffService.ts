@@ -1,4 +1,4 @@
-import { supabase, isDemoMode } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export interface StaffMember {
   id: string;
@@ -45,158 +45,6 @@ export interface InviteResult {
   message: string;
 }
 
-const DEMO_ROLES: SystemRole[] = [
-  {
-    id: 'super_admin',
-    name: 'Super Admin',
-    description: 'Full unrestricted authority over all operations, staff, tariffs, and settings',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 1,
-    permissions: [
-      'audit.view',
-      'cms.manage',
-      'cms.view',
-      'customers.manage',
-      'customers.view',
-      'dashboard.view',
-      'enquiries.manage',
-      'enquiries.view',
-      'pricing.manage',
-      'pricing.view',
-      'quotations.manage',
-      'quotations.view',
-      'reports.view',
-      'routes.manage',
-      'routes.view',
-      'settings.manage',
-      'settings.view',
-      'staff.manage',
-      'staff.view',
-    ],
-  },
-  {
-    id: 'admin_manager',
-    name: 'Operations Manager',
-    description: 'Full management over quotations, routes, customers, and pricing tariffs',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: [
-      'audit.view',
-      'cms.manage',
-      'cms.view',
-      'customers.manage',
-      'customers.view',
-      'dashboard.view',
-      'enquiries.manage',
-      'enquiries.view',
-      'pricing.manage',
-      'pricing.view',
-      'quotations.manage',
-      'quotations.view',
-      'reports.view',
-      'routes.manage',
-      'routes.view',
-      'settings.view',
-    ],
-  },
-  {
-    id: 'quotation_officer',
-    name: 'Quotation Officer',
-    description:
-      'Prepares and approves freight quotations, reviews tariff schedules, and manages customer pricing requests',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: [
-      'dashboard.view',
-      'enquiries.view',
-      'enquiries.manage',
-      'quotations.view',
-      'quotations.manage',
-      'customers.view',
-      'customers.manage',
-      'routes.view',
-      'pricing.view',
-    ],
-  },
-  {
-    id: 'pricing_manager',
-    name: 'Pricing & Tariffs Manager',
-    description: 'Controls ocean freight, towing rules, and destination surcharge matrix',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: [
-      'dashboard.view',
-      'pricing.manage',
-      'pricing.view',
-      'quotations.view',
-      'routes.manage',
-      'routes.view',
-      'settings.view',
-    ],
-  },
-  {
-    id: 'sales_agent',
-    name: 'Sales Coordinator',
-    description:
-      'Handles inbound customer leads, quotation adjustments, and WhatsApp communication',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: [
-      'customers.manage',
-      'customers.view',
-      'dashboard.view',
-      'enquiries.manage',
-      'enquiries.view',
-      'quotations.manage',
-      'quotations.view',
-      'routes.view',
-    ],
-  },
-  {
-    id: 'content_manager',
-    name: 'Content Manager',
-    description: 'Manages website marketing notices, port descriptions, and announcements',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: ['cms.manage', 'cms.view', 'dashboard.view'],
-  },
-  {
-    id: 'viewer',
-    name: 'Auditor / Viewer',
-    description: 'Read-only access across business data and reports',
-    isSystem: true,
-    isActive: true,
-    assignedStaffCount: 0,
-    permissions: [
-      'customers.view',
-      'dashboard.view',
-      'enquiries.view',
-      'pricing.view',
-      'quotations.view',
-      'reports.view',
-      'routes.view',
-    ],
-  },
-];
-
-const DEMO_STAFF_MEMBERS: StaffMember[] = [
-  {
-    id: 'f2a884d9-27d4-48b7-b346-d25706db8846',
-    email: 'shipping1cal@gmail.com',
-    fullName: 'Super Admin',
-    isActive: true,
-    roleId: 'super_admin',
-    roleName: 'Super Admin',
-    createdAt: new Date().toISOString(),
-  },
-];
-
 interface StaffDirectoryRow {
   id: string;
   email: string;
@@ -227,168 +75,63 @@ interface StaffInvitationQueryResult {
 
 export const staffService = {
   async getRoles(): Promise<SystemRole[]> {
-    if (isDemoMode) {
-      return DEMO_ROLES;
+    // Query roles with permissions and staff counts directly from authoritative live database
+    const [rolesRes, permsRes, countsRes] = await Promise.all([
+      supabase
+        .from('roles')
+        .select('id, name, description, is_system, is_active, created_at')
+        .order('id'),
+      supabase.from('role_permissions').select('role_id, permission_id'),
+      supabase.from('staff_role_assignments').select('role_id'),
+    ]);
+
+    if (rolesRes.error) {
+      throw new Error(rolesRes.error.message || 'Unable to load roles from database.');
+    }
+    if (!rolesRes.data) {
+      return [];
     }
 
-    try {
-      // Query roles with permissions and staff counts
-      const [rolesRes, permsRes, countsRes] = await Promise.all([
-        supabase
-          .from('roles')
-          .select('id, name, description, is_system, is_active, created_at')
-          .order('id'),
-        supabase.from('role_permissions').select('role_id, permission_id'),
-        supabase.from('staff_role_assignments').select('role_id'),
-      ]);
-
-      if (rolesRes.error || !rolesRes.data || rolesRes.data.length === 0) {
-        return DEMO_ROLES;
+    // Group permissions by role_id
+    const permsMap = new Map<string, string[]>();
+    if (permsRes.data) {
+      for (const rp of permsRes.data) {
+        const list = permsMap.get(rp.role_id) || [];
+        list.push(rp.permission_id);
+        permsMap.set(rp.role_id, list);
       }
-
-      // Group permissions by role_id
-      const permsMap = new Map<string, string[]>();
-      if (permsRes.data) {
-        for (const rp of permsRes.data) {
-          const list = permsMap.get(rp.role_id) || [];
-          list.push(rp.permission_id);
-          permsMap.set(rp.role_id, list);
-        }
-      }
-
-      // Count staff assigned to each role
-      const countsMap = new Map<string, number>();
-      if (countsRes.data) {
-        for (const row of countsRes.data) {
-          countsMap.set(row.role_id, (countsMap.get(row.role_id) || 0) + 1);
-        }
-      }
-
-      return rolesRes.data.map((r) => ({
-        id: r.id,
-        name: r.name,
-        description: r.description,
-        isSystem: Boolean(r.is_system),
-        isActive: r.is_active !== false,
-        createdAt: r.created_at,
-        assignedStaffCount: countsMap.get(r.id) || 0,
-        permissions: permsMap.get(r.id) || [],
-      }));
-    } catch {
-      return DEMO_ROLES;
     }
+
+    // Count staff assigned to each role
+    const countsMap = new Map<string, number>();
+    if (countsRes.data) {
+      for (const row of countsRes.data) {
+        countsMap.set(row.role_id, (countsMap.get(row.role_id) || 0) + 1);
+      }
+    }
+
+    return rolesRes.data.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      isSystem: Boolean(r.is_system),
+      isActive: r.is_active !== false,
+      createdAt: r.created_at,
+      assignedStaffCount: countsMap.get(r.id) || 0,
+      permissions: permsMap.get(r.id) || [],
+    }));
   },
 
   async getAllPermissions(): Promise<SystemPermission[]> {
-    if (isDemoMode) {
-      return [
-        {
-          id: 'dashboard.view',
-          description: 'View operational dashboard KPIs and pipeline summaries',
-          module: 'dashboard',
-        },
-        {
-          id: 'enquiries.view',
-          description: 'View customer shipping enquiries and inbound leads',
-          module: 'enquiries',
-        },
-        {
-          id: 'enquiries.manage',
-          description: 'Update status, assign staff, and edit enquiry details',
-          module: 'enquiries',
-        },
-        {
-          id: 'quotations.view',
-          description: 'View calculated quotations and pricing snapshots',
-          module: 'quotations',
-        },
-        {
-          id: 'quotations.manage',
-          description: 'Revise, adjust, and approve quotations for customers',
-          module: 'quotations',
-        },
-        {
-          id: 'customers.view',
-          description: 'View customer directory and contact details',
-          module: 'customers',
-        },
-        {
-          id: 'customers.manage',
-          description: 'Create and update customer profiles',
-          module: 'customers',
-        },
-        {
-          id: 'routes.view',
-          description: 'View origins, destination ports, and transit schedules',
-          module: 'routes',
-        },
-        {
-          id: 'routes.manage',
-          description: 'Create and configure shipping routes, ports, and transit days',
-          module: 'routes',
-        },
-        {
-          id: 'pricing.view',
-          description: 'View ocean freight tariffs, towing brackets, and tax rules',
-          module: 'pricing',
-        },
-        {
-          id: 'pricing.manage',
-          description: 'Update freight rates, towing rules, and surcharge matrix',
-          module: 'pricing',
-        },
-        {
-          id: 'staff.view',
-          description: 'View internal staff accounts and assigned roles',
-          module: 'staff',
-        },
-        {
-          id: 'staff.manage',
-          description: 'Invite staff and modify staff role assignments',
-          module: 'staff',
-        },
-        {
-          id: 'cms.view',
-          description: 'View website content items and announcements',
-          module: 'cms',
-        },
-        {
-          id: 'cms.manage',
-          description: 'Publish and edit website content and promotional banners',
-          module: 'cms',
-        },
-        {
-          id: 'reports.view',
-          description: 'Generate and view financial and volume reporting',
-          module: 'reports',
-        },
-        {
-          id: 'settings.view',
-          description: 'View system parameters and currency exchange rates',
-          module: 'settings',
-        },
-        {
-          id: 'settings.manage',
-          description: 'Modify system settings, exchange rates, and business variables',
-          module: 'settings',
-        },
-        {
-          id: 'audit.view',
-          description: 'Inspect immutable audit events and system modification logs',
-          module: 'audit',
-        },
-      ];
-    }
-
     const { data, error } = await supabase
       .from('permissions')
       .select('id, description')
       .order('id');
 
-    if (error || !data) {
-      console.warn('[StaffService] Could not load permissions list:', error);
-      return [];
+    if (error) {
+      throw new Error(error.message || 'Unable to load permissions list.');
     }
+    if (!data) return [];
 
     return data.map((p) => {
       const module = p.id.split('.')[0] || 'general';
@@ -401,10 +144,6 @@ export const staffService = {
   },
 
   async getStaffList(): Promise<StaffMember[]> {
-    if (isDemoMode) {
-      return DEMO_STAFF_MEMBERS;
-    }
-
     // 1. Query staff_directory_view (disambiguated and security_invoker enforced)
     const { data: viewData, error: viewError } = await supabase
       .from('staff_directory_view')
@@ -485,10 +224,6 @@ export const staffService = {
   },
 
   async getPendingInvitations(): Promise<StaffInvitation[]> {
-    if (isDemoMode) {
-      return [];
-    }
-
     const { data, error } = await supabase
       .from('staff_invitations')
       .select(
@@ -509,10 +244,11 @@ export const staffService = {
       )
       .order('created_at', { ascending: false });
 
-    if (error || !data) {
+    if (error) {
       console.warn('[StaffService] Error loading pending invitations:', error);
-      return [];
+      throw new Error(error.message || 'Unable to load pending staff invitations.');
     }
+    if (!data) return [];
 
     const rows = data as unknown as StaffInvitationQueryResult[];
 
@@ -553,14 +289,6 @@ export const staffService = {
       throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
     }
 
-    if (isDemoMode) {
-      return {
-        success: true,
-        emailSent: false,
-        message: 'Demo mode: Staff invitation registered locally.',
-      };
-    }
-
     const { data, error } = await supabase.functions.invoke('invite-staff', {
       body: {
         action: 'invite',
@@ -598,14 +326,6 @@ export const staffService = {
   },
 
   async resendInvitation(email: string, invitationId?: string): Promise<InviteResult> {
-    if (isDemoMode) {
-      return {
-        success: true,
-        emailSent: false,
-        message: 'Demo mode: Invitation resent locally.',
-      };
-    }
-
     const { data, error } = await supabase.functions.invoke('invite-staff', {
       body: {
         action: 'resend',
@@ -643,10 +363,6 @@ export const staffService = {
       throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
     }
 
-    if (isDemoMode) {
-      return { success: true };
-    }
-
     const { error } = await supabase.rpc('admin_update_staff_role', {
       p_staff_id: staffId,
       p_role_id: roleId,
@@ -660,10 +376,6 @@ export const staffService = {
   },
 
   async toggleStaffStatus(staffId: string, isActive: boolean): Promise<{ success: boolean }> {
-    if (isDemoMode) {
-      return { success: true };
-    }
-
     const { error } = await supabase.rpc('admin_toggle_staff_status', {
       p_staff_id: staffId,
       p_is_active: isActive,
@@ -677,8 +389,6 @@ export const staffService = {
   },
 
   async deleteInvitation(invitationId: string): Promise<void> {
-    if (isDemoMode) return;
-
     const { data, error } = await supabase.functions.invoke('invite-staff', {
       body: {
         action: 'revoke',
@@ -703,32 +413,52 @@ export const staffService = {
 
   // Role Management Operations
   async createRole(
-    id: string,
-    name: string,
-    description: string,
-    permissions: string[]
+    nameOrId: string,
+    descOrName: string,
+    permsOrDesc: string[] | string,
+    optionalPerms?: string[]
   ): Promise<{ success: boolean; roleId: string }> {
-    const cleanId = id
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '_');
-    const cleanName = name.trim();
+    let roleId: string | undefined;
+    let name: string;
+    let description: string;
+    let permissions: string[];
 
-    if (!cleanId || cleanId.length < 3) {
-      throw new Error(
-        'Role identifier must be at least 3 characters (letters, numbers, underscores).'
-      );
+    if (Array.isArray(permsOrDesc)) {
+      name = nameOrId;
+      description = descOrName;
+      permissions = permsOrDesc;
+    } else {
+      roleId = nameOrId;
+      name = descOrName;
+      description = permsOrDesc;
+      permissions = optionalPerms || [];
     }
+
+    const cleanName = name.trim();
     if (!cleanName || cleanName.length < 2) {
       throw new Error('Role name must be at least 2 characters.');
     }
 
-    if (isDemoMode) {
-      return { success: true, roleId: cleanId };
+    if (roleId && roleId.trim()) {
+      const { data, error } = await supabase.rpc('admin_create_role', {
+        p_id: roleId
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '_'),
+        p_name: cleanName,
+        p_description: description.trim(),
+        p_permissions: permissions,
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to create role.');
+      }
+
+      const result = data as { success?: boolean; role_id?: string };
+      return { success: true, roleId: result.role_id || '' };
     }
 
     const { data, error } = await supabase.rpc('admin_create_role', {
-      p_id: cleanId,
       p_name: cleanName,
       p_description: description.trim(),
       p_permissions: permissions,
@@ -739,7 +469,7 @@ export const staffService = {
     }
 
     const result = data as { success?: boolean; role_id?: string };
-    return { success: true, roleId: result.role_id || cleanId };
+    return { success: true, roleId: result.role_id || '' };
   },
 
   async updateRole(
@@ -752,10 +482,6 @@ export const staffService = {
     const cleanName = name.trim();
     if (!cleanName || cleanName.length < 2) {
       throw new Error('Role name must be at least 2 characters.');
-    }
-
-    if (isDemoMode) {
-      return { success: true };
     }
 
     const { error } = await supabase.rpc('admin_update_role', {
@@ -774,10 +500,6 @@ export const staffService = {
   },
 
   async deleteRole(roleId: string): Promise<{ success: boolean }> {
-    if (isDemoMode) {
-      return { success: true };
-    }
-
     const { error } = await supabase.rpc('admin_delete_role', {
       p_role_id: roleId,
     });
@@ -808,15 +530,11 @@ export const staffService = {
       throw new Error('New role name must be at least 2 characters.');
     }
 
-    if (isDemoMode) {
-      return { success: true, roleId: cleanId };
-    }
-
     const { data, error } = await supabase.rpc('admin_clone_role', {
       p_source_role_id: sourceRoleId,
       p_new_role_id: cleanId,
-      p_new_role_name: cleanName,
-      p_new_description: newDescription?.trim() || undefined,
+      p_new_name: cleanName,
+      p_new_description: newDescription?.trim() || '',
     });
 
     if (error) {

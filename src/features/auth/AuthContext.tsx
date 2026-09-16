@@ -30,36 +30,6 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_STAFF: StaffProfile = {
-  id: 'demo-staff-admin-id',
-  email: 'admin@fakheralamshipping.com',
-  full_name: 'Operations Manager (Demo)',
-  is_active: true,
-  role: 'super_admin',
-};
-
-const DEMO_PERMISSIONS = [
-  'dashboard.view',
-  'enquiries.view',
-  'enquiries.manage',
-  'quotations.view',
-  'quotations.manage',
-  'customers.view',
-  'customers.manage',
-  'routes.view',
-  'routes.manage',
-  'pricing.view',
-  'pricing.manage',
-  'cms.view',
-  'cms.manage',
-  'staff.view',
-  'staff.manage',
-  'reports.view',
-  'settings.view',
-  'settings.manage',
-  'audit.view',
-];
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -150,13 +120,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      // Check if previously logged in to demo
-      const demoAuth = localStorage.getItem('fa_demo_auth');
-      if (demoAuth === 'true') {
-        setUser({ id: DEMO_STAFF.id, email: DEMO_STAFF.email } as User);
-        setStaffProfile(DEMO_STAFF);
-        setPermissions(DEMO_PERMISSIONS);
-      }
       setIsLoading(false);
       return;
     }
@@ -206,17 +169,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
 
     if (!isSupabaseConfigured || !supabase) {
-      // Demo authentication mode fallback
-      if (password.length >= 6) {
-        localStorage.setItem('fa_demo_auth', 'true');
-        setUser({ id: DEMO_STAFF.id, email } as User);
-        setStaffProfile({ ...DEMO_STAFF, email });
-        setPermissions(DEMO_PERMISSIONS);
-        setIsLoading(false);
-        return { success: true };
-      }
       setIsLoading(false);
-      return { success: false, error: 'Password must be at least 6 characters in demo mode.' };
+      return {
+        success: false,
+        error: 'Authentication service is unavailable. Please check configuration.',
+      };
     }
 
     try {

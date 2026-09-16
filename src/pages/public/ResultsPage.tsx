@@ -28,13 +28,37 @@ import {
 export const ResultsPage: React.FC = () => {
   const { t, direction } = useI18n();
   const [currency, setCurrency] = useState<'USD' | 'AED'>('USD');
-  const [quote, setQuote] = useState<QuotationBreakdown>(() => quotationService.getActiveQuote());
+  const [quote, setQuote] = useState<QuotationBreakdown | null>(() =>
+    quotationService.getActiveQuote()
+  );
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   useEffect(() => {
     const active = quotationService.getActiveQuote();
     setQuote(active);
   }, []);
+
+  if (!quote) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-12">
+        <Container className="max-w-md px-4 text-center">
+          <Card className="p-8 bg-white border border-slate-200">
+            <Receipt className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-brand-navy-950 mb-2">No Active Quotation</h2>
+            <p className="text-xs text-slate-500 mb-6">
+              You have not calculated a shipping quotation yet. Use our shipping calculator to
+              obtain an accurate quote.
+            </p>
+            <Link to="/calculator">
+              <Button variant="primary" className="w-full">
+                Calculate Shipping Now
+              </Button>
+            </Link>
+          </Card>
+        </Container>
+      </div>
+    );
+  }
 
   const displayAmount = (usdAmount: number) => {
     if (currency === 'AED') {
@@ -68,24 +92,16 @@ export const ResultsPage: React.FC = () => {
     : formatCurrency(quote.totalChargesAed || convertUsdToAed(quote.totalChargesUsd), 'AED');
 
   const whatsappMessage = `*FAKHER ALAM USED CARS SHIPPING - QUOTATION CONFIRMATION*
-Quotation Ref: ${quote.referenceNumber}
-Enquiry Ref: ${quote.enquiryReference || 'Pending'}
-Customer: ${quote.input.customerName || 'Valued Customer'}
-Route: ${quote.input.loadingPort.toUpperCase()} (USA) -> ${quote.input.destinationPort.toUpperCase()} (UAE)
-Vehicle: ${quote.input.vehicleType.toUpperCase()} (${quote.input.powertrain})
-Purchase Source: ${quote.input.purchaseSource.toUpperCase()}
-Declared Vehicle Value: $${quote.input.buyingPrice?.toLocaleString()} USD
-Inland Towing: ${quote.input.towFromLocation || 'Delivered to Port'} ${quote.isTowingRange ? `($${quote.towingFeeMin}-$${quote.towingFeeMax} USD range)` : quote.towingFeeMin ? `($${quote.towingFeeMin} USD fixed)` : ''}
-Estimated Transit: ${quote.estimatedTransitDays} Days
-Estimated Total Shipping Charges: ${totalFormatted} (${currency})
---------------------------------
-Please confirm carrier booking slot availability and container dispatch.`;
+Quote Ref: ${quote.referenceNumber}
+Customer: ${quote.input.customerName || 'Customer'}
+Route: ${quote.input.loadingPort.toUpperCase()} -> ${quote.input.destinationPort.toUpperCase()}
+Total Estimated: ${totalFormatted} (${totalAedFormatted})
+View Quote: ${window.location.origin}/results`;
 
-  const whatsappHref = `https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}?text=${encodeURIComponent(
-    whatsappMessage
-  )}`;
+  const whatsappHref = `https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`;
 
-  const handleDownloadPlaceholder = () => {
+  const handleDownloadQuotation = () => {
+    window.print();
     setDownloadSuccess(true);
     setTimeout(() => setDownloadSuccess(false), 5000);
   };
@@ -97,7 +113,7 @@ Please confirm carrier booking slot availability and container dispatch.`;
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold max-w-full text-center">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="truncate">Authoritative Quotation • Verified PostgreSQL Engine</span>
+            <span className="truncate">Official Shipping Quotation</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-brand-navy-950">{t.resultsTitle}</h1>
           <p className="text-xs sm:text-sm text-slate-600">{t.resultsSubtitle}</p>
@@ -465,7 +481,7 @@ Please confirm carrier booking slot availability and container dispatch.`;
                 variant="secondary"
                 size="md"
                 className="w-full font-bold"
-                onClick={handleDownloadPlaceholder}
+                onClick={handleDownloadQuotation}
                 startIcon={<Download className="w-4 h-4" />}
               >
                 {t.btnDownloadQuote}

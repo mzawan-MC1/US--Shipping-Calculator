@@ -160,9 +160,9 @@ export const dictionaries: Record<Language, Translations> = {
     callUs: 'Call Us',
     trackEnquiry: 'Track Enquiry',
     demoModeNotice:
-      'Demo Mode: Running with local fixtures. Authoritative pricing calculated via backend functions in production.',
+      'System Notice: Live shipping rates are calculated directly from verified system tariffs.',
     demoDataDisclaimer:
-      'This is an estimated quote for demonstration purposes. Final charges may vary based on physical vehicle inspection, actual auction invoice, port tariffs, exchange rates, and carrier surcharges.',
+      'This is an estimated quote. Final charges may vary based on physical vehicle inspection, actual auction invoice, port tariffs, exchange rates, and carrier surcharges.',
 
     navHome: 'Home',
     navCalculator: 'Shipping Calculator',
@@ -289,7 +289,7 @@ export const dictionaries: Record<Language, Translations> = {
     adminLogout: 'Sign Out',
     adminRecentEnquiries: 'Recent Leads & Quotation Requests',
     adminPricingEngineNote:
-      'Notice: Authoritative pricing and surcharge matrix rules are validated in real time by the centralized rate engine.',
+      'Notice: Pricing and surcharge rates are updated in real time from system tariffs.',
   },
 
   ar: {
@@ -301,10 +301,9 @@ export const dictionaries: Record<Language, Translations> = {
     whatsappQuote: 'عرض سعر عبر واتساب',
     callUs: 'اتصل بنا',
     trackEnquiry: 'متابعة الطلب',
-    demoModeNotice:
-      'وضع العرض التجريبي: يعمل ببيانات توضيحية. الحسابات النهائية تنفذ عبر خوادم قاعدة البيانات.',
+    demoModeNotice: 'إشعار النظام: يتم استرداد أسعار الشحن مباشرة من قاعدة بيانات النظام المعتمدة.',
     demoDataDisclaimer:
-      'هذا عرض سعر تقديري لأغراض توضيحية. قد تتغير الأسعار النهائية بناءً على الفحص الفعلي، وفاتورة المزاد، ورسوم الميناء وسعر الصرف.',
+      'هذا عرض سعر تقديري. قد تتغير الأسعار النهائية بناءً على الفحص الفعلي للمركبة، وفاتورة المزاد، ورسوم الميناء وسعر الصرف.',
 
     navHome: 'الرئيسية',
     navCalculator: 'حاسبة الشحن',
@@ -430,6 +429,6 @@ export const dictionaries: Record<Language, Translations> = {
     adminLogout: 'تسجيل الخروج',
     adminRecentEnquiries: 'أحدث الطلبات وعروض الأسعار المستلمة',
     adminPricingEngineNote:
-      'ملاحظة: جداول وقواعد التسعير والتعريفات الرسمية معتمدة ومحدثة في الوقت الفعلي عبر محرك التسعير المركزي.',
+      'ملاحظة: يتم تحديث أسعار الشحن ورسوم الخدمة في الوقت الفعلي من قاعدة بيانات النظام.',
   },
 };

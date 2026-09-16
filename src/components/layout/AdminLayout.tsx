@@ -89,11 +89,10 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
         {/* Security Status Banner */}
         <div className="bg-brand-navy-900 border-b border-brand-navy-800 px-4 py-2 text-xs text-slate-300 flex items-center justify-between">
           <span className="truncate">
-            🔒 <strong>Secure Session:</strong> Enterprise role-based access control and encrypted
-            transit active.
+            🔒 <strong>Staff Portal:</strong> Authenticated staff session active.
           </span>
           <span className="hidden md:inline-block px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
-            Live Session
+            System Online
           </span>
         </div>
 

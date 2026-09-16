@@ -47,12 +47,12 @@ export const AdminCmsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Contact form state
-  const [supportPhone, setSupportPhone] = useState('+971 50 123 4567');
-  const [supportEmail, setSupportEmail] = useState('info@fakheralamshipping.com');
-  const [whatsappNumber, setWhatsappNumber] = useState('+971501234567');
-  const [addressEn, setAddressEn] = useState('Industrial Area 4, Sharjah, United Arab Emirates');
+  const [supportPhone, setSupportPhone] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [addressEn, setAddressEn] = useState('Industrial Area 2, Sharjah, UAE');
   const [addressAr, setAddressAr] = useState(
-    'المنطقة الصناعية 4، الشارقة، الإمارات العربية المتحدة'
+    'المنطقة الصناعية 2، الشارقة، الإمارات العربية المتحدة'
   );
   const [isSavingContact, setIsSavingContact] = useState(false);
 
@@ -68,11 +68,19 @@ export const AdminCmsPage: React.FC = () => {
       setNotices(n);
       const profile = (settings.company_profile as Record<string, unknown>) || {};
       setCompanyProfile(profile);
-      if (profile.support_phone) setSupportPhone(String(profile.support_phone));
-      if (profile.support_email) setSupportEmail(String(profile.support_email));
-      if (profile.whatsapp_number) setWhatsappNumber(String(profile.whatsapp_number));
-      if (profile.headquarters_address) setAddressEn(String(profile.headquarters_address));
-      if (profile.headquarters_address_ar) setAddressAr(String(profile.headquarters_address_ar));
+      setSupportPhone(profile.support_phone ? String(profile.support_phone) : '');
+      setSupportEmail(profile.support_email ? String(profile.support_email) : '');
+      setWhatsappNumber(profile.whatsapp_number ? String(profile.whatsapp_number) : '');
+      setAddressEn(
+        profile.headquarters_address
+          ? String(profile.headquarters_address)
+          : 'Industrial Area 2, Sharjah, UAE'
+      );
+      setAddressAr(
+        profile.headquarters_address_ar
+          ? String(profile.headquarters_address_ar)
+          : 'المنطقة الصناعية 2، الشارقة، الإمارات العربية المتحدة'
+      );
     } catch (err) {
       console.warn('Failed to load CMS content', err);
       setActionError('Unable to load CMS content.');
@@ -373,7 +381,7 @@ export const AdminCmsPage: React.FC = () => {
                     <Input
                       value={supportPhone}
                       onChange={(e) => setSupportPhone(e.target.value)}
-                      required
+                      placeholder="Not configured"
                     />
                   </div>
                   <div>
@@ -383,7 +391,7 @@ export const AdminCmsPage: React.FC = () => {
                     <Input
                       value={whatsappNumber}
                       onChange={(e) => setWhatsappNumber(e.target.value)}
-                      required
+                      placeholder="Not configured"
                     />
                   </div>
                 </div>
@@ -396,7 +404,7 @@ export const AdminCmsPage: React.FC = () => {
                     type="email"
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    required
+                    placeholder="Not configured"
                   />
                 </div>
 
@@ -407,7 +415,7 @@ export const AdminCmsPage: React.FC = () => {
                   <Input
                     value={addressEn}
                     onChange={(e) => setAddressEn(e.target.value)}
-                    required
+                    placeholder="Not configured"
                   />
                 </div>
 
@@ -418,6 +426,7 @@ export const AdminCmsPage: React.FC = () => {
                   <Input
                     value={addressAr}
                     onChange={(e) => setAddressAr(e.target.value)}
+                    placeholder="Not configured"
                     className="text-end dir-rtl"
                   />
                 </div>
