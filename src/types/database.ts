@@ -1,4 +1,4 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -104,10 +104,59 @@ export type Database = {
             foreignKeyName: 'audit_events_performed_by_fkey';
             columns: ['performed_by'];
             isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'audit_events_performed_by_fkey';
+            columns: ['performed_by'];
+            isOneToOne: false;
             referencedRelation: 'staff_profiles';
             referencedColumns: ['id'];
           },
         ];
+      };
+      cms_notices: {
+        Row: {
+          banner_type: string;
+          content: string;
+          content_ar: string | null;
+          created_at: string | null;
+          display_location: string;
+          display_order: number;
+          id: string;
+          is_active: boolean;
+          title: string;
+          title_ar: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          banner_type?: string;
+          content: string;
+          content_ar?: string | null;
+          created_at?: string | null;
+          display_location?: string;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          title: string;
+          title_ar?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          banner_type?: string;
+          content?: string;
+          content_ar?: string | null;
+          created_at?: string | null;
+          display_location?: string;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          title?: string;
+          title_ar?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
       };
       countries: {
         Row: {
@@ -332,6 +381,13 @@ export type Database = {
             foreignKeyName: 'enquiries_assigned_staff_id_fkey';
             columns: ['assigned_staff_id'];
             isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'enquiries_assigned_staff_id_fkey';
+            columns: ['assigned_staff_id'];
+            isOneToOne: false;
             referencedRelation: 'staff_profiles';
             referencedColumns: ['id'];
           },
@@ -373,6 +429,13 @@ export type Database = {
           old_status?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'enquiry_status_history_changed_by_fkey';
+            columns: ['changed_by'];
+            isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'enquiry_status_history_changed_by_fkey';
             columns: ['changed_by'];
@@ -421,6 +484,13 @@ export type Database = {
           to_currency?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'exchange_rates_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'exchange_rates_created_by_fkey';
             columns: ['created_by'];
@@ -766,19 +836,28 @@ export type Database = {
           created_at: string;
           description: string | null;
           id: string;
+          is_active: boolean;
+          is_system: boolean;
           name: string;
+          updated_at: string | null;
         };
         Insert: {
           created_at?: string;
           description?: string | null;
           id: string;
+          is_active?: boolean;
+          is_system?: boolean;
           name: string;
+          updated_at?: string | null;
         };
         Update: {
           created_at?: string;
           description?: string | null;
           id?: string;
+          is_active?: boolean;
+          is_system?: boolean;
           name?: string;
+          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -967,6 +1046,13 @@ export type Database = {
             foreignKeyName: 'staff_invitations_invited_by_fkey';
             columns: ['invited_by'];
             isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'staff_invitations_invited_by_fkey';
+            columns: ['invited_by'];
+            isOneToOne: false;
             referencedRelation: 'staff_profiles';
             referencedColumns: ['id'];
           },
@@ -1030,6 +1116,13 @@ export type Database = {
             foreignKeyName: 'staff_role_assignments_assigned_by_fkey';
             columns: ['assigned_by'];
             isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'staff_role_assignments_assigned_by_fkey';
+            columns: ['assigned_by'];
+            isOneToOne: false;
             referencedRelation: 'staff_profiles';
             referencedColumns: ['id'];
           },
@@ -1038,6 +1131,13 @@ export type Database = {
             columns: ['role_id'];
             isOneToOne: false;
             referencedRelation: 'roles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'staff_role_assignments_staff_id_fkey';
+            columns: ['staff_id'];
+            isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
             referencedColumns: ['id'];
           },
           {
@@ -1106,6 +1206,45 @@ export type Database = {
             columns: ['vehicle_condition_id'];
             isOneToOne: false;
             referencedRelation: 'vehicle_conditions';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      system_settings: {
+        Row: {
+          description: string | null;
+          key: string;
+          updated_at: string | null;
+          updated_by: string | null;
+          value: Json;
+        };
+        Insert: {
+          description?: string | null;
+          key: string;
+          updated_at?: string | null;
+          updated_by?: string | null;
+          value: Json;
+        };
+        Update: {
+          description?: string | null;
+          key?: string;
+          updated_at?: string | null;
+          updated_by?: string | null;
+          value?: Json;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'system_settings_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'staff_directory_view';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'system_settings_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'staff_profiles';
             referencedColumns: ['id'];
           },
         ];
@@ -1246,10 +1385,52 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      staff_directory_view: {
+        Row: {
+          created_at: string | null;
+          email: string | null;
+          full_name: string | null;
+          id: string | null;
+          is_active: boolean | null;
+          role_description: string | null;
+          role_id: string | null;
+          role_is_active: boolean | null;
+          role_is_system: boolean | null;
+          role_name: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'staff_role_assignments_role_id_fkey';
+            columns: ['role_id'];
+            isOneToOne: false;
+            referencedRelation: 'roles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Functions: {
       accept_staff_invitation: { Args: never; Returns: Json };
+      admin_clone_role: {
+        Args: {
+          p_new_description?: string;
+          p_new_role_id: string;
+          p_new_role_name: string;
+          p_source_role_id: string;
+        };
+        Returns: Json;
+      };
+      admin_create_role: {
+        Args: {
+          p_description: string;
+          p_id: string;
+          p_name: string;
+          p_permissions: string[];
+        };
+        Returns: Json;
+      };
+      admin_delete_role: { Args: { p_role_id: string }; Returns: Json };
       admin_invite_or_create_staff: {
         Args: { p_email: string; p_full_name: string; p_role_id: string };
         Returns: Json;
@@ -1268,6 +1449,16 @@ export type Database = {
       };
       admin_update_enquiry_status: {
         Args: { p_enquiry_id: string; p_new_status: string; p_notes?: string };
+        Returns: Json;
+      };
+      admin_update_role: {
+        Args: {
+          p_description: string;
+          p_is_active?: boolean;
+          p_name: string;
+          p_permissions: string[];
+          p_role_id: string;
+        };
         Returns: Json;
       };
       admin_update_staff_role: {

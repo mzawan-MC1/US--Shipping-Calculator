@@ -199,7 +199,7 @@ export const AdminLoginPage: React.FC = () => {
             <>
               <div className="text-xs text-slate-600">
                 Sign in with your authorized staff credentials. Sessions are securely persisted and
-                verified with Supabase Auth RBAC.
+                verified via enterprise access control.
               </div>
 
               <form onSubmit={handleSignIn} className="space-y-4 pt-1">

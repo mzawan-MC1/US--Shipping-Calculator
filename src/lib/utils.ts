@@ -20,6 +20,14 @@ export function formatCurrency(amount: number, currency: 'USD' | 'AED' = 'USD'):
   }).format(amount);
 }
 
+export function formatUSD(amount: number): string {
+  return formatCurrency(amount, 'USD');
+}
+
+export function formatAED(amount: number): string {
+  return formatCurrency(amount, 'AED');
+}
+
 export const USD_TO_AED_EXCHANGE_RATE = 3.6725;
 
 export function convertUsdToAed(usd: number): number {

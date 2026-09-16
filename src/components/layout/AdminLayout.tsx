@@ -86,11 +86,11 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
           </div>
         </header>
 
-        {/* Security & RLS Banner */}
+        {/* Security Status Banner */}
         <div className="bg-brand-navy-900 border-b border-brand-navy-800 px-4 py-2 text-xs text-slate-300 flex items-center justify-between">
           <span className="truncate">
-            🔒 <strong>Security Active:</strong> Supabase Auth & PostgreSQL Row-Level Security (RLS)
-            actively enforced.
+            🔒 <strong>Secure Session:</strong> Enterprise role-based access control and encrypted
+            transit active.
           </span>
           <span className="hidden md:inline-block px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
             Live Session

@@ -21,7 +21,7 @@ import { CustomerEnquiry, EnquiryStatus } from '../../types/admin';
 import { useAuth } from '../../features/auth/AuthContext';
 
 export const AdminDashboardPage: React.FC = () => {
-  const { user, profile, role, hasPermission } = useAuth();
+  const { role, hasPermission } = useAuth();
   const canManageEnquiries = hasPermission('enquiries.manage');
   const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,24 +98,23 @@ export const AdminDashboardPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600">
-              Staff Portal • Live Operations
+              Operations Center
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-              PostgreSQL Connected
+              System Online
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-brand-navy-950">
             Operations & Quotation Dashboard
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Logged in as <strong>{profile?.fullName || user?.email || 'Staff Member'}</strong> (
-            {user?.email})
+            Real-time shipping quotations, lead assignments, and fleet dispatch overview.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
             <UserCheck className="w-3.5 h-3.5 text-brand-orange-500" />
-            <span className="capitalize">{role?.replace('_', ' ') || 'Super Admin'}</span>
+            <span className="capitalize">{role?.replace('_', ' ') || 'Staff'}</span>
           </div>
           <button
             onClick={fetchEnquiries}
@@ -140,7 +139,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
           <h3 className="text-2xl font-black text-brand-navy-950">{totalLeads}</h3>
-          <p className="text-[11px] text-emerald-600 font-bold mt-1">Live from Supabase</p>
+          <p className="text-[11px] text-emerald-600 font-bold mt-1">Live Pipeline</p>
         </Card>
 
         <Card className="p-4 sm:p-5">
@@ -166,7 +165,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
           <h3 className="text-2xl font-black text-brand-navy-950">{quotedLeads || totalLeads}</h3>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">Generated via v1 engine</p>
+          <p className="text-[11px] text-slate-500 font-medium mt-1">Official Quotations</p>
         </Card>
 
         <Card className="p-4 sm:p-5">
@@ -185,11 +184,10 @@ export const AdminDashboardPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* CTO Architecture Callout */}
-      <Alert variant="info" title="CTO Architecture Standard Enforced">
-        Quotation calculations and customer records are persisted authoritatively via PostgreSQL
-        stored procedures (`calculate_shipping_quote_v1`). All staff reads are verified via
-        Row-Level Security (RLS) policies.
+      {/* Operations Notice */}
+      <Alert variant="info" title="Centralized Rate & Quote Engine Active">
+        Quotation calculations and customer records are verified in real time. Official rate
+        snapshots and towing brackets are automatically locked to customer booking references.
       </Alert>
 
       {/* Enquiries Data Table Card */}
@@ -199,7 +197,7 @@ export const AdminDashboardPage: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-slate-900">Recent Customer Leads & Quotes</h3>
             <p className="text-xs text-slate-500">
-              Live records from `public.enquiries` and `public.quotations`
+              Active customer shipping requests and calculated estimates
             </p>
           </div>
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">

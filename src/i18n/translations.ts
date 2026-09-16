@@ -141,6 +141,7 @@ export interface Translations {
   adminStaff: string;
   adminReports: string;
   adminSettings: string;
+  adminActivity: string;
   adminLogout: string;
   adminRecentEnquiries: string;
   adminPricingEngineNote: string;
@@ -281,13 +282,14 @@ export const dictionaries: Record<Language, Translations> = {
     adminRoutes: 'Countries, Ports & Routes',
     adminPricing: 'Freight & Towing Tariffs',
     adminContent: 'Website CMS',
-    adminStaff: 'Staff & RBAC Accounts',
+    adminStaff: 'Staff & Roles',
     adminReports: 'KPIs & Reports',
     adminSettings: 'System Settings',
+    adminActivity: 'Activity History',
     adminLogout: 'Sign Out',
     adminRecentEnquiries: 'Recent Leads & Quotation Requests',
     adminPricingEngineNote:
-      'Notice: Authoritative pricing and surcharge matrix rules are stored in PostgreSQL tables and executed through secured Supabase RPC functions.',
+      'Notice: Authoritative pricing and surcharge matrix rules are validated in real time by the centralized rate engine.',
   },
 
   ar: {
@@ -421,12 +423,13 @@ export const dictionaries: Record<Language, Translations> = {
     adminRoutes: 'الدول، الموانئ ومسارات الشحن',
     adminPricing: 'تعريفات الشحن والسطحة',
     adminContent: 'إدارة محتوى الموقع',
-    adminStaff: 'حسابات الموظفين والصلاحيات',
+    adminStaff: 'فريق العمل والأدوار',
     adminReports: 'التقارير والمؤشرات (KPIs)',
     adminSettings: 'إعدادات النظام',
+    adminActivity: 'سجل العمليات والنشاط',
     adminLogout: 'تسجيل الخروج',
     adminRecentEnquiries: 'أحدث الطلبات وعروض الأسعار المستلمة',
     adminPricingEngineNote:
-      'ملاحظة: جداول وقواعد التسعير الرسمية مخزنة بقاعدة بيانات PostgreSQL ويتم تشغيلها عبر دوال Supabase RPC المحمية.',
+      'ملاحظة: جداول وقواعد التسعير والتعريفات الرسمية معتمدة ومحدثة في الوقت الفعلي عبر محرك التسعير المركزي.',
   },
 };

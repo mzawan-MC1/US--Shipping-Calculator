@@ -15,6 +15,7 @@ import {
   Settings,
   Ship,
   ExternalLink,
+  History,
 } from 'lucide-react';
 
 export interface AdminSidebarProps {
@@ -37,6 +38,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
     { label: t.adminStaff, path: '/admin/staff', icon: UserCheck },
     { label: t.adminReports, path: '/admin/reports', icon: BarChart3 },
     { label: t.adminSettings, path: '/admin/settings', icon: Settings },
+    { label: t.adminActivity, path: '/admin/activity', icon: History },
   ];
 
   const formattedRole = role

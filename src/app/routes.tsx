@@ -29,11 +29,35 @@ const AdminDashboardPage = lazy(() =>
 const AdminLoginPage = lazy(() =>
   import('../pages/admin/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage }))
 );
-const AdminPlaceholderPage = lazy(() =>
-  import('../pages/admin/AdminPlaceholderPage').then((m) => ({ default: m.AdminPlaceholderPage }))
+const AdminEnquiriesPage = lazy(() =>
+  import('../pages/admin/AdminEnquiriesPage').then((m) => ({ default: m.AdminEnquiriesPage }))
+);
+const AdminQuotationsPage = lazy(() =>
+  import('../pages/admin/AdminQuotationsPage').then((m) => ({ default: m.AdminQuotationsPage }))
+);
+const AdminCustomersPage = lazy(() =>
+  import('../pages/admin/AdminCustomersPage').then((m) => ({ default: m.AdminCustomersPage }))
+);
+const AdminRoutesPage = lazy(() =>
+  import('../pages/admin/AdminRoutesPage').then((m) => ({ default: m.AdminRoutesPage }))
+);
+const AdminTariffsPage = lazy(() =>
+  import('../pages/admin/AdminTariffsPage').then((m) => ({ default: m.AdminTariffsPage }))
+);
+const AdminCmsPage = lazy(() =>
+  import('../pages/admin/AdminCmsPage').then((m) => ({ default: m.AdminCmsPage }))
 );
 const AdminStaffPage = lazy(() =>
   import('../pages/admin/AdminStaffPage').then((m) => ({ default: m.AdminStaffPage }))
+);
+const AdminReportsPage = lazy(() =>
+  import('../pages/admin/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage }))
+);
+const AdminSettingsPage = lazy(() =>
+  import('../pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage }))
+);
+const AdminActivityPage = lazy(() =>
+  import('../pages/admin/AdminActivityPage').then((m) => ({ default: m.AdminActivityPage }))
 );
 
 const SuspenseLoader: React.FC = () => (
@@ -127,11 +151,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="enquiries.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Customer Enquiries"
-                  description="Manage all inbound inquiries from the web calculator and WhatsApp."
-                  moduleName="Enquiries"
-                />
+                <AdminEnquiriesPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -141,11 +161,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="quotations.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Quotations & Revisions"
-                  description="Review quotation snapshots, revisions, and customer booking approvals."
-                  moduleName="Quotations"
-                />
+                <AdminQuotationsPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -155,11 +171,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="customers.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Customer Directory"
-                  description="Manage customer profiles, previous shipments, and contact preferences."
-                  moduleName="Customers"
-                />
+                <AdminCustomersPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -169,11 +181,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="routes.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Countries, Ports & Routes"
-                  description="Manage loading origin ports, destination terminals, and transit durations."
-                  moduleName="Routes"
-                />
+                <AdminRoutesPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -183,12 +191,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="pricing.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Freight, Towing & Surcharge Tariffs"
-                  description="Central tariff engine for base ocean freight, vehicle surcharges, and state towing rates."
-                  moduleName="Tariffs"
-                  architectureNote="CRITICAL ARCHITECTURE: Pricing tables and tariff updates are stored in PostgreSQL and calculated authoritatively through secure Supabase RPC functions."
-                />
+                <AdminTariffsPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -196,13 +199,9 @@ export const AppRoutes: React.FC = () => {
         <Route
           path="/admin/content"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="cms.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Website Content Management"
-                  description="Manage banners, promotional notices, and business hours."
-                  moduleName="Content"
-                />
+                <AdminCmsPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -222,11 +221,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="reports.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Reports & Analytics"
-                  description="Shipping volume trends, port efficiency, and financial conversion metrics."
-                  moduleName="Reports"
-                />
+                <AdminReportsPage />
               </AdminLayout>
             </ProtectedRoute>
           }
@@ -236,11 +231,17 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="settings.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="System Settings"
-                  description="Exchange rates, WhatsApp routing numbers, and default customs parameters."
-                  moduleName="Settings"
-                />
+                <AdminSettingsPage />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/activity"
+          element={
+            <ProtectedRoute requiredPermission="audit.view">
+              <AdminLayout>
+                <AdminActivityPage />
               </AdminLayout>
             </ProtectedRoute>
           }
