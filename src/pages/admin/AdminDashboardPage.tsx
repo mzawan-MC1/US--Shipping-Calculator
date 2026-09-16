@@ -3,6 +3,8 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
+import { Spinner } from '../../components/ui/Spinner';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { enquiryService } from '../../services/enquiryService';
 import { formatCurrency } from '../../lib/utils';
 import {
@@ -19,11 +21,13 @@ import { CustomerEnquiry, EnquiryStatus } from '../../types/admin';
 import { useAuth } from '../../features/auth/AuthContext';
 
 export const AdminDashboardPage: React.FC = () => {
-  const { user, profile, role } = useAuth();
+  const { user, profile, role, hasPermission } = useAuth();
+  const canManageEnquiries = hasPermission('enquiries.manage');
   const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchEnquiries = async () => {
     setIsLoading(true);
@@ -34,6 +38,22 @@ export const AdminDashboardPage: React.FC = () => {
       console.error('Failed to load enquiries', e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (enquiryId: string, newStatus: EnquiryStatus) => {
+    setUpdatingId(enquiryId);
+    try {
+      const success = await enquiryService.updateEnquiryStatus(enquiryId, newStatus);
+      if (success) {
+        setEnquiries((prev) =>
+          prev.map((e) => (e.id === enquiryId ? { ...e, status: newStatus } : e))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update enquiry status', err);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -204,100 +224,165 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Responsive Table */}
-        <div className="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-          <table className="w-full text-start text-xs min-w-[620px]">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                <th className="pb-3 text-start">Reference & Date</th>
-                <th className="pb-3 text-start">Customer</th>
-                <th className="pb-3 text-start">Vehicle & Route</th>
-                <th className="pb-3 text-start">Estimate</th>
-                <th className="pb-3 text-start">Status</th>
-                <th className="pb-3 text-end">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredEnquiries.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    {item.referenceNumber}
-                    <span className="block text-[10px] font-normal text-slate-400">
-                      {new Date(item.createdAt).toLocaleDateString()}
-                    </span>
-                  </td>
-                  <td className="py-3 font-semibold text-slate-900">
-                    <span className="block whitespace-nowrap">{item.customerName}</span>
-                    <span className="block text-[11px] font-normal text-slate-500 whitespace-nowrap">
-                      {item.phone}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span className="font-semibold text-slate-800 block">
-                      {item.vehicleDetails}
-                    </span>
-                    <span className="text-[11px] text-slate-500">{item.route}</span>
-                  </td>
-                  <td className="py-3 font-bold text-brand-navy-950 whitespace-nowrap">
-                    {formatCurrency(item.estimatedTotalUsd)}
-                  </td>
-                  <td className="py-3 whitespace-nowrap">{getStatusBadge(item.status)}</td>
-                  <td className="py-3 text-end whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1.5">
-                      <a
-                        href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                        title="Open WhatsApp"
-                      >
-                        <PhoneCall className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Card List View for Phones */}
-        <div className="sm:hidden space-y-3">
-          {filteredEnquiries.map((item) => (
-            <div
-              key={item.id}
-              className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono font-bold text-slate-900">{item.referenceNumber}</span>
-                {getStatusBadge(item.status)}
-              </div>
-              <div>
-                <strong className="text-slate-900 block">{item.customerName}</strong>
-                <span className="text-slate-500">{item.phone}</span>
-              </div>
-              <div className="text-slate-600">
-                <span className="font-medium block">{item.vehicleDetails}</span>
-                <span className="text-[11px] text-slate-400">{item.route}</span>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                <span className="font-black text-brand-navy-950">
-                  {formatCurrency(item.estimatedTotalUsd)}
-                </span>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center gap-1"
-                  >
-                    <PhoneCall className="w-3 h-3" /> WhatsApp
-                  </a>
-                </div>
-              </div>
+        {/* Content Area */}
+        {isLoading ? (
+          <div className="p-12 flex flex-col items-center justify-center gap-3">
+            <Spinner size="lg" />
+            <p className="text-xs text-slate-400 font-medium">Fetching real-time enquiries...</p>
+          </div>
+        ) : filteredEnquiries.length === 0 ? (
+          <div className="p-8 text-center">
+            <EmptyState
+              title="No customer enquiries found"
+              description={
+                search || statusFilter !== 'all'
+                  ? 'No results match your active search or filter criteria.'
+                  : 'New quotations submitted through the shipping calculator will appear here in real-time.'
+              }
+            />
+          </div>
+        ) : (
+          <>
+            {/* Responsive Table */}
+            <div className="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="w-full text-start text-xs min-w-[620px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="pb-3 text-start">Reference & Date</th>
+                    <th className="pb-3 text-start">Customer</th>
+                    <th className="pb-3 text-start">Vehicle & Route</th>
+                    <th className="pb-3 text-start">Estimate</th>
+                    <th className="pb-3 text-start">Status</th>
+                    <th className="pb-3 text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {filteredEnquiries.map((item) => {
+                    const isUpdating = updatingId === item.id;
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                          {item.referenceNumber}
+                          <span className="block text-[10px] font-normal text-slate-400">
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </span>
+                        </td>
+                        <td className="py-3 font-semibold text-slate-900">
+                          <span className="block whitespace-nowrap">{item.customerName}</span>
+                          <span className="block text-[11px] font-normal text-slate-500 whitespace-nowrap">
+                            {item.phone}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <span className="font-semibold text-slate-800 block">
+                            {item.vehicleDetails}
+                          </span>
+                          <span className="text-[11px] text-slate-500">{item.route}</span>
+                        </td>
+                        <td className="py-3 font-bold text-brand-navy-950 whitespace-nowrap">
+                          {formatCurrency(item.estimatedTotalUsd)}
+                        </td>
+                        <td className="py-3 whitespace-nowrap">
+                          {canManageEnquiries ? (
+                            <select
+                              value={item.status}
+                              disabled={isUpdating}
+                              onChange={(e) =>
+                                handleStatusChange(item.id, e.target.value as EnquiryStatus)
+                              }
+                              className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:opacity-50 cursor-pointer"
+                            >
+                              <option value="new">New Lead</option>
+                              <option value="contacted">Contacted</option>
+                              <option value="quoted">Quoted</option>
+                              <option value="in_transit">In Transit</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          ) : (
+                            getStatusBadge(item.status)
+                          )}
+                        </td>
+                        <td className="py-3 text-end whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <a
+                              href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                              title="Open WhatsApp"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+
+            {/* Mobile Card List View for Phones */}
+            <div className="sm:hidden space-y-3">
+              {filteredEnquiries.map((item) => {
+                const isUpdating = updatingId === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900">
+                        {item.referenceNumber}
+                      </span>
+                      {canManageEnquiries ? (
+                        <select
+                          value={item.status}
+                          disabled={isUpdating}
+                          onChange={(e) =>
+                            handleStatusChange(item.id, e.target.value as EnquiryStatus)
+                          }
+                          className="text-[11px] font-semibold bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-slate-800 focus:outline-none"
+                        >
+                          <option value="new">New</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="quoted">Quoted</option>
+                          <option value="in_transit">In Transit</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      ) : (
+                        getStatusBadge(item.status)
+                      )}
+                    </div>
+                    <div>
+                      <strong className="text-slate-900 block">{item.customerName}</strong>
+                      <span className="text-slate-500">{item.phone}</span>
+                    </div>
+                    <div className="text-slate-600">
+                      <span className="font-medium block">{item.vehicleDetails}</span>
+                      <span className="text-[11px] text-slate-400">{item.route}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                      <span className="font-black text-brand-navy-950">
+                        {formatCurrency(item.estimatedTotalUsd)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center gap-1"
+                        >
+                          <PhoneCall className="w-3 h-3" /> WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </Card>
     </div>
   );

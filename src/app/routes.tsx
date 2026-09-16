@@ -32,6 +32,9 @@ const AdminLoginPage = lazy(() =>
 const AdminPlaceholderPage = lazy(() =>
   import('../pages/admin/AdminPlaceholderPage').then((m) => ({ default: m.AdminPlaceholderPage }))
 );
+const AdminStaffPage = lazy(() =>
+  import('../pages/admin/AdminStaffPage').then((m) => ({ default: m.AdminStaffPage }))
+);
 
 const SuspenseLoader: React.FC = () => (
   <div className="min-h-[50vh] flex flex-col items-center justify-center p-8">
@@ -209,11 +212,7 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requiredPermission="staff.view">
               <AdminLayout>
-                <AdminPlaceholderPage
-                  title="Staff Accounts & Role-Based Access Control"
-                  description="Configure staff user roles (Super Admin, Operations, Sales, Customs Officer)."
-                  moduleName="Staff"
-                />
+                <AdminStaffPage />
               </AdminLayout>
             </ProtectedRoute>
           }

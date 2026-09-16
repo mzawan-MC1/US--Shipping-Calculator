@@ -66,12 +66,13 @@ export const enquiryService = {
         .order('created_at', { ascending: false })
         .limit(25);
 
-      if (error || !data || data.length === 0) {
-        console.info(
-          '[EnquiryService] No live enquiries returned or query fell back, using mock data:',
-          error?.message
-        );
-        return MOCK_ENQUIRIES;
+      if (error) {
+        console.error('[EnquiryService] Error fetching live enquiries:', error);
+        throw new Error(error.message);
+      }
+
+      if (!data || data.length === 0) {
+        return [];
       }
 
       const rows = data as unknown as EnquiryQueryResult[];
@@ -104,8 +105,8 @@ export const enquiryService = {
         };
       });
     } catch (err) {
-      console.warn('[EnquiryService] Error fetching enquiries, falling back to mock data:', err);
-      return MOCK_ENQUIRIES;
+      console.warn('[EnquiryService] Error fetching live enquiries:', err);
+      return [];
     }
   },
 
@@ -120,20 +121,21 @@ export const enquiryService = {
     }
 
     try {
-      const { error: updateError } = await supabase
-        .from('enquiries')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', enquiryId);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      await supabase.from('enquiry_status_history').insert({
-        enquiry_id: enquiryId,
-        new_status: newStatus,
-        notes: notes || `Status updated to ${newStatus} by staff`,
+      const { error } = await supabase.rpc('admin_update_enquiry_status', {
+        p_enquiry_id: enquiryId,
+        p_new_status: newStatus,
+        p_notes: notes || `Status updated to ${newStatus} by staff`,
       });
+
+      if (error) {
+        // Fallback to direct update if permitted by RLS
+        const { error: directError } = await supabase
+          .from('enquiries')
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq('id', enquiryId);
+
+        if (directError) throw directError;
+      }
 
       return true;
     } catch (err) {

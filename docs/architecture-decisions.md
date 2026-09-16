@@ -53,3 +53,22 @@
 - **Rationale**:
   - Avoids bloated third-party runtime bundles while maintaining 100% type coverage for keys.
   - Automatically updates `dir="rtl"` and `lang="ar"` on `<html>`, with Tailwind logical properties (`ps-`, `pe-`, `start-`, `end-`) ensuring zero layout regressions across languages.
+
+---
+
+### ADR 006: Authoritative Database Calculation Engine & RBAC Governance
+- **Decision**: All financial quotation computations (ocean freight, towing brackets, surcharges, UAE customs duty 5%, import VAT 5%, and AED currency conversions) must be executed strictly server-side inside PostgreSQL via the `public.calculate_shipping_quote_v1(jsonb)` stored procedure.
+- **Rationale**:
+  - The client UI is never trusted for pricing or tariff parameters.
+  - Generates immutable calculation snapshots (`pricing_snapshot`) stored alongside quotation records.
+  - Staff RBAC is enforced via granular permission checks (`has_permission`) and strict Row-Level Security (RLS) policies across all 27 public tables.
+
+---
+
+### ADR 007: Cloudflare Turnstile Abuse Protection Deferral & Production Security Limitation
+- **Decision**: Cloudflare Turnstile integration is intentionally deferred for subsequent operational rollout.
+- **Security Boundary & Risk Acceptance**:
+  - Public anonymous quotation submission (`calculate_shipping_quote_v1`) is accessible to role `anon` to allow unauthenticated web visitors to calculate shipping costs and submit inquiries.
+  - **Limitation**: Until Cloudflare Turnstile (or equivalent server-side proof-of-work / IP rate limiting via Supabase Edge Functions or Cloudflare WAF) is deployed, public quotation submission is susceptible to automated script abuse, fake lead generation, or denial-of-service spam.
+  - Production deployment of public quotation submission must NOT be considered fully abuse-protected until Turnstile or equivalent anti-bot verification is enforced.
+
