@@ -71,39 +71,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isSupabaseConfigured || !supabase) return;
 
     try {
-      // 1. Fetch staff profile
-      const { data: profile } = await supabase
+      // 1. Fetch staff profile (querying without is_active filter to distinguish inactive vs not found)
+      const { data: profile, error: profileErr } = await supabase
         .from('staff_profiles')
         .select('*')
         .eq('id', userId)
-        .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      if (profile) {
-        // Fetch role
-        const { data: roleData } = await supabase
-          .from('staff_role_assignments')
-          .select('role_id')
-          .eq('staff_id', userId)
-          .limit(1)
-          .single();
-
-        setStaffProfile({
-          ...profile,
-          role: roleData?.role_id,
-        });
+      if (profileErr) {
+        console.error('[AuthContext] Error loading staff profile:', profileErr);
+        throw new Error('Failed to verify staff credentials.');
       }
 
+      if (!profile) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setStaffProfile(null);
+        setPermissions([]);
+        throw new Error('Access denied: Account is not authorized as staff.');
+      }
+
+      if (!profile.is_active) {
+        // Inactive staff invariant: immediately invalidate session and reject
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setStaffProfile(null);
+        setPermissions([]);
+        throw new Error('Account is deactivated. Contact Super Admin.');
+      }
+
+      // Fetch role
+      const { data: roleData } = await supabase
+        .from('staff_role_assignments')
+        .select('role_id')
+        .eq('staff_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      setStaffProfile({
+        ...profile,
+        role: roleData?.role_id,
+      });
+
       // 2. Fetch permissions via RPC
-      const { data: userPerms } = await supabase.rpc('get_user_permissions', {
+      const { data: userPerms, error: permsErr } = await supabase.rpc('get_user_permissions', {
         target_user_id: userId,
       });
 
-      if (Array.isArray(userPerms)) {
+      if (permsErr) {
+        console.error('[AuthContext] Error loading permissions:', permsErr);
+      } else if (Array.isArray(userPerms)) {
         setPermissions(userPerms.map((p: { permission_id: string }) => p.permission_id));
       }
     } catch (err) {
-      console.error('[AuthContext] Error loading staff data:', err);
+      console.error('[AuthContext] Error in fetchStaffData:', err);
+      throw err;
     }
   }, []);
 
@@ -125,7 +149,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(initSession);
       setUser(initSession?.user ?? null);
       if (initSession?.user) {
-        fetchStaffData(initSession.user.id).finally(() => setIsLoading(false));
+        fetchStaffData(initSession.user.id)
+          .catch((err) => {
+            console.warn('[AuthContext] Session invalid:', err.message);
+          })
+          .finally(() => setIsLoading(false));
       } else {
         setIsLoading(false);
       }
@@ -137,7 +165,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        await fetchStaffData(newSession.user.id);
+        try {
+          await fetchStaffData(newSession.user.id);
+        } catch (err: unknown) {
+          console.warn('[AuthContext] Auth state change invalid:', err);
+        }
       } else {
         setStaffProfile(null);
         setPermissions([]);
@@ -182,7 +214,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        await fetchStaffData(data.user.id);
+        try {
+          await fetchStaffData(data.user.id);
+        } catch (fetchErr: unknown) {
+          setIsLoading(false);
+          const errorMsg =
+            fetchErr instanceof Error ? fetchErr.message : 'Account verification failed.';
+          return { success: false, error: errorMsg };
+        }
       }
 
       setIsLoading(false);
@@ -234,7 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: staffProfile?.role || null,
         permissions,
         isLoading,
-        isAuthenticated: Boolean(user),
+        isAuthenticated: Boolean(user && staffProfile && staffProfile.is_active),
         signIn,
         signOut,
         hasPermission,

@@ -150,6 +150,24 @@ export const AdminStaffPage: React.FC = () => {
     }
   };
 
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const handleResendInvitation = async (email: string, invitationId: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+    setResendingId(invitationId);
+    try {
+      const res = await staffService.resendInvitation(email, invitationId);
+      setActionSuccess(res.message);
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to resend invitation.';
+      setActionError(msg);
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const handleDeleteInvitation = async (invitationId: string) => {
     if (!window.confirm('Are you sure you want to revoke this pending invitation?')) return;
     setActionError(null);
@@ -453,6 +471,7 @@ export const AdminStaffPage: React.FC = () => {
                   <th className="py-3 px-4">Invited Email</th>
                   <th className="py-3 px-4">Full Name</th>
                   <th className="py-3 px-4">Designated Role</th>
+                  <th className="py-3 px-4">Channel / Status</th>
                   <th className="py-3 px-4">Invited At</th>
                   {canManageStaff && <th className="py-3 px-4 text-right">Action</th>}
                 </tr>
@@ -465,19 +484,46 @@ export const AdminStaffPage: React.FC = () => {
                     <td className="py-3 px-4">
                       <Badge variant={getRoleBadgeVariant(inv.roleId)}>{inv.roleName}</Badge>
                     </td>
+                    <td className="py-3 px-4">
+                      {inv.emailSent ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Mail className="w-3 h-3 text-emerald-600" />
+                          Email Dispatched
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                          title="Outbound email service unconfigured; invitation recorded in directory."
+                        >
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          Record Only (SMTP Pending)
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-slate-500">
                       {new Date(inv.createdAt).toLocaleString()}
                     </td>
                     {canManageStaff && (
                       <td className="py-3 px-4 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteInvitation(inv.id)}
-                          className="text-[11px] py-0.5 px-2 text-rose-600 hover:bg-rose-50"
-                        >
-                          Revoke
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={resendingId === inv.id}
+                            onClick={() => handleResendInvitation(inv.email, inv.id)}
+                            className="text-[11px] py-0.5 px-2"
+                          >
+                            {resendingId === inv.id ? 'Sending...' : 'Resend'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteInvitation(inv.id)}
+                            className="text-[11px] py-0.5 px-2 text-rose-600 hover:bg-rose-50"
+                          >
+                            Revoke
+                          </Button>
+                        </div>
                       </td>
                     )}
                   </tr>

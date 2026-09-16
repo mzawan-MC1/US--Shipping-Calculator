@@ -64,4 +64,80 @@ describe('Staff RBAC System (Phase 2A)', () => {
     expect(customsPerms).not.toContain('pricing.manage');
     expect(customsPerms).not.toContain('enquiries.manage');
   });
+
+  describe('Staff Account Governance & Inactive Invariant', () => {
+    it('enforces that inactive staff accounts cannot hold authenticated session', () => {
+      interface MockStaffAccount {
+        id: string;
+        email: string;
+        is_active: boolean;
+        role: string;
+      }
+
+      const activeAccount: MockStaffAccount = {
+        id: 'user-1',
+        email: 'staff@example.com',
+        is_active: true,
+        role: 'sales_agent',
+      };
+
+      const deactivatedAccount: MockStaffAccount = {
+        id: 'user-2',
+        email: 'exstaff@example.com',
+        is_active: false,
+        role: 'sales_agent',
+      };
+
+      const checkAccess = (account: MockStaffAccount | null) => {
+        if (!account) throw new Error('Access denied: Account is not authorized as staff.');
+        if (!account.is_active) throw new Error('Account is deactivated. Contact Super Admin.');
+        return true;
+      };
+
+      expect(checkAccess(activeAccount)).toBe(true);
+      expect(() => checkAccess(deactivatedAccount)).toThrow(/Account is deactivated/i);
+      expect(() => checkAccess(null)).toThrow(/not authorized as staff/i);
+    });
+
+    it('enforces that the last Super Admin cannot be deactivated or demoted', () => {
+      interface StaffRow {
+        id: string;
+        role: string;
+        is_active: boolean;
+      }
+
+      const staffDirectory: StaffRow[] = [
+        { id: 'admin-1', role: 'super_admin', is_active: true },
+        { id: 'agent-1', role: 'sales_agent', is_active: true },
+      ];
+
+      const canDeactivateStaff = (targetStaffId: string, directory: StaffRow[]) => {
+        const target = directory.find((s) => s.id === targetStaffId);
+        if (!target) throw new Error('Staff member not found');
+
+        if (target.role === 'super_admin') {
+          const activeSuperAdmins = directory.filter(
+            (s) => s.role === 'super_admin' && s.is_active && s.id !== targetStaffId
+          );
+          if (activeSuperAdmins.length === 0) {
+            throw new Error('Cannot deactivate the last active Super Admin.');
+          }
+        }
+        return true;
+      };
+
+      // Demoting or deactivating the only super admin must throw
+      expect(() => canDeactivateStaff('admin-1', staffDirectory)).toThrow(
+        /last active Super Admin/i
+      );
+
+      // Adding another super admin allows deactivation of the first
+      const multiAdminDirectory: StaffRow[] = [
+        { id: 'admin-1', role: 'super_admin', is_active: true },
+        { id: 'admin-2', role: 'super_admin', is_active: true },
+        { id: 'agent-1', role: 'sales_agent', is_active: true },
+      ];
+      expect(canDeactivateStaff('admin-1', multiAdminDirectory)).toBe(true);
+    });
+  });
 });

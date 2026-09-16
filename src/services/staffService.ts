@@ -16,6 +16,9 @@ export interface StaffInvitation {
   fullName: string;
   roleId: string;
   roleName: string;
+  emailSent: boolean;
+  resendCount: number;
+  status: string;
   createdAt: string;
 }
 
@@ -23,6 +26,12 @@ export interface SystemRole {
   id: string;
   name: string;
   description: string | null;
+}
+
+export interface InviteResult {
+  success: boolean;
+  emailSent: boolean;
+  message: string;
 }
 
 const DEMO_ROLES: SystemRole[] = [
@@ -91,6 +100,9 @@ interface StaffInvitationQueryResult {
   email: string;
   full_name: string;
   role_id: string;
+  email_sent?: boolean;
+  resend_count?: number;
+  status?: string;
   created_at: string;
   roles: {
     id: string;
@@ -176,6 +188,9 @@ export const staffService = {
         email,
         full_name,
         role_id,
+        email_sent,
+        resend_count,
+        status,
         created_at,
         roles (
           id,
@@ -198,34 +213,124 @@ export const staffService = {
       fullName: inv.full_name,
       roleId: inv.role_id,
       roleName: inv.roles?.name || inv.role_id,
+      emailSent: Boolean(inv.email_sent),
+      resendCount: inv.resend_count || 0,
+      status: inv.status || 'pending',
       createdAt: inv.created_at,
     }));
   },
 
-  async inviteStaff(
-    email: string,
-    fullName: string,
-    roleId: string
-  ): Promise<{ success: boolean; message?: string }> {
-    if (isDemoMode) {
-      return { success: true, message: 'Demo mode: Invitation created locally.' };
+  async inviteStaff(email: string, fullName: string, roleId: string): Promise<InviteResult> {
+    const trimmedEmail = email ? email.trim() : '';
+    const trimmedName = fullName ? fullName.trim() : '';
+
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      throw new Error('A valid email address is required.');
+    }
+    if (!trimmedName || trimmedName.length < 2) {
+      throw new Error('Staff full name must be at least 2 characters.');
+    }
+    const validRoles = [
+      'super_admin',
+      'admin_manager',
+      'pricing_manager',
+      'sales_agent',
+      'content_manager',
+      'viewer',
+    ];
+    if (!validRoles.includes(roleId)) {
+      throw new Error(`Invalid role: "${roleId}". Must be one of: ${validRoles.join(', ')}`);
     }
 
-    const { data, error } = await supabase.rpc('admin_invite_or_create_staff', {
-      p_email: email,
-      p_full_name: fullName,
-      p_role_id: roleId,
+    if (isDemoMode) {
+      return {
+        success: true,
+        emailSent: false,
+        message: 'Demo mode: Staff invitation recorded locally.',
+      };
+    }
+
+    const { data, error } = await supabase.functions.invoke('invite-staff', {
+      body: {
+        action: 'invite',
+        email: trimmedEmail,
+        full_name: trimmedName,
+        role_id: roleId,
+      },
+    });
+
+    if (error) {
+      const contextErr = error as unknown as {
+        context?: { json?: () => Promise<{ error?: string }> };
+      };
+      let message = error.message;
+      if (contextErr?.context?.json) {
+        try {
+          const parsed = await contextErr.context.json();
+          if (parsed?.error) message = parsed.error;
+        } catch {
+          // ignore
+        }
+      }
+      throw new Error(message);
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return {
+      success: true,
+      emailSent: Boolean(data?.email_sent),
+      message: data?.message || 'Staff invitation processed successfully.',
+    };
+  },
+
+  async resendInvitation(email: string, invitationId?: string): Promise<InviteResult> {
+    if (isDemoMode) {
+      return {
+        success: true,
+        emailSent: false,
+        message: 'Demo mode: Invitation resent locally.',
+      };
+    }
+
+    const { data, error } = await supabase.functions.invoke('invite-staff', {
+      body: {
+        action: 'resend',
+        email,
+        invitation_id: invitationId,
+      },
     });
 
     if (error) {
       throw new Error(error.message);
     }
 
-    const res = data as { success: boolean; message?: string };
-    return { success: res?.success, message: res?.message };
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return {
+      success: true,
+      emailSent: Boolean(data?.email_sent),
+      message: data?.message || 'Invitation resent.',
+    };
   },
 
   async updateStaffRole(staffId: string, roleId: string): Promise<{ success: boolean }> {
+    const validRoles = [
+      'super_admin',
+      'admin_manager',
+      'pricing_manager',
+      'sales_agent',
+      'content_manager',
+      'viewer',
+    ];
+    if (!validRoles.includes(roleId)) {
+      throw new Error(`Invalid role: "${roleId}". Must be one of: ${validRoles.join(', ')}`);
+    }
+
     if (isDemoMode) {
       return { success: true };
     }
@@ -262,10 +367,25 @@ export const staffService = {
   async deleteInvitation(invitationId: string): Promise<void> {
     if (isDemoMode) return;
 
-    const { error } = await supabase.from('staff_invitations').delete().eq('id', invitationId);
+    const { data, error } = await supabase.functions.invoke('invite-staff', {
+      body: {
+        action: 'revoke',
+        invitation_id: invitationId,
+      },
+    });
 
     if (error) {
-      throw new Error(error.message);
+      // Fallback to database RLS delete
+      const { error: dbError } = await supabase
+        .from('staff_invitations')
+        .delete()
+        .eq('id', invitationId);
+      if (dbError) throw new Error(dbError.message);
+      return;
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
     }
   },
 };
