@@ -13,13 +13,20 @@ const STORAGE_KEY = 'fakher_alam_active_quote';
 export const quotationService = {
   async calculateQuote(input: CalculatorFormData): Promise<QuotationBreakdown> {
     try {
-      // Map loading port & destination port slugs to UUIDs
-      const originPortId =
-        PORT_SLUG_TO_UUID[input.loadingPort] || '10000000-0000-0000-0000-000000000002';
-      const destPortId =
-        PORT_SLUG_TO_UUID[input.destinationPort] || '20000000-0000-0000-0000-000000000001';
+      // Map loading port & destination port (supports direct UUIDs, standard slugs, or port codes)
+      const isUUID = (val?: string) =>
+        Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
-      // Map vehicle category (handle 'bike' -> 'motorcycle')
+      const originPortId = isUUID(input.loadingPort)
+        ? input.loadingPort
+        : (PORT_SLUG_TO_UUID[input.loadingPort] ||
+           '10000000-0000-0000-0000-000000000002');
+      const destPortId = isUUID(input.destinationPort)
+        ? input.destinationPort
+        : (PORT_SLUG_TO_UUID[input.destinationPort] ||
+           '20000000-0000-0000-0000-000000000001');
+
+      // Map vehicle category (handle 'bike' -> 'motorcycle' if needed)
       const categoryId = input.vehicleType === 'bike' ? 'motorcycle' : input.vehicleType;
 
       // Map purchase location if known

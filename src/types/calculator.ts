@@ -1,12 +1,27 @@
-export type VehicleType = 'sedan' | 'suv' | 'van' | 'pickup' | 'bike';
-export type Powertrain = 'petrol' | 'hybrid' | 'electric';
-export type PurchaseSource = 'copart' | 'iaai' | 'manheim' | 'acv' | 'adesa' | 'dealer' | 'other';
-export type UsLoadingPort = 'newark' | 'savannah' | 'houston' | 'los_angeles' | 'baltimore';
-export type UaeDestinationPort = 'khorfakkan' | 'jebel_ali';
+export type VehicleType = 'sedan' | 'suv' | 'van' | 'pickup' | 'bike' | (string & {});
+export type Powertrain = 'petrol' | 'hybrid' | 'electric' | (string & {});
+export type PurchaseSource =
+  | 'copart'
+  | 'iaai'
+  | 'manheim'
+  | 'acv'
+  | 'adesa'
+  | 'dealer'
+  | 'other'
+  | (string & {});
+export type UsLoadingPort =
+  | 'newark'
+  | 'savannah'
+  | 'houston'
+  | 'los_angeles'
+  | 'baltimore'
+  | (string & {});
+export type UaeDestinationPort = 'khorfakkan' | 'jebel_ali' | (string & {});
 
 export interface PortOption {
   id: string;
   name: string;
+  nameAr?: string;
   stateOrCity: string;
   country: string;
   code: string;

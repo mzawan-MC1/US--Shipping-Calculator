@@ -1,11 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
-import { UNVERIFIED_CONTENT } from '../../config/unverifiedContent';
+import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { Ship, MapPin, Phone, Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 
 export const PublicFooter: React.FC = () => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { branding, getWhatsAppLink, getPhoneTel } = useWebsiteSettings();
+
+  const isAr = language === 'ar';
+  const brandTitle = isAr ? branding.companyNameAr : branding.companyName;
+  const addressDisplay = isAr ? branding.headquartersAddressAr : branding.headquartersAddress;
+  const copyrightDisplay = isAr ? branding.copyrightTextAr : branding.copyrightText;
+  const whatsappHref = getWhatsAppLink();
+  const phoneHref = `tel:${getPhoneTel()}`;
 
   return (
     <footer className="bg-brand-navy-950 text-slate-400 border-t border-brand-navy-800 text-sm">
@@ -14,24 +22,39 @@ export const PublicFooter: React.FC = () => {
           {/* Brand Col */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-brand-orange-500 flex items-center justify-center text-white">
-                <Ship className="w-5 h-5" />
-              </div>
-              <span className="text-lg font-black text-white">{t.brandName}</span>
+              {branding.darkLogoUrl || branding.logoUrl ? (
+                <img
+                  src={branding.darkLogoUrl || branding.logoUrl}
+                  alt={brandTitle}
+                  className="h-9 max-w-[150px] object-contain"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-brand-orange-500 flex items-center justify-center text-white shrink-0">
+                  <Ship className="w-5 h-5" />
+                </div>
+              )}
+              <span className="text-lg font-black text-white">{brandTitle}</span>
             </div>
             <p className="text-slate-300 text-xs sm:text-sm max-w-md leading-relaxed">
-              Professional, licensed car shipping specialists transporting vehicles from major USA
-              auto auctions and ports directly to Khorfakkan Port (Sharjah) and Jebel Ali (Dubai).
+              {isAr
+                ? 'متخصصون في شحن السيارات وتقديم الخدمات اللوجستية البحرية الموثوقة من موانئ ومزادات الولايات المتحدة الأمريكية مباشرة إلى موانئ دولة الإمارات العربية المتحدة.'
+                : 'Professional, licensed car shipping specialists transporting vehicles from major USA auto auctions and ports directly to Khorfakkan Port (Sharjah) and Jebel Ali (Dubai).'}
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold">
               <ShieldCheck className="w-4 h-4" />
-              <span>{UNVERIFIED_CONTENT.licenseDescription}</span>
+              <span>
+                {isAr
+                  ? 'خدمات لوجستية بحرية مرخصة ومعتمدة في دولة الإمارات العربية المتحدة'
+                  : 'Licensed & Registered UAE Maritime Freight Forwarder'}
+              </span>
             </div>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-3">Quick Links</h4>
+            <h4 className="text-white font-bold text-sm mb-3">
+              {isAr ? 'روابط سريعة' : 'Quick Links'}
+            </h4>
             <ul className="space-y-2 text-xs sm:text-sm">
               <li>
                 <Link to="/" className="hover:text-white transition-colors">
@@ -63,45 +86,53 @@ export const PublicFooter: React.FC = () => {
 
           {/* Contact Col */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-3">Sharjah Office</h4>
+            <h4 className="text-white font-bold text-sm mb-3">
+              {isAr ? 'المقر الرئيسي والمساعدة' : 'Headquarters & Support'}
+            </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm">
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-brand-orange-400 shrink-0 mt-0.5" />
-                <span>{UNVERIFIED_CONTENT.addressFull}</span>
+                <span>{addressDisplay}</span>
               </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-brand-orange-400 shrink-0" />
-                <a href={`tel:${UNVERIFIED_CONTENT.phoneTel}`} className="hover:text-white">
-                  {UNVERIFIED_CONTENT.phonePrimary}
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-brand-whatsapp shrink-0" />
-                <a
-                  href={`https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-white"
-                >
-                  WhatsApp Chat
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-brand-orange-400 shrink-0" />
-                <a href={`mailto:${UNVERIFIED_CONTENT.emailSupport}`} className="hover:text-white">
-                  {UNVERIFIED_CONTENT.emailSupport}
-                </a>
-              </li>
+              {branding.supportPhone && (
+                <li className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-brand-orange-400 shrink-0" />
+                  <a href={phoneHref} className="hover:text-white">
+                    {branding.supportPhone}
+                  </a>
+                </li>
+              )}
+              {whatsappHref && (
+                <li className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-brand-whatsapp shrink-0" />
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-white"
+                  >
+                    {isAr ? 'محادثة واتساب مباشرة' : 'WhatsApp Support'}
+                  </a>
+                </li>
+              )}
+              {branding.supportEmail && (
+                <li className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-brand-orange-400 shrink-0" />
+                  <a href={`mailto:${branding.supportEmail}`} className="hover:text-white">
+                    {branding.supportEmail}
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         </div>
 
         {/* Bottom bar */}
         <div className="mt-12 pt-6 border-t border-brand-navy-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
-          <p>© 2026 Fakher Alam Used Cars Shipping. All Rights Reserved.</p>
+          <p>© {new Date().getFullYear()} {copyrightDisplay}</p>
           <div className="flex items-center gap-4">
             <span className="text-[11px] px-2 py-0.5 rounded bg-brand-navy-900 border border-brand-navy-800 text-slate-300">
-              SiteGround Preview Release
+              UAE Logistics Platform
             </span>
           </div>
         </div>

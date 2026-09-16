@@ -9,7 +9,7 @@ import { Alert } from '../../components/ui/Alert';
 import { quotationService } from '../../services/quotationService';
 import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
-import { UNVERIFIED_CONTENT } from '../../config/unverifiedContent';
+import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import {
   Clock,
   Car,
@@ -91,14 +91,16 @@ export const ResultsPage: React.FC = () => {
     ? `${formatCurrency(quote.totalChargesAedMin || convertUsdToAed(quote.totalChargesUsdMin || 0), 'AED')} - ${formatCurrency(quote.totalChargesAedMax || convertUsdToAed(quote.totalChargesUsdMax || 0), 'AED')}`
     : formatCurrency(quote.totalChargesAed || convertUsdToAed(quote.totalChargesUsd), 'AED');
 
-  const whatsappMessage = `*FAKHER ALAM USED CARS SHIPPING - QUOTATION CONFIRMATION*
+  const { branding, getWhatsAppLink } = useWebsiteSettings();
+  const brandNameHeader = (branding.shortName || branding.companyName).toUpperCase();
+  const whatsappMessage = `*${brandNameHeader} - SHIPPING QUOTATION*
 Quote Ref: ${quote.referenceNumber}
 Customer: ${quote.input.customerName || 'Customer'}
 Route: ${quote.input.loadingPort.toUpperCase()} -> ${quote.input.destinationPort.toUpperCase()}
 Total Estimated: ${totalFormatted} (${totalAedFormatted})
 View Quote: ${window.location.origin}/results`;
 
-  const whatsappHref = `https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`;
+  const whatsappHref = getWhatsAppLink(whatsappMessage);
 
   const handleDownloadQuotation = () => {
     window.print();
@@ -451,7 +453,7 @@ View Quote: ${window.location.origin}/results`;
           {/* Action Buttons */}
           <div className="space-y-3 pt-2">
             <a
-              href={whatsappHref}
+              href={whatsappHref || '#'}
               target="_blank"
               rel="noopener noreferrer"
               className="block w-full"

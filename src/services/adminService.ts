@@ -1,5 +1,13 @@
 import { supabase } from '../lib/supabase';
-import type { Json } from '../types/database';
+import type { Database, Json } from '../types/database';
+
+type RouteUpdate = Database['public']['Tables']['shipping_routes']['Update'];
+type PortUpdate = Database['public']['Tables']['ports']['Update'];
+type CountryUpdate = Database['public']['Tables']['countries']['Update'];
+type FreightRateUpdate = Database['public']['Tables']['route_freight_rates']['Update'];
+type TowingRateUpdate = Database['public']['Tables']['towing_rates']['Update'];
+type ShippingMethodUpdate = Database['public']['Tables']['shipping_methods']['Update'];
+type AdditionalChargeRuleUpdate = Database['public']['Tables']['additional_charge_rules']['Update'];
 
 export interface AdminQuotation {
   id: string;
@@ -47,8 +55,10 @@ export interface AdminCustomer {
 
 export interface AdminRoute {
   id: string;
+  originPortId: string;
   originPortName: string;
   originPortCode: string;
+  destinationPortId: string;
   destinationPortName: string;
   destinationPortCode: string;
   transitDaysMin: number;
@@ -61,6 +71,7 @@ export interface AdminPort {
   id: string;
   code: string;
   name: string;
+  nameAr?: string;
   countryCode: string;
   stateOrCity?: string;
   isLoadingPort: boolean;
@@ -71,16 +82,27 @@ export interface AdminPort {
 export interface AdminCountry {
   code: string;
   name: string;
+  nameAr?: string;
   isActive: boolean;
   createdAt: string;
 }
 
 export interface AdminFreightRate {
   id: string;
+  routeId: string;
   routeDesc: string;
+  originPortName: string;
+  originPortCode: string;
+  destinationPortName: string;
+  destinationPortCode: string;
+  vehicleCategoryId: string;
   category: string;
+  powertrainId: string;
+  powertrain: string;
+  shippingMethodId: string;
   shippingMethod: string;
   amountUsd: number;
+  currency: string;
   effectiveFrom: string;
   effectiveTo?: string;
   isActive: boolean;
@@ -88,16 +110,134 @@ export interface AdminFreightRate {
 
 export interface AdminTowingRate {
   id: string;
+  purchaseLocationId: string;
+  loadingPortId: string;
   originLocation: string;
+  stateCode?: string;
   loadingPort: string;
+  vehicleCategoryId?: string;
   vehicleCategory: string;
-  rateType: string;
+  vehicleConditionId?: string;
+  vehicleCondition: string;
+  rateType: 'fixed' | 'range';
   fixedAmount: number;
   minAmount: number;
   maxAmount: number;
+  currency: string;
   isRange: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
   isActive: boolean;
 }
+
+export interface AdminVehicleCategory {
+  id: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+export interface AdminShippingMethod {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface AdminPowertrain {
+  id: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+export interface AdminPurchaseLocation {
+  id: string;
+  name: string;
+  stateCode: string;
+  postalCode?: string;
+  purchaseSourceId: string;
+  defaultLoadingPortId?: string;
+  isActive: boolean;
+}
+
+export interface AdminAdditionalChargeRule {
+  id: string;
+  name: string;
+  category: string;
+  chargeType: string;
+  amount: number;
+  currency: string;
+  isMandatory: boolean;
+  isIncludedInVatBase: boolean;
+  countryCode?: string;
+  destinationPortId?: string;
+  isActive: boolean;
+}
+
+export interface BrandingSettings {
+  companyName: string;
+  companyNameAr: string;
+  shortName: string;
+  shortNameAr: string;
+  tagline: string;
+  taglineAr: string;
+  logoUrl: string;
+  darkLogoUrl: string;
+  faviconUrl: string;
+  browserTitle: string;
+  browserTitleAr: string;
+  metaDescription: string;
+  metaDescriptionAr: string;
+  supportPhone: string;
+  supportEmail: string;
+  whatsappNumber: string;
+  headquartersAddress: string;
+  headquartersAddressAr: string;
+  businessHours: string;
+  businessHoursAr: string;
+  copyrightText: string;
+  copyrightTextAr: string;
+  socialLinks: {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    linkedin?: string;
+  };
+}
+
+export const DEFAULT_BRANDING: BrandingSettings = {
+  companyName: 'Fakher Alam Used Cars Shipping',
+  companyNameAr: 'فاخر علم لشحن السيارات المستعملة',
+  shortName: 'Fakher Alam',
+  shortNameAr: 'فاخر علم',
+  tagline: 'Premier Auto Logistics from US Auctions to UAE Ports',
+  taglineAr: 'رواد الشحن البحري للسيارات من مزادات أمريكا إلى موانئ الإمارات',
+  logoUrl: '',
+  darkLogoUrl: '',
+  faviconUrl: '',
+  browserTitle: 'Fakher Alam Used Cars Shipping | US to UAE Auto Logistics',
+  browserTitleAr: 'فاخر علم لشحن السيارات المستعملة | شحن السيارات من أمريكا إلى الإمارات',
+  metaDescription:
+    'Authoritative ocean container shipping, inland towing, customs clearance, and statutory duty calculation for vehicle imports into the UAE.',
+  metaDescriptionAr:
+    'خدمات الشحن البحري، القطر الداخلي، التخليص الجمركي، وحساب الرسوم بدقة لاستيراد المركبات إلى دولة الإمارات العربية المتحدة.',
+  supportPhone: '+971508322799',
+  supportEmail: 'info@mc1services.com',
+  whatsappNumber: '+971508322799',
+  headquartersAddress: 'Industrial Area 2, Sharjah, UAE',
+  headquartersAddressAr: 'المنطقة الصناعية 2، الشارقة، الإمارات العربية المتحدة',
+  businessHours: 'Saturday – Thursday: 9:00 AM – 8:00 PM (GST)',
+  businessHoursAr: 'السبت – الخميس: 9:00 صباحاً – 8:00 مساءً (توقيت الإمارات)',
+  copyrightText: 'Fakher Alam Used Cars Shipping. All rights reserved.',
+  copyrightTextAr: 'فاخر علم لشحن السيارات المستعملة. جميع الحقوق محفوظة.',
+  socialLinks: {
+    facebook: '',
+    instagram: '',
+    twitter: '',
+    linkedin: '',
+  },
+};
 
 export interface AdminCmsNotice {
   id: string;
@@ -149,6 +289,8 @@ export const adminService = {
         disclaimer,
         created_at,
         enquiries (
+          id,
+          reference_number,
           customers (
             full_name,
             phone,
@@ -160,17 +302,24 @@ export const adminService = {
       .order('created_at', { ascending: false });
 
     if (error) {
-      throw new Error(error.message || 'Unable to load quotations.');
+      throw new Error(error.message || 'Unable to load live quotations.');
     }
 
-    interface RawQuoteRow {
+    interface RawQuote {
       id: string;
       reference_number: string;
       enquiry_id: string;
       version: number;
       pricing_snapshot: {
-        vehicle?: { category_id?: string; make?: string; model?: string; year?: number };
+        customer?: { full_name?: string; phone?: string; email?: string };
         route?: { origin_port_name?: string; destination_port_name?: string };
+        vehicle?: { category_name?: string; make?: string; model?: string; year?: number };
+        line_items?: Array<{
+          category: string;
+          description: string;
+          amount_usd?: number;
+          amount_aed?: number;
+        }>;
       } | null;
       subtotal_ocean_freight: number;
       towing_fee_min: number;
@@ -182,50 +331,59 @@ export const adminService = {
       total_charges_usd_max: number;
       total_charges_aed_min: number;
       total_charges_aed_max: number;
-      disclaimer: string | null;
+      disclaimer?: string;
       created_at: string;
       enquiries: {
         customers: {
-          full_name: string | null;
-          phone: string | null;
-          email: string | null;
+          full_name: string;
+          phone: string;
+          email?: string;
         } | null;
       } | null;
     }
 
-    const rows = data as unknown as RawQuoteRow[];
-
+    const rows = (data || []) as unknown as RawQuote[];
     return rows.map((q) => {
-      const cust = q.enquiries?.customers;
       const snap = q.pricing_snapshot;
-      const vehicleDesc = snap?.vehicle
-        ? `${snap.vehicle.year || ''} ${snap.vehicle.make || ''} ${snap.vehicle.model || ''}`.trim()
+      const cust = q.enquiries?.customers;
+      const customerName = cust?.full_name || snap?.customer?.full_name || 'Client';
+      const customerPhone = cust?.phone || snap?.customer?.phone || 'No phone recorded';
+      const route = snap?.route
+        ? `${snap.route.origin_port_name || 'USA'} -> ${snap.route.destination_port_name || 'UAE'}`
+        : 'US to UAE Route';
+      const veh = snap?.vehicle
+        ? `${snap.vehicle.year ? snap.vehicle.year + ' ' : ''}${snap.vehicle.make || ''} ${snap.vehicle.model || ''} (${snap.vehicle.category_name || 'Vehicle'})`
         : 'Standard Vehicle';
-      const originPort = snap?.route?.origin_port_name || 'USA';
-      const destPort = snap?.route?.destination_port_name || 'UAE';
 
       return {
         id: q.id,
         referenceNumber: q.reference_number,
         enquiryId: q.enquiry_id,
-        version: q.version || 1,
-        customerName: cust?.full_name || 'Direct Customer',
-        customerPhone: cust?.phone || 'N/A',
-        customerEmail: cust?.email || undefined,
-        route: `${originPort} -> ${destPort}`,
-        vehicleDetails: vehicleDesc,
-        oceanFreightUsd: Number(q.subtotal_ocean_freight || 0),
-        towingFeeMin: Number(q.towing_fee_min || 0),
-        towingFeeMax: Number(q.towing_fee_max || 0),
+        version: q.version,
+        customerName,
+        customerPhone,
+        customerEmail: cust?.email || snap?.customer?.email,
+        route,
+        vehicleDetails: veh.trim() || 'Vehicle',
+        oceanFreightUsd: Number(q.subtotal_ocean_freight),
+        towingFeeMin: Number(q.towing_fee_min),
+        towingFeeMax: Number(q.towing_fee_max),
         isTowingRange: Boolean(q.is_towing_range),
-        customsDutyUsd: Number(q.customs_duty || 0),
-        importVatUsd: Number(q.import_vat || 0),
-        totalUsdMin: Number(q.total_charges_usd_min || 0),
-        totalUsdMax: Number(q.total_charges_usd_max || 0),
-        totalAedMin: Number(q.total_charges_aed_min || 0),
-        totalAedMax: Number(q.total_charges_aed_max || 0),
-        disclaimer: q.disclaimer || undefined,
+        customsDutyUsd: Number(q.customs_duty),
+        importVatUsd: Number(q.import_vat),
+        totalUsdMin: Number(q.total_charges_usd_min),
+        totalUsdMax: Number(q.total_charges_usd_max),
+        totalAedMin: Number(q.total_charges_aed_min),
+        totalAedMax: Number(q.total_charges_aed_max),
+        disclaimer: q.disclaimer,
         createdAt: q.created_at,
+        lineItems: snap?.line_items?.map((li) => ({
+          category: li.category,
+          description: li.description,
+          amountUsd: Number(li.amount_usd || 0),
+          amountAed: Number(li.amount_aed || 0),
+          isEstimate: li.category === 'towing' && q.is_towing_range,
+        })),
       };
     });
   },
@@ -238,10 +396,7 @@ export const adminService = {
     ]);
 
     if (custRes.error) {
-      throw new Error(custRes.error.message || 'Unable to load customers.');
-    }
-    if (vehRes.error) {
-      throw new Error(vehRes.error.message || 'Unable to load customer vehicle counts.');
+      throw new Error(custRes.error.message || 'Unable to load customer database.');
     }
 
     const vehCounts = new Map<string, number>();
@@ -299,15 +454,19 @@ export const adminService = {
       .select(
         `
         id,
+        origin_port_id,
+        destination_port_id,
         transit_days_min,
         transit_days_max,
         is_active,
         created_at,
         origin_port:ports!shipping_routes_origin_port_id_fkey (
+          id,
           name,
           code
         ),
         dest_port:ports!shipping_routes_destination_port_id_fkey (
+          id,
           name,
           code
         )
@@ -321,19 +480,23 @@ export const adminService = {
 
     interface RawRoute {
       id: string;
+      origin_port_id: string;
+      destination_port_id: string;
       transit_days_min: number;
       transit_days_max: number;
       is_active: boolean;
       created_at: string;
-      origin_port: { name: string; code: string } | null;
-      dest_port: { name: string; code: string } | null;
+      origin_port: { id: string; name: string; code: string } | null;
+      dest_port: { id: string; name: string; code: string } | null;
     }
 
     const rows = (data || []) as unknown as RawRoute[];
     return rows.map((r) => ({
       id: r.id,
+      originPortId: r.origin_port_id,
       originPortName: r.origin_port?.name || 'Origin Port',
       originPortCode: r.origin_port?.code || 'ORIGIN',
+      destinationPortId: r.destination_port_id,
       destinationPortName: r.dest_port?.name || 'Destination Port',
       destinationPortCode: r.dest_port?.code || 'DEST',
       transitDaysMin: r.transit_days_min,
@@ -341,6 +504,65 @@ export const adminService = {
       isActive: Boolean(r.is_active),
       createdAt: r.created_at,
     }));
+  },
+
+  async createRoute(route: {
+    originPortId: string;
+    destinationPortId: string;
+    transitDaysMin: number;
+    transitDaysMax: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; id?: string }> {
+    if (route.originPortId === route.destinationPortId) {
+      throw new Error('Origin port and destination port must be different.');
+    }
+    if (route.transitDaysMin <= 0) {
+      throw new Error('Minimum transit days must be greater than 0.');
+    }
+    if (route.transitDaysMax < route.transitDaysMin) {
+      throw new Error('Maximum transit days must be greater than or equal to minimum transit days.');
+    }
+
+    const { data, error } = await supabase
+      .from('shipping_routes')
+      .insert({
+        origin_port_id: route.originPortId,
+        destination_port_id: route.destinationPortId,
+        transit_days_min: route.transitDaysMin,
+        transit_days_max: route.transitDaysMax,
+        is_active: route.isActive ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create shipping route.');
+    return { success: true, id: data?.id };
+  },
+
+  async updateRoute(
+    id: string,
+    updates: Partial<{
+      originPortId: string;
+      destinationPortId: string;
+      transitDaysMin: number;
+      transitDaysMax: number;
+      isActive: boolean;
+    }>
+  ): Promise<boolean> {
+    const payload: RouteUpdate = {};
+    if (updates.originPortId) payload.origin_port_id = updates.originPortId;
+    if (updates.destinationPortId) payload.destination_port_id = updates.destinationPortId;
+    if (updates.transitDaysMin !== undefined) payload.transit_days_min = updates.transitDaysMin;
+    if (updates.transitDaysMax !== undefined) payload.transit_days_max = updates.transitDaysMax;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    if (payload.origin_port_id && payload.destination_port_id && payload.origin_port_id === payload.destination_port_id) {
+      throw new Error('Origin and destination ports cannot be the same.');
+    }
+
+    const { error } = await supabase.from('shipping_routes').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update route.');
+    return true;
   },
 
   async toggleRouteStatus(routeId: string, isActive: boolean): Promise<boolean> {
@@ -352,11 +574,18 @@ export const adminService = {
     return true;
   },
 
+  async deleteRoute(routeId: string): Promise<boolean> {
+    const { error } = await supabase.from('shipping_routes').delete().eq('id', routeId);
+    if (error) throw new Error(error.message || 'Unable to delete route (it may have active freight tariffs assigned).');
+    return true;
+  },
+
   async getPorts(): Promise<AdminPort[]> {
     const { data, error } = await supabase
       .from('ports')
       .select('*')
-      .order('country_code', { ascending: true });
+      .order('country_code', { ascending: true })
+      .order('name', { ascending: true });
 
     if (error) {
       throw new Error(error.message || 'Unable to load ports.');
@@ -366,6 +595,7 @@ export const adminService = {
       id: p.id,
       code: p.code,
       name: p.name,
+      nameAr: p.name_ar || undefined,
       countryCode: p.country_code,
       stateOrCity: p.state_or_city || undefined,
       isLoadingPort: Boolean(p.is_loading_port),
@@ -374,9 +604,72 @@ export const adminService = {
     }));
   },
 
+  async createPort(port: {
+    code: string;
+    name: string;
+    nameAr?: string;
+    countryCode: string;
+    stateOrCity?: string;
+    isLoadingPort: boolean;
+    isDestinationPort: boolean;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; id?: string }> {
+    const { data, error } = await supabase
+      .from('ports')
+      .insert({
+        code: port.code.trim().toUpperCase(),
+        name: port.name.trim(),
+        name_ar: port.nameAr?.trim() || null,
+        country_code: port.countryCode.trim().toUpperCase(),
+        state_or_city: port.stateOrCity?.trim() || '',
+        is_loading_port: port.isLoadingPort,
+        is_destination_port: port.isDestinationPort,
+        is_active: port.isActive ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create port.');
+    return { success: true, id: data?.id };
+  },
+
+  async updatePort(
+    id: string,
+    updates: Partial<{
+      code: string;
+      name: string;
+      nameAr?: string;
+      countryCode: string;
+      stateOrCity?: string;
+      isLoadingPort: boolean;
+      isDestinationPort: boolean;
+      isActive: boolean;
+    }>
+  ): Promise<boolean> {
+    const payload: PortUpdate = {};
+    if (updates.code) payload.code = updates.code.trim().toUpperCase();
+    if (updates.name) payload.name = updates.name.trim();
+    if (updates.nameAr !== undefined) payload.name_ar = updates.nameAr ? updates.nameAr.trim() : null;
+    if (updates.countryCode) payload.country_code = updates.countryCode.trim().toUpperCase();
+    if (updates.stateOrCity !== undefined) payload.state_or_city = updates.stateOrCity ? updates.stateOrCity.trim() : '';
+    if (updates.isLoadingPort !== undefined) payload.is_loading_port = updates.isLoadingPort;
+    if (updates.isDestinationPort !== undefined) payload.is_destination_port = updates.isDestinationPort;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    const { error } = await supabase.from('ports').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update port.');
+    return true;
+  },
+
   async togglePortStatus(portId: string, isActive: boolean): Promise<boolean> {
     const { error } = await supabase.from('ports').update({ is_active: isActive }).eq('id', portId);
     if (error) throw new Error(error.message || 'Unable to update port status.');
+    return true;
+  },
+
+  async deletePort(portId: string): Promise<boolean> {
+    const { error } = await supabase.from('ports').delete().eq('id', portId);
+    if (error) throw new Error(error.message || 'Unable to delete port (routes or towing rates reference this port).');
     return true;
   },
 
@@ -388,27 +681,74 @@ export const adminService = {
     return (data || []).map((c) => ({
       code: c.code,
       name: c.name,
+      nameAr: c.name_ar || undefined,
       isActive: Boolean(c.is_active),
       createdAt: c.created_at,
     }));
   },
 
-  // Tariffs & Towing
+  async createCountry(country: {
+    code: string;
+    name: string;
+    nameAr?: string;
+    isActive?: boolean;
+  }): Promise<boolean> {
+    const { error } = await supabase.from('countries').insert({
+      code: country.code.trim().toUpperCase(),
+      name: country.name.trim(),
+      name_ar: country.nameAr?.trim() || null,
+      is_active: country.isActive ?? true,
+    });
+    if (error) throw new Error(error.message || 'Unable to register country.');
+    return true;
+  },
+
+  async updateCountry(
+    code: string,
+    updates: Partial<{ name: string; nameAr?: string; isActive: boolean }>
+  ): Promise<boolean> {
+    const payload: CountryUpdate = {};
+    if (updates.name) payload.name = updates.name.trim();
+    if (updates.nameAr !== undefined) payload.name_ar = updates.nameAr ? updates.nameAr.trim() : null;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    const { error } = await supabase.from('countries').update(payload).eq('code', code);
+    if (error) throw new Error(error.message || 'Unable to update country.');
+    return true;
+  },
+
+  async toggleCountryStatus(code: string, isActive: boolean): Promise<boolean> {
+    const { error } = await supabase.from('countries').update({ is_active: isActive }).eq('code', code);
+    if (error) throw new Error(error.message || 'Unable to update country status.');
+    return true;
+  },
+
+  async deleteCountry(code: string): Promise<boolean> {
+    const { error } = await supabase.from('countries').delete().eq('code', code);
+    if (error) throw new Error(error.message || 'Unable to delete country (ports or rules reference this country).');
+    return true;
+  },
+
+  // Tariffs & Freight Rates
   async getFreightRates(): Promise<AdminFreightRate[]> {
     const { data, error } = await supabase
       .from('route_freight_rates')
       .select(
         `
         id,
+        route_id,
         vehicle_category_id,
+        powertrain_id,
         shipping_method_id,
-        rate_amount,
+        base_amount,
+        currency,
         effective_from,
         effective_to,
         is_active,
-        shipping_routes (
-          origin_port:ports!shipping_routes_origin_port_id_fkey ( name ),
-          dest_port:ports!shipping_routes_destination_port_id_fkey ( name )
+        shipping_routes!route_freight_rates_route_id_fkey (
+          id,
+          origin_port:ports!shipping_routes_origin_port_id_fkey ( name, code ),
+          dest_port:ports!shipping_routes_destination_port_id_fkey ( name, code )
         )
       `
       )
@@ -420,28 +760,44 @@ export const adminService = {
 
     interface RawFreight {
       id: string;
+      route_id: string;
       vehicle_category_id: string;
+      powertrain_id: string;
       shipping_method_id: string;
-      rate_amount: number;
+      base_amount: number;
+      currency: string;
       effective_from: string;
       effective_to: string | null;
       is_active: boolean;
       shipping_routes: {
-        origin_port: { name: string } | null;
-        dest_port: { name: string } | null;
+        id: string;
+        origin_port: { name: string; code: string } | null;
+        dest_port: { name: string; code: string } | null;
       } | null;
     }
 
     const rows = (data || []) as unknown as RawFreight[];
     return rows.map((r) => {
-      const origin = r.shipping_routes?.origin_port?.name || 'USA Port';
-      const dest = r.shipping_routes?.dest_port?.name || 'UAE Port';
+      const originName = r.shipping_routes?.origin_port?.name || 'USA Port';
+      const originCode = r.shipping_routes?.origin_port?.code || 'ORIGIN';
+      const destName = r.shipping_routes?.dest_port?.name || 'UAE Port';
+      const destCode = r.shipping_routes?.dest_port?.code || 'DEST';
       return {
         id: r.id,
-        routeDesc: `${origin} -> ${dest}`,
+        routeId: r.route_id,
+        routeDesc: `${originName} (${originCode}) -> ${destName} (${destCode})`,
+        originPortName: originName,
+        originPortCode: originCode,
+        destinationPortName: destName,
+        destinationPortCode: destCode,
+        vehicleCategoryId: r.vehicle_category_id,
         category: r.vehicle_category_id.toUpperCase(),
-        shippingMethod: r.shipping_method_id.toUpperCase(),
-        amountUsd: Number(r.rate_amount),
+        powertrainId: r.powertrain_id,
+        powertrain: r.powertrain_id.toUpperCase(),
+        shippingMethodId: r.shipping_method_id,
+        shippingMethod: r.shipping_method_id.replace(/_/g, ' ').toUpperCase(),
+        amountUsd: Number(r.base_amount),
+        currency: r.currency || 'USD',
         effectiveFrom: r.effective_from,
         effectiveTo: r.effective_to || undefined,
         isActive: Boolean(r.is_active),
@@ -449,24 +805,131 @@ export const adminService = {
     });
   },
 
+  async createFreightRate(rate: {
+    routeId: string;
+    vehicleCategoryId: string;
+    powertrainId?: string;
+    shippingMethodId: string;
+    baseAmount: number;
+    currency?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; id?: string }> {
+    if (rate.baseAmount <= 0) {
+      throw new Error('Freight rate amount must be a positive number.');
+    }
+    const ptId = rate.powertrainId || 'petrol';
+
+    // Prevent duplicate active rates
+    const { data: existing } = await supabase
+      .from('route_freight_rates')
+      .select('id')
+      .eq('route_id', rate.routeId)
+      .eq('shipping_method_id', rate.shippingMethodId)
+      .eq('vehicle_category_id', rate.vehicleCategoryId)
+      .eq('powertrain_id', ptId)
+      .eq('is_active', true)
+      .is('effective_to', null)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error('An active freight rate already exists for this Route, Method, Category, and Powertrain combination.');
+    }
+
+    const { data, error } = await supabase
+      .from('route_freight_rates')
+      .insert({
+        route_id: rate.routeId,
+        vehicle_category_id: rate.vehicleCategoryId,
+        powertrain_id: ptId,
+        shipping_method_id: rate.shippingMethodId,
+        base_amount: rate.baseAmount,
+        currency: rate.currency || 'USD',
+        effective_from: rate.effectiveFrom || new Date().toISOString().split('T')[0],
+        effective_to: rate.effectiveTo || null,
+        is_active: rate.isActive ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create freight rate.');
+    return { success: true, id: data?.id };
+  },
+
+  async updateFreightRate(
+    id: string,
+    updates: Partial<{
+      baseAmount: number;
+      effectiveFrom: string;
+      effectiveTo?: string | null;
+      isActive: boolean;
+      shippingMethodId: string;
+      vehicleCategoryId: string;
+      powertrainId: string;
+    }>
+  ): Promise<boolean> {
+    const payload: FreightRateUpdate = {};
+    if (updates.baseAmount !== undefined) {
+      if (updates.baseAmount <= 0) throw new Error('Freight rate amount must be positive.');
+      payload.base_amount = updates.baseAmount;
+    }
+    if (updates.effectiveFrom) payload.effective_from = updates.effectiveFrom;
+    if (updates.effectiveTo !== undefined) payload.effective_to = updates.effectiveTo;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    if (updates.shippingMethodId) payload.shipping_method_id = updates.shippingMethodId;
+    if (updates.vehicleCategoryId) payload.vehicle_category_id = updates.vehicleCategoryId;
+    if (updates.powertrainId) payload.powertrain_id = updates.powertrainId;
+    payload.updated_at = new Date().toISOString();
+
+    const { error } = await supabase.from('route_freight_rates').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update freight rate.');
+    return true;
+  },
+
+  async toggleFreightRateStatus(id: string, isActive: boolean): Promise<boolean> {
+    const { error } = await supabase
+      .from('route_freight_rates')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update freight rate status.');
+    return true;
+  },
+
+  async deleteFreightRate(id: string): Promise<boolean> {
+    const { error } = await supabase.from('route_freight_rates').delete().eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to delete freight rate.');
+    return true;
+  },
+
+  // Inland Towing Rates
   async getTowingRates(): Promise<AdminTowingRate[]> {
     const { data, error } = await supabase
       .from('towing_rates')
       .select(
         `
         id,
+        purchase_location_id,
+        loading_port_id,
         vehicle_category_id,
+        vehicle_condition_id,
         rate_type,
+        currency,
         fixed_amount,
         min_amount,
         max_amount,
+        effective_from,
+        effective_to,
         is_active,
-        purchase_locations (
-          state_or_city,
-          source_type
+        purchase_locations!towing_rates_purchase_location_id_fkey (
+          id,
+          name,
+          state_code
         ),
-        ports:loading_port_id (
-          name
+        ports!towing_rates_loading_port_id_fkey (
+          id,
+          name,
+          code
         )
       `
       )
@@ -478,31 +941,288 @@ export const adminService = {
 
     interface RawTowing {
       id: string;
-      vehicle_category_id: string;
+      purchase_location_id: string;
+      loading_port_id: string;
+      vehicle_category_id: string | null;
+      vehicle_condition_id: string | null;
       rate_type: string;
+      currency: string;
       fixed_amount: number | null;
       min_amount: number | null;
       max_amount: number | null;
+      effective_from: string;
+      effective_to: string | null;
       is_active: boolean;
-      purchase_locations: { state_or_city: string; source_type: string } | null;
-      ports: { name: string } | null;
+      purchase_locations: { id: string; name: string; state_code: string } | null;
+      ports: { id: string; name: string; code: string } | null;
     }
 
     const rows = (data || []) as unknown as RawTowing[];
     return rows.map((t) => ({
       id: t.id,
-      originLocation: t.purchase_locations?.state_or_city || 'State/Auction',
+      purchaseLocationId: t.purchase_location_id,
+      loadingPortId: t.loading_port_id,
+      originLocation: t.purchase_locations?.name
+        ? `${t.purchase_locations.name}, ${t.purchase_locations.state_code}`
+        : 'State/Auction',
+      stateCode: t.purchase_locations?.state_code || undefined,
       loadingPort: t.ports?.name || 'Departure Port',
-      vehicleCategory: t.vehicle_category_id.toUpperCase(),
-      rateType: t.rate_type,
+      vehicleCategoryId: t.vehicle_category_id || undefined,
+      vehicleCategory: t.vehicle_category_id ? t.vehicle_category_id.toUpperCase() : 'ALL CATEGORIES',
+      vehicleConditionId: t.vehicle_condition_id || undefined,
+      vehicleCondition: t.vehicle_condition_id ? t.vehicle_condition_id.toUpperCase() : 'ALL CONDITIONS',
+      rateType: t.rate_type as 'fixed' | 'range',
       fixedAmount: Number(t.fixed_amount || 0),
       minAmount: Number(t.min_amount || 0),
       maxAmount: Number(t.max_amount || 0),
+      currency: t.currency || 'USD',
       isRange: t.rate_type === 'range',
+      effectiveFrom: t.effective_from,
+      effectiveTo: t.effective_to || undefined,
       isActive: Boolean(t.is_active),
     }));
   },
 
+  async createTowingRate(rate: {
+    purchaseLocationId: string;
+    loadingPortId: string;
+    vehicleCategoryId?: string | null;
+    vehicleConditionId?: string | null;
+    rateType: 'fixed' | 'range';
+    fixedAmount?: number;
+    minAmount?: number;
+    maxAmount?: number;
+    currency?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; id?: string }> {
+    if (rate.rateType === 'fixed') {
+      if (!rate.fixedAmount || rate.fixedAmount <= 0) {
+        throw new Error('Fixed towing rate must have a positive fixed amount.');
+      }
+    } else {
+      if (!rate.minAmount || rate.minAmount <= 0) {
+        throw new Error('Range towing rate must have a positive minimum amount.');
+      }
+      if (!rate.maxAmount || rate.maxAmount < rate.minAmount) {
+        throw new Error('Maximum towing rate must be greater than or equal to minimum amount.');
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('towing_rates')
+      .insert({
+        purchase_location_id: rate.purchaseLocationId,
+        loading_port_id: rate.loadingPortId,
+        vehicle_category_id: rate.vehicleCategoryId || null,
+        vehicle_condition_id: rate.vehicleConditionId || null,
+        rate_type: rate.rateType,
+        fixed_amount: rate.rateType === 'fixed' ? rate.fixedAmount : null,
+        min_amount: rate.rateType === 'range' ? rate.minAmount : null,
+        max_amount: rate.rateType === 'range' ? rate.maxAmount : null,
+        currency: rate.currency || 'USD',
+        effective_from: rate.effectiveFrom || new Date().toISOString().split('T')[0],
+        effective_to: rate.effectiveTo || null,
+        is_active: rate.isActive ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create inland towing rate.');
+    return { success: true, id: data?.id };
+  },
+
+  async updateTowingRate(
+    id: string,
+    updates: Partial<{
+      purchaseLocationId: string;
+      loadingPortId: string;
+      vehicleCategoryId: string | null;
+      vehicleConditionId: string | null;
+      rateType: 'fixed' | 'range';
+      fixedAmount: number | null;
+      minAmount: number | null;
+      maxAmount: number | null;
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      isActive: boolean;
+    }>
+  ): Promise<boolean> {
+    const payload: TowingRateUpdate = {};
+    if (updates.purchaseLocationId) payload.purchase_location_id = updates.purchaseLocationId;
+    if (updates.loadingPortId) payload.loading_port_id = updates.loadingPortId;
+    if (updates.vehicleCategoryId !== undefined) payload.vehicle_category_id = updates.vehicleCategoryId;
+    if (updates.vehicleConditionId !== undefined) payload.vehicle_condition_id = updates.vehicleConditionId;
+    if (updates.rateType) payload.rate_type = updates.rateType;
+    if (updates.fixedAmount !== undefined) payload.fixed_amount = updates.fixedAmount;
+    if (updates.minAmount !== undefined) payload.min_amount = updates.minAmount;
+    if (updates.maxAmount !== undefined) payload.max_amount = updates.maxAmount;
+    if (updates.effectiveFrom) payload.effective_from = updates.effectiveFrom;
+    if (updates.effectiveTo !== undefined) payload.effective_to = updates.effectiveTo;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    payload.updated_at = new Date().toISOString();
+
+    const { error } = await supabase.from('towing_rates').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update towing rate.');
+    return true;
+  },
+
+  async toggleTowingRateStatus(id: string, isActive: boolean): Promise<boolean> {
+    const { error } = await supabase
+      .from('towing_rates')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update towing rate status.');
+    return true;
+  },
+
+  async deleteTowingRate(id: string): Promise<boolean> {
+    const { error } = await supabase.from('towing_rates').delete().eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to delete inland towing rate.');
+    return true;
+  },
+
+  // Related Pricing Configurations
+  async getVehicleCategories(): Promise<AdminVehicleCategory[]> {
+    const { data, error } = await supabase
+      .from('vehicle_categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) throw new Error(error.message || 'Unable to load vehicle categories.');
+    return (data || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      displayOrder: c.display_order,
+      isActive: Boolean(c.is_active),
+    }));
+  },
+
+  async getShippingMethods(): Promise<AdminShippingMethod[]> {
+    const { data, error } = await supabase
+      .from('shipping_methods')
+      .select('*')
+      .order('name', { ascending: true });
+    if (error) throw new Error(error.message || 'Unable to load shipping methods.');
+    return (data || []).map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description || undefined,
+      isActive: Boolean(m.is_active),
+    }));
+  },
+
+  async createShippingMethod(method: {
+    id: string;
+    name: string;
+    description?: string;
+    isActive?: boolean;
+  }): Promise<boolean> {
+    const { error } = await supabase.from('shipping_methods').insert({
+      id: method.id.trim().toLowerCase().replace(/\s+/g, '_'),
+      name: method.name.trim(),
+      description: method.description?.trim() || null,
+      is_active: method.isActive ?? true,
+    });
+    if (error) throw new Error(error.message || 'Unable to create shipping method.');
+    return true;
+  },
+
+  async updateShippingMethod(
+    id: string,
+    updates: Partial<{ name: string; description?: string; isActive: boolean }>
+  ): Promise<boolean> {
+    const payload: ShippingMethodUpdate = {};
+    if (updates.name) payload.name = updates.name.trim();
+    if (updates.description !== undefined) payload.description = updates.description?.trim() || null;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    const { error } = await supabase.from('shipping_methods').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update shipping method.');
+    return true;
+  },
+
+  async toggleShippingMethodStatus(id: string, isActive: boolean): Promise<boolean> {
+    const { error } = await supabase.from('shipping_methods').update({ is_active: isActive }).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update shipping method status.');
+    return true;
+  },
+
+  async deleteShippingMethod(id: string): Promise<boolean> {
+    const { error } = await supabase.from('shipping_methods').delete().eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to delete shipping method (tariffs may depend on it).');
+    return true;
+  },
+
+  async getPowertrains(): Promise<AdminPowertrain[]> {
+    const { data, error } = await supabase
+      .from('powertrains')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) throw new Error(error.message || 'Unable to load powertrains.');
+    return (data || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      displayOrder: p.display_order,
+      isActive: Boolean(p.is_active),
+    }));
+  },
+
+  async getPurchaseLocations(): Promise<AdminPurchaseLocation[]> {
+    const { data, error } = await supabase
+      .from('purchase_locations')
+      .select('*')
+      .order('state_code', { ascending: true })
+      .order('name', { ascending: true });
+    if (error) throw new Error(error.message || 'Unable to load purchase locations.');
+    return (data || []).map((l) => ({
+      id: l.id,
+      name: l.name,
+      stateCode: l.state_code,
+      postalCode: l.postal_code || undefined,
+      purchaseSourceId: l.purchase_source_id,
+      defaultLoadingPortId: l.default_loading_port_id || undefined,
+      isActive: Boolean(l.is_active),
+    }));
+  },
+
+  async getAdditionalChargeRules(): Promise<AdminAdditionalChargeRule[]> {
+    const { data, error } = await supabase
+      .from('additional_charge_rules')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(error.message || 'Unable to load additional charge rules.');
+    return (data || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      chargeType: c.charge_type,
+      amount: Number(c.amount),
+      currency: c.currency || 'USD',
+      isMandatory: Boolean(c.is_mandatory),
+      isIncludedInVatBase: Boolean(c.is_included_in_vat_base),
+      countryCode: c.country_code || undefined,
+      destinationPortId: c.destination_port_id || undefined,
+      isActive: Boolean(c.is_active),
+    }));
+  },
+
+  async updateAdditionalChargeRule(
+    id: string,
+    updates: Partial<{ amount: number; isMandatory: boolean; isIncludedInVatBase: boolean; isActive: boolean }>
+  ): Promise<boolean> {
+    const payload: AdditionalChargeRuleUpdate = {};
+    if (updates.amount !== undefined) payload.amount = updates.amount;
+    if (updates.isMandatory !== undefined) payload.is_mandatory = updates.isMandatory;
+    if (updates.isIncludedInVatBase !== undefined) payload.is_included_in_vat_base = updates.isIncludedInVatBase;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    const { error } = await supabase.from('additional_charge_rules').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update charge rule.');
+    return true;
+  },
+
+  // Exchange Rates
   async getExchangeRate(): Promise<{ rate: number; updatedAt: string }> {
     const { data, error } = await supabase
       .from('exchange_rates')
@@ -533,7 +1253,7 @@ export const adminService = {
     return true;
   },
 
-  // CMS
+  // CMS Notices
   async getCmsNotices(): Promise<AdminCmsNotice[]> {
     const { data, error } = await supabase
       .from('cms_notices')
@@ -604,7 +1324,7 @@ export const adminService = {
     return true;
   },
 
-  // Settings
+  // Settings & Branding
   async getSystemSettings(): Promise<Record<string, unknown>> {
     const { data, error } = await supabase.from('system_settings').select('*');
     if (error) {
@@ -627,6 +1347,123 @@ export const adminService = {
     });
     if (error) throw new Error(error.message || 'Failed to save settings.');
     return true;
+  },
+
+  async getBrandingSettings(): Promise<BrandingSettings> {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('key, value')
+      .in('key', ['company_profile', 'branding_settings']);
+
+    if (error) {
+      console.warn('Failed to fetch branding settings, returning default baseline', error);
+      return DEFAULT_BRANDING;
+    }
+
+    const settingsMap: Record<string, Record<string, unknown>> = {};
+    for (const item of data || []) {
+      if (item.value && typeof item.value === 'object') {
+        settingsMap[item.key] = item.value as Record<string, unknown>;
+      }
+    }
+
+    const cp = settingsMap['company_profile'] || {};
+    const bs = settingsMap['branding_settings'] || {};
+
+    return {
+      companyName: String(bs.company_name || cp.company_name || DEFAULT_BRANDING.companyName),
+      companyNameAr: String(bs.company_name_ar || cp.company_name_ar || DEFAULT_BRANDING.companyNameAr),
+      shortName: String(bs.short_name || DEFAULT_BRANDING.shortName),
+      shortNameAr: String(bs.short_name_ar || DEFAULT_BRANDING.shortNameAr),
+      tagline: String(bs.tagline || DEFAULT_BRANDING.tagline),
+      taglineAr: String(bs.tagline_ar || DEFAULT_BRANDING.taglineAr),
+      logoUrl: String(bs.logo_url || ''),
+      darkLogoUrl: String(bs.dark_logo_url || ''),
+      faviconUrl: String(bs.favicon_url || ''),
+      browserTitle: String(bs.browser_title || DEFAULT_BRANDING.browserTitle),
+      browserTitleAr: String(bs.browser_title_ar || DEFAULT_BRANDING.browserTitleAr),
+      metaDescription: String(bs.meta_description || DEFAULT_BRANDING.metaDescription),
+      metaDescriptionAr: String(bs.meta_description_ar || DEFAULT_BRANDING.metaDescriptionAr),
+      supportPhone: String(cp.support_phone || bs.support_phone || DEFAULT_BRANDING.supportPhone),
+      supportEmail: String(cp.support_email || bs.support_email || DEFAULT_BRANDING.supportEmail),
+      whatsappNumber: String(cp.whatsapp_number || bs.whatsapp_number || DEFAULT_BRANDING.whatsappNumber),
+      headquartersAddress: String(cp.headquarters_address || bs.headquarters_address || DEFAULT_BRANDING.headquartersAddress),
+      headquartersAddressAr: String(cp.headquarters_address_ar || bs.headquarters_address_ar || DEFAULT_BRANDING.headquartersAddressAr),
+      businessHours: String(bs.business_hours || DEFAULT_BRANDING.businessHours),
+      businessHoursAr: String(bs.business_hours_ar || DEFAULT_BRANDING.businessHoursAr),
+      copyrightText: String(bs.copyright_text || DEFAULT_BRANDING.copyrightText),
+      copyrightTextAr: String(bs.copyright_text_ar || DEFAULT_BRANDING.copyrightTextAr),
+      socialLinks: (bs.social_links as BrandingSettings['socialLinks']) || DEFAULT_BRANDING.socialLinks,
+    };
+  },
+
+  async updateBrandingSettings(settings: Partial<BrandingSettings>): Promise<boolean> {
+    const current = await this.getBrandingSettings();
+    const updated = { ...current, ...settings };
+
+    // Update company_profile in system_settings
+    const companyProfileUpdate = {
+      company_name: updated.companyName,
+      company_name_ar: updated.companyNameAr,
+      support_phone: updated.supportPhone,
+      support_email: updated.supportEmail,
+      whatsapp_number: updated.whatsappNumber,
+      headquarters_address: updated.headquartersAddress,
+      headquarters_address_ar: updated.headquartersAddressAr,
+    };
+
+    // Update branding_settings in system_settings
+    const brandingSettingsUpdate = {
+      company_name: updated.companyName,
+      company_name_ar: updated.companyNameAr,
+      short_name: updated.shortName,
+      short_name_ar: updated.shortNameAr,
+      tagline: updated.tagline,
+      taglineAr: updated.taglineAr,
+      logo_url: updated.logoUrl,
+      dark_logo_url: updated.darkLogoUrl,
+      favicon_url: updated.faviconUrl,
+      browser_title: updated.browserTitle,
+      browser_title_ar: updated.browserTitleAr,
+      meta_description: updated.metaDescription,
+      meta_description_ar: updated.metaDescriptionAr,
+      business_hours: updated.businessHours,
+      business_hours_ar: updated.businessHoursAr,
+      copyright_text: updated.copyrightText,
+      copyright_text_ar: updated.copyrightTextAr,
+      social_links: updated.socialLinks,
+      support_phone: updated.supportPhone,
+      support_email: updated.supportEmail,
+      whatsapp_number: updated.whatsappNumber,
+      headquarters_address: updated.headquartersAddress,
+      headquarters_address_ar: updated.headquartersAddressAr,
+    };
+
+    await Promise.all([
+      this.updateSystemSetting('company_profile', companyProfileUpdate),
+      this.updateSystemSetting('branding_settings', brandingSettingsUpdate),
+    ]);
+
+    return true;
+  },
+
+  async uploadBrandingAsset(file: File, prefix: string): Promise<string> {
+    const ext = file.name.split('.').pop() || 'png';
+    const filePath = `${prefix}_${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('branding')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    const { data } = supabase.storage.from('branding').getPublicUrl(filePath);
+    return data.publicUrl;
   },
 
   // Audit Events

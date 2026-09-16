@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
+import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { Button } from '../../components/ui/Button';
 import { Container } from '../../components/ui/Container';
 import { Card } from '../../components/ui/Card';
 import { ShippingHeroGraphic } from '../../components/ui/ShippingHeroGraphic';
-import { UNVERIFIED_CONTENT } from '../../config/unverifiedContent';
 import {
   Calculator,
   MessageCircle,
@@ -13,7 +13,6 @@ import {
   Clock,
   Award,
   Headphones,
-  Star,
   Ship,
   Truck,
   FileCheck,
@@ -22,16 +21,24 @@ import {
   CheckCircle2,
   ArrowRight,
   MapPin,
-  AlertTriangle,
 } from 'lucide-react';
 import { US_LOADING_PORTS, UAE_DESTINATION_PORTS } from '../../config/calculatorConfig';
 
 export const HomePage: React.FC = () => {
-  const { t, direction } = useI18n();
+  const { t, language, direction } = useI18n();
+  const { branding, getWhatsAppLink } = useWebsiteSettings();
 
-  const whatsappHref = `https://wa.me/${UNVERIFIED_CONTENT.whatsappNumber}?text=${encodeURIComponent(
-    'Hello Fakher Alam Shipping, I would like to get a quote for vehicle shipping from USA to UAE.'
-  )}`;
+  const isAr = language === 'ar';
+  const brandTitle = isAr ? branding.companyNameAr : branding.companyName;
+  const brandTagline = isAr
+    ? branding.taglineAr || t.brandTagline
+    : branding.tagline || t.brandTagline;
+
+  const whatsappHref = getWhatsAppLink(
+    isAr
+      ? `مرحباً ${brandTitle}، أود الاستفسار عن تفاصيل وحساب تكلفة شحن سيارة من أمريكا إلى الإمارات.`
+      : `Hello ${brandTitle}, I would like to get a quote for vehicle shipping from USA to UAE.`
+  );
 
   const trustBadges = [
     {
@@ -57,82 +64,95 @@ export const HomePage: React.FC = () => {
   ];
 
   const whyChooseFeatures = [
-    { label: t.featureLicensed, icon: <ShieldCheck className="w-6 h-6 text-blue-600" /> },
-    { label: t.featureWorldwide, icon: <Ship className="w-6 h-6 text-cyan-600" /> },
-    { label: t.featureDoorToPort, icon: <Truck className="w-6 h-6 text-amber-600" /> },
-    { label: t.featureExportDocs, icon: <FileCheck className="w-6 h-6 text-emerald-600" /> },
-    { label: t.featureContainerLoading, icon: <Box className="w-6 h-6 text-indigo-600" /> },
+    { label: t.featureLicensed, icon: <ShieldCheck className="w-6 h-6 text-brand-orange-500" /> },
+    { label: t.featureWorldwide, icon: <Ship className="w-6 h-6 text-brand-orange-500" /> },
+    { label: t.featureDoorToPort, icon: <Truck className="w-6 h-6 text-brand-orange-500" /> },
+    { label: t.featureExportDocs, icon: <FileCheck className="w-6 h-6 text-brand-orange-500" /> },
+    { label: t.featureContainerLoading, icon: <Box className="w-6 h-6 text-brand-orange-500" /> },
     {
       label: t.featureCustomsClearance,
-      icon: <ClipboardList className="w-6 h-6 text-violet-600" />,
+      icon: <Award className="w-6 h-6 text-brand-orange-500" />,
     },
-    { label: t.featureVehicleInspection, icon: <CheckCircle2 className="w-6 h-6 text-teal-600" /> },
-    { label: t.featureSupport247, icon: <Headphones className="w-6 h-6 text-rose-600" /> },
+    {
+      label: t.featureVehicleInspection,
+      icon: <CheckCircle2 className="w-6 h-6 text-brand-orange-500" />,
+    },
+    { label: t.featureSupport247, icon: <Headphones className="w-6 h-6 text-brand-orange-500" /> },
   ];
 
-  const journeySteps = [
+  const steps = [
     {
-      num: '01',
-      title: 'Auction Purchase & Towing',
-      desc: 'Buy from Copart, IAAI, Manheim or private dealers. We tow your car directly from any USA state to our nearest port facility.',
+      step: 1,
+      title: isAr ? 'شراء المزاد والنقل الداخلي' : 'Auction Purchase & Tow',
+      desc: isAr
+        ? 'استلام سيارتك من أي ساحة مزاد أمريكية (كوبارت، إياي، مانهيم) ونقلها بأمان إلى أقرب ميناء تحميل.'
+        : 'Vehicle collected from any US auction yard (Copart, IAAI, Manheim) and securely towed to the nearest loading port.',
+      icon: <ClipboardList className="w-6 h-6 text-white" />,
     },
     {
-      num: '02',
-      title: 'Inspection & Container Loading',
-      desc: 'Comprehensive photos and condition report upon port arrival, followed by safe container consolidation and US customs export clearance.',
+      step: 2,
+      title: isAr ? 'فحص الميناء والشحن بالحاويات' : 'Port Inspection & Loading',
+      desc: isAr
+        ? 'فحص استلام، تصوير عالي الدقة لحالة المركبة، إنهاء إجراءات التصدير، وتحميل الحاوية بحرفية.'
+        : 'Arrival inspection, high-resolution condition photos, export customs clearance, and careful container stuffing.',
+      icon: <Truck className="w-6 h-6 text-white" />,
     },
     {
-      num: '03',
-      title: 'Ocean Freight to UAE',
-      desc: 'Fast, secure maritime transit from Newark, Savannah, Houston, Los Angeles, or Baltimore directly to Khorfakkan or Jebel Ali.',
+      step: 3,
+      title: isAr ? 'الشحن البحري الدولي' : 'Ocean Freight Transit',
+      desc: isAr
+        ? 'إبحار الحاويات مباشرة من موانئ أمريكا إلى ميناء خورفكان أو جبل علي مع توثيق بوليصة الشحن.'
+        : 'Direct container vessel transit from USA ports to Khorfakkan or Jebel Ali with complete bill of lading documentation.',
+      icon: <Ship className="w-6 h-6 text-white" />,
     },
     {
-      num: '04',
-      title: 'Clearance & Handover',
-      desc: 'Expert customs clearance, VAT assessment, and handover at our Sharjah / Khorfakkan terminal ready for registration.',
+      step: 4,
+      title: isAr ? 'التخليص الجمركي والتسليم' : 'UAE Clearance & Handover',
+      desc: isAr
+        ? 'تخليص جمركي سريع، احتساب الرسوم والضريبة بدقة، وتسليم المركبة من ساحتنا بالشارقة.'
+        : 'Fast UAE customs inspection, 5% duty assessment, 5% VAT handling, and final collection from our Sharjah yard.',
+      icon: <CheckCircle2 className="w-6 h-6 text-white" />,
     },
   ];
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="space-y-12 sm:space-y-16 pb-16 w-full overflow-x-hidden">
       {/* Hero Section */}
-      <section className="relative bg-brand-navy-950 text-white overflow-hidden py-8 sm:py-14 border-b border-brand-navy-800">
-        {/* Subtle background glow effect */}
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-700 via-brand-navy-900 to-transparent pointer-events-none" />
+      <section className="relative bg-gradient-to-b from-brand-navy-950 via-brand-navy-900 to-brand-navy-950 text-white pt-10 pb-16 sm:pt-16 sm:pb-24 overflow-hidden">
+        {/* Subtle background decoration */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#f97316_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
         <Container className="relative z-10">
-          <div className="max-w-3xl mx-auto text-center space-y-5">
-            {/* Licensed Badge Placeholder */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-navy-900/90 border border-brand-navy-700 text-xs font-bold text-slate-200 shadow-sm">
+          <div className="max-w-3xl mx-auto text-center space-y-6">
+            {/* Trust Pills */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-navy-800/80 border border-brand-navy-700 text-xs font-semibold text-brand-orange-400 shadow-inner">
               <span className="w-2 h-2 rounded-full bg-brand-orange-500 animate-ping" />
-              <span>{UNVERIFIED_CONTENT.licenseTitle}</span>
-              <span className="text-slate-500">•</span>
-              <span className="text-brand-orange-400">{UNVERIFIED_CONTENT.headquartersCity}</span>
+              <span>{brandTagline}</span>
             </div>
 
-            {/* Clean Country Headline (No duplicated US/AE fallback labels) */}
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight">
-              <span>{t.heroTitlePart1} </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 mx-1 rounded-xl bg-blue-950 border border-blue-500/40 text-blue-400 shadow-sm">
-                USA
+            {/* Main Headline */}
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight sm:leading-none">
+              {t.heroTitlePart1}{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange-400 to-amber-300">
+                {t.heroTitleHighlightUs}
               </span>{' '}
-              <span>{t.heroTitleTo} </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 mx-1 rounded-xl bg-emerald-950 border border-emerald-500/40 text-emerald-400 shadow-sm">
-                UAE
+              {t.heroTitleTo}{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+                {t.heroTitleHighlightUae}
               </span>
             </h1>
 
-            {/* Subtitle */}
-            <p className="text-slate-300 text-xs sm:text-base max-w-xl mx-auto whitespace-pre-line leading-relaxed font-medium">
+            {/* Subheading */}
+            <p className="text-slate-300 text-sm sm:text-lg max-w-2xl mx-auto font-normal leading-relaxed">
               {t.heroSubtitle}
             </p>
 
-            {/* Original Maritime Cargo & Vehicle Graphic */}
-            <div className="pt-2 pb-1">
-              <ShippingHeroGraphic className="max-w-md sm:max-w-lg" />
+            {/* Hero Graphic Container */}
+            <div className="py-4">
+              <ShippingHeroGraphic />
             </div>
 
-            {/* Hero CTAs */}
+            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <Link to="/calculator" className="w-full sm:w-auto">
                 <Button
@@ -151,35 +171,32 @@ export const HomePage: React.FC = () => {
                   {t.calculateShipping}
                 </Button>
               </Link>
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto"
-              >
-                <Button
-                  variant="whatsapp"
-                  size="lg"
-                  className="w-full sm:w-auto text-sm sm:text-base font-extrabold"
-                  startIcon={<MessageCircle className="w-5 h-5" />}
+              {whatsappHref && (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto"
                 >
-                  {t.whatsappQuote}
-                </Button>
-              </a>
+                  <Button
+                    variant="whatsapp"
+                    size="lg"
+                    className="w-full sm:w-auto text-sm sm:text-base font-extrabold"
+                    startIcon={<MessageCircle className="w-5 h-5" />}
+                  >
+                    {t.whatsappQuote}
+                  </Button>
+                </a>
+              )}
             </div>
 
-            {/* Trustpilot highlight (Marked as unverified demo) */}
+            {/* Verified UAE Compliance highlight */}
             <div className="pt-1 flex items-center justify-center gap-2 text-xs text-slate-300 font-semibold">
-              <div className="flex items-center text-emerald-400">
-                <Star className="w-3.5 h-3.5 fill-emerald-400" />
-                <Star className="w-3.5 h-3.5 fill-emerald-400" />
-                <Star className="w-3.5 h-3.5 fill-emerald-400" />
-                <Star className="w-3.5 h-3.5 fill-emerald-400" />
-                <Star className="w-3.5 h-3.5 fill-emerald-400" />
-              </div>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>
-                Trustpilot {UNVERIFIED_CONTENT.trustpilotRating} Rating (
-                {UNVERIFIED_CONTENT.trustpilotReviewCount})
+                {isAr
+                  ? 'خدمات لوجستية وشحن بحري مرخص ومعتمد في دولة الإمارات العربية المتحدة'
+                  : 'Licensed UAE Maritime Freight Forwarder & Customs Clearance Specialist'}
               </span>
             </div>
           </div>
@@ -199,160 +216,129 @@ export const HomePage: React.FC = () => {
                 <h4 className="text-xs sm:text-sm font-black tracking-wider text-slate-100">
                   {badge.title}
                 </h4>
-                <p className="text-[10px] sm:text-[11px] font-bold text-brand-orange-400 tracking-wider uppercase">
-                  {badge.subtitle}
-                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{badge.subtitle}</p>
               </div>
             ))}
           </div>
         </Container>
       </section>
 
-      {/* Interactive Routes Preview */}
-      <section className="py-12 sm:py-16 bg-white border-b border-slate-200">
+      {/* How It Works */}
+      <section>
         <Container>
-          <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
+          <div className="text-center max-w-xl mx-auto mb-10 sm:mb-12 space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600">
+              {t.navHome}
+            </span>
             <h2 className="text-2xl sm:text-3xl font-black text-brand-navy-950">
-              {t.heroUsPortsTitle}
+              {isAr ? 'كيف يعمل شحن السيارات؟' : 'How Car Shipping Works'}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Regular weekly container sailings from five major coastal hubs directly to the UAE
+            <p className="text-slate-600 text-xs sm:text-sm">
+              {isAr
+                ? 'رحلة نقل واضحة وموثوقة من المزاد إلى التسليم في الشارقة'
+                : 'A transparent, hassle-free 4-stage vehicle transit journey'}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* US Loading Ports Card */}
-            <Card className="p-5 sm:p-6">
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
-                <span className="text-xs font-black px-2 py-1 rounded bg-blue-900 text-blue-200">
-                  USA
-                </span>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                    USA Loading Ports
-                  </h3>
-                  <p className="text-xs text-slate-500">Weekly departures & container loading</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {steps.map((s) => (
+              <Card key={s.step} className="p-6 relative overflow-hidden group">
+                <div className="w-12 h-12 rounded-2xl bg-brand-orange-500 flex items-center justify-center mb-4 shadow-orange-glow group-hover:scale-110 transition-transform">
+                  {s.icon}
                 </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {US_LOADING_PORTS.map((port) => (
-                  <div
-                    key={port.id}
-                    className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-800">{port.name}</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                        {port.stateOrCity}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-500 font-mono">{port.code}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* UAE Destination Ports Card */}
-            <Card className="p-5 sm:p-6">
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
-                <span className="text-xs font-black px-2 py-1 rounded bg-emerald-900 text-emerald-200">
-                  UAE
-                </span>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                    UAE Destination Ports
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Fast clearance & vehicle pickup terminals
-                  </p>
+                <div className="text-4xl font-black text-slate-100 absolute top-4 end-4 pointer-events-none">
+                  0{s.step}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {UAE_DESTINATION_PORTS.map((port) => (
-                  <div
-                    key={port.id}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-800">{port.name}</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                        {port.stateOrCity}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-2">
-                      <MapPin className="w-3.5 h-3.5 text-brand-orange-500" />
-                      <span>Dedicated terminal & yard</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        </Container>
-      </section>
-
-      {/* Why Choose Fakher Alam */}
-      <section className="py-12 sm:py-16 bg-slate-50 border-b border-slate-200">
-        <Container>
-          <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-black text-brand-navy-950">
-              {t.whyChooseUsTitle}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Complete vehicle logistics from auction gavel to Sharjah handover
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {whyChooseFeatures.map((feat, idx) => (
-              <Card key={idx} className="p-4 text-center flex flex-col items-center justify-center">
-                <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center mb-2.5">
-                  {feat.icon}
-                </div>
-                <h4 className="text-xs sm:text-sm font-bold text-slate-800">{feat.label}</h4>
+                <h3 className="text-base font-bold text-brand-navy-950 mb-2">{s.title}</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">{s.desc}</p>
               </Card>
             ))}
           </div>
         </Container>
       </section>
 
-      {/* Shipping Journey Timeline */}
-      <section className="py-12 sm:py-16 bg-white">
+      {/* Popular Shipping Routes Display */}
+      <section className="bg-slate-100/60 py-12 border-y border-slate-200">
         <Container>
-          <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-black text-brand-navy-950">
-              How Car Shipping Works
+          <div className="text-center max-w-xl mx-auto mb-8 space-y-2">
+            <h2 className="text-xl sm:text-2xl font-black text-brand-navy-950">
+              {t.heroUsPortsTitle}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              A transparent, hassle-free 4-stage vehicle transit journey
+            <p className="text-slate-600 text-xs sm:text-sm">
+              {isAr
+                ? 'رحلات بحرية منتظمة أسبوعياً من أبرز موانئ الشحن الأمريكية إلى موانئ الإمارات مباشرة'
+                : 'Standard departures from all major US shipping hubs directly to Khorfakkan and Jebel Ali.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {journeySteps.map((step) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {US_LOADING_PORTS.slice(0, 4).map((origin) => (
               <div
-                key={step.num}
-                className="relative p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between"
+                key={origin.id}
+                className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between space-y-3"
               >
                 <div>
-                  <span className="inline-block text-2xl font-black text-brand-orange-500 mb-2">
-                    {step.num}
-                  </span>
-                  <h4 className="text-sm font-bold text-slate-900 mb-2">{step.title}</h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">{step.desc}</p>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-brand-orange-600 mb-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>{origin.name}</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    {origin.name} → {UAE_DESTINATION_PORTS[0].name}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">Consolidated & Dedicated Containers</p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Est. Transit:</span>
+                  <span className="font-bold text-slate-900">30 – 45 days</span>
                 </div>
               </div>
             ))}
           </div>
+        </Container>
+      </section>
 
-          {/* Bottom CTA banner */}
-          <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-brand-navy-950 text-white flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
+      {/* Why Choose Fakher Alam Shipping */}
+      <section>
+        <Container>
+          <div className="text-center max-w-xl mx-auto mb-10 space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-black text-brand-navy-950">
+              {t.whyChooseUsTitle}
+            </h2>
+            <p className="text-slate-600 text-xs sm:text-sm">
+              {isAr
+                ? 'لوجستيات متكاملة للمركبات من مزادات أمريكا حتى الاستلام في الشارقة'
+                : 'Complete vehicle logistics from auction gavel to Sharjah handover'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {whyChooseFeatures.map((feat, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-xl border border-slate-200 bg-white flex items-center gap-3.5 shadow-sm"
+              >
+                <div className="p-2.5 rounded-lg bg-slate-50 shrink-0">{feat.icon}</div>
+                <span className="text-xs sm:text-sm font-bold text-brand-navy-950 leading-snug">
+                  {feat.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      {/* Bottom CTA Card */}
+      <section>
+        <Container>
+          <div className="bg-brand-navy-950 text-white rounded-3xl p-8 sm:p-12 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center sm:text-start">
               <h3 className="text-lg sm:text-2xl font-black">
-                Ready to Calculate Your Shipping Cost?
+                {isAr ? 'جاهز لحساب تكاليف شحن سيارتك؟' : 'Ready to Calculate Your Shipping Cost?'}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300">
-                Instant estimates for ocean freight, customs duty, and UAE VAT.
+                {isAr
+                  ? 'تقديرات فورية ودقيقة للشحن البحري، التخليص الجمركي، والرسوم النظامية.'
+                  : 'Instant estimates for ocean freight, customs duty, and UAE VAT.'}
               </p>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -361,23 +347,29 @@ export const HomePage: React.FC = () => {
                   {t.calculateShipping}
                 </Button>
               </Link>
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto"
-              >
-                <Button variant="whatsapp" size="lg" className="w-full sm:w-auto font-extrabold">
-                  {t.whatsappQuote}
-                </Button>
-              </a>
+              {whatsappHref && (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto"
+                >
+                  <Button variant="whatsapp" size="lg" className="w-full sm:w-auto font-extrabold">
+                    {t.whatsappQuote}
+                  </Button>
+                </a>
+              )}
             </div>
           </div>
 
-          {/* Provisional Content Notice */}
+          {/* Legal Compliance Assurance */}
           <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-slate-400 text-center">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span>{UNVERIFIED_CONTENT.provisionalNotice}</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>
+              {isAr
+                ? `${brandTitle} - شحن بحري وتخليص جمركي موثوق وفق أنظمة الموانئ والجمارك بدولة الإمارات العربية المتحدة.`
+                : `${brandTitle} - Authoritative maritime shipping, inland towing, and UAE customs clearance.`}
+            </span>
           </div>
         </Container>
       </section>
