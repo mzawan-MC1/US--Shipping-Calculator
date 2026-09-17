@@ -8,13 +8,17 @@ export interface StaffProfile {
   full_name: string;
   is_active: boolean;
   role?: string;
+  avatar_url?: string | null;
+  phone?: string | null;
+  preferred_language?: string | null;
+  notification_preferences?: { email?: boolean; browser?: boolean } | null;
 }
 
 export interface AuthContextType {
   user: User | null;
   session: Session | null;
   staffProfile: StaffProfile | null;
-  profile: { fullName: string; email: string } | null;
+  profile: { fullName: string; email: string; avatarUrl?: string | null; phone?: string | null } | null;
   role: string | null;
   permissions: string[];
   isLoading: boolean;
@@ -24,6 +28,8 @@ export interface AuthContextType {
     password: string
   ) => Promise<{ success: boolean; error?: Error | string }>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<StaffProfile>) => void;
+  refreshStaffProfile: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
 }
@@ -97,8 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .limit(1)
         .maybeSingle();
 
+      const notifPrefs = profile.notification_preferences as { email?: boolean; browser?: boolean } | null;
       setStaffProfile({
         ...profile,
+        notification_preferences: notifPrefs,
         role: roleData?.role_id,
       });
 
@@ -234,6 +242,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return staffProfile?.role === role;
   };
 
+  const updateProfile = (updates: Partial<StaffProfile>): void => {
+    setStaffProfile((prev) => (prev ? { ...prev, ...updates } : null));
+  };
+
+  const refreshStaffProfile = async (): Promise<void> => {
+    if (user?.id) {
+      await fetchStaffData(user.id);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -241,7 +259,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         staffProfile,
         profile: staffProfile
-          ? { fullName: staffProfile.full_name, email: staffProfile.email }
+          ? {
+              fullName: staffProfile.full_name,
+              email: staffProfile.email,
+              avatarUrl: staffProfile.avatar_url,
+              phone: staffProfile.phone,
+            }
           : null,
         role: staffProfile?.role || null,
         permissions,
@@ -249,6 +272,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: Boolean(user && staffProfile && staffProfile.is_active),
         signIn,
         signOut,
+        updateProfile,
+        refreshStaffProfile,
         hasPermission,
         hasRole,
       }}

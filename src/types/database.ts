@@ -1077,29 +1077,77 @@ export type Database = {
           },
         ]
       }
+      quotation_rules: {
+        Row: {
+          id: string
+          rule_key: string
+          title: string
+          content: string
+          category: string
+          is_active: boolean
+          display_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          rule_key: string
+          title: string
+          content: string
+          category?: string
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          rule_key?: string
+          title?: string
+          content?: string
+          category?: string
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       staff_profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           email: string
           full_name: string
           id: string
           is_active: boolean
+          notification_preferences: Json | null
+          phone: string | null
+          preferred_language: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           email: string
           full_name: string
           id: string
           is_active?: boolean
+          notification_preferences?: Json | null
+          phone?: string | null
+          preferred_language?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           email?: string
           full_name?: string
           id?: string
           is_active?: boolean
+          notification_preferences?: Json | null
+          phone?: string | null
+          preferred_language?: string | null
           updated_at?: string
         }
         Relationships: []

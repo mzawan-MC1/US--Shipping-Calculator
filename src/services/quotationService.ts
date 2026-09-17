@@ -1,4 +1,4 @@
-import { CalculatorFormData, QuotationBreakdown, QuotationLineItem } from '../types/calculator';
+import { CalculatorFormData, QuotationBreakdown, QuotationLineItem, QuotationRuleItem } from '../types/calculator';
 import { supabase } from '../lib/supabase';
 import { PORT_SLUG_TO_UUID } from './referenceDataService';
 
@@ -146,6 +146,7 @@ export const quotationService = {
           };
           disclaimer: string;
           line_items: QuotationLineItem[];
+          rules?: QuotationRuleItem[];
         };
       };
 
@@ -193,6 +194,7 @@ export const quotationService = {
         disclaimer: res.snapshot.disclaimer,
         lineItems: res.snapshot.line_items,
         routeInfo: res.snapshot.route,
+        rules: res.snapshot.rules || [],
         snapshot: res.snapshot as unknown as Record<string, unknown>,
         isIdempotentReplay: res.is_idempotent_replay || false,
       };

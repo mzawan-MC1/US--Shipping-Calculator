@@ -7,6 +7,8 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 import { adminService, AdminQuotation } from '../../services/adminService';
 import { formatCurrency, formatAED } from '../../lib/utils';
+import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
+import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
 import {
   FileSpreadsheet,
   Search,
@@ -17,12 +19,18 @@ import {
   FileText,
   AlertCircle,
   Printer,
+  Download,
+  Car,
+  MapPin,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const AdminQuotationsPage: React.FC = () => {
+  const { branding } = useWebsiteSettings();
   const [quotations, setQuotations] = useState<AdminQuotation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<AdminQuotation | null>(null);
 
@@ -56,6 +64,53 @@ export const AdminQuotationsPage: React.FC = () => {
       item.route.toLowerCase().includes(q)
     );
   });
+
+  const handleDownloadPdf = async (quote: AdminQuotation) => {
+    setIsDownloadingPdf(true);
+    try {
+      const snap = (quote.pricingSnapshot as Record<string, unknown>) || {};
+      const origin = (snap.originPort as string) || quote.route.split('→')[0]?.trim() || 'USA Port / Auction';
+      const destination = (snap.destinationPort as string) || quote.route.split('→')[1]?.trim() || 'UAE Port (Jebel Ali)';
+      const shippingMethod = (snap.shippingMethod as string) || 'Containerized Ocean Freight';
+      const transitTime = (snap.transitTime as string) || '30 - 45 Days';
+
+      const pdfData: PdfQuotationData = {
+        referenceNumber: quote.referenceNumber,
+        createdAt: quote.createdAt,
+        customerName: quote.customerName,
+        customerPhone: quote.customerPhone,
+        customerEmail: quote.customerEmail,
+        vehicleDetails: quote.vehicleDetails,
+        originPort: origin,
+        destinationPort: destination,
+        shippingMethod,
+        transitTime,
+        declaredValueUsd: quote.declaredValueUsd,
+        oceanFreightUsd: quote.oceanFreightUsd,
+        towingFeeMin: quote.towingFeeMin,
+        towingFeeMax: quote.towingFeeMax,
+        isTowingRange: quote.isTowingRange,
+        clearanceFeeUsd: quote.customsClearanceUsd || 150,
+        portHandlingFeeUsd: quote.portHandlingUsd || 200,
+        surchargesUsd: quote.surchargesUsd || 0,
+        cifUsd: quote.cifMax || 0,
+        customsDutyUsd: quote.customsDutyUsd,
+        importVatUsd: quote.importVatUsd,
+        totalUsdMin: quote.totalUsdMin,
+        totalUsdMax: quote.totalUsdMax,
+        totalAedMin: quote.totalAedMin,
+        totalAedMax: quote.totalAedMax,
+        exchangeRate: quote.exchangeRate || 3.6725,
+        disclaimer: quote.disclaimer,
+        rules: snap.rules as PdfQuotationData['rules'],
+      };
+      await generateQuotationPdf(pdfData, branding);
+    } catch (err) {
+      console.error('Failed to generate quotation PDF:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   return (
     <div className="space-y-6 w-full max-w-full">
@@ -98,132 +153,87 @@ export const AdminQuotationsPage: React.FC = () => {
       <Card className="p-4 sm:p-6 bg-white border border-slate-200 overflow-hidden w-full">
         {/* Filter Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
-          <Input
-            placeholder="Search by quote number, customer, vehicle, route..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            startIcon={<Search className="w-4 h-4" />}
-            className="w-full sm:w-80 min-h-[38px] text-xs"
-          />
-          <span className="text-xs text-slate-400 font-semibold self-end sm:self-auto">
-            Showing {filteredQuotes.length} of {quotations.length} records
+          <div className="w-full sm:max-w-xs relative">
+            <Input
+              type="text"
+              placeholder="Search reference, customer, vehicle..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              startIcon={<Search className="w-4 h-4 text-slate-400" />}
+              className="text-xs"
+            />
+          </div>
+          <span className="text-xs text-slate-500 self-center">
+            Showing <strong>{filteredQuotes.length}</strong> of {quotations.length} quotes
           </span>
         </div>
 
-        {/* Content */}
+        {/* Quotations Table */}
         {isLoading ? (
-          <div className="p-12 flex flex-col items-center justify-center gap-3">
+          <div className="py-12 flex justify-center">
             <Spinner size="lg" />
-            <p className="text-xs text-slate-400 font-medium">Loading quotations...</p>
           </div>
         ) : filteredQuotes.length === 0 ? (
-          <div className="p-8 text-center">
-            <EmptyState
-              title="No quotations found"
-              description={
-                search
-                  ? 'No quotations match your active search terms.'
-                  : 'Calculated quotations generated through the customer calculator will be recorded here.'
-              }
-            />
-          </div>
+          <EmptyState
+            icon={<FileSpreadsheet className="w-12 h-12 text-slate-300 stroke-[1.5]" />}
+            title="No quotations found"
+            description={
+              search ? 'Try adjusting your search criteria.' : 'Customer quotes will appear here once requested.'
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-start text-xs min-w-[750px]">
+            <table className="w-full text-xs text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="pb-3 text-start">Quotation Ref</th>
-                  <th className="pb-3 text-start">Customer</th>
-                  <th className="pb-3 text-start">Vehicle & Route</th>
-                  <th className="pb-3 text-start">Ocean Freight</th>
-                  <th className="pb-3 text-start">Towing Fee</th>
-                  <th className="pb-3 text-start">Total (USD / AED)</th>
-                  <th className="pb-3 text-end">Action</th>
+                <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3 px-3">Reference</th>
+                  <th className="py-3 px-3">Date</th>
+                  <th className="py-3 px-3">Customer</th>
+                  <th className="py-3 px-3">Vehicle</th>
+                  <th className="py-3 px-3">Route</th>
+                  <th className="py-3 px-3 text-end">Est. Total (USD)</th>
+                  <th className="py-3 px-3 text-end">Est. Total (AED)</th>
+                  <th className="py-3 px-3 text-center">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredQuotes.map((item) => {
+              <tbody className="divide-y divide-slate-100">
+                {filteredQuotes.map((q) => {
+                  const hasRange = q.isTowingRange && q.totalUsdMin !== q.totalUsdMax;
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 font-mono font-bold text-brand-navy-950 whitespace-nowrap">
-                        {item.referenceNumber}
-                        <span className="block text-[10px] font-normal text-slate-400">
-                          v{item.version} •{' '}
-                          {new Date(item.createdAt).toLocaleDateString(undefined, {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
+                    <tr key={q.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-brand-navy-950">
+                        {q.referenceNumber}
                       </td>
-
-                      <td className="py-3.5 font-semibold text-slate-900">
-                        <span className="block">{item.customerName}</span>
-                        <span className="block text-[11px] font-mono font-normal text-slate-500">
-                          {item.customerPhone}
-                        </span>
+                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                        {new Date(q.createdAt).toLocaleDateString()}
                       </td>
-
-                      <td className="py-3.5 max-w-[220px]">
-                        <span className="font-semibold text-slate-800 block truncate">
-                          {item.vehicleDetails}
-                        </span>
-                        <span className="text-[11px] text-slate-500 truncate block">
-                          {item.route}
-                        </span>
+                      <td className="py-3 px-3">
+                        <div className="font-semibold text-slate-900">{q.customerName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{q.customerPhone}</div>
                       </td>
-
-                      <td className="py-3.5 font-semibold text-slate-900 whitespace-nowrap">
-                        {formatCurrency(item.oceanFreightUsd)}
+                      <td className="py-3 px-3 text-slate-700 max-w-[150px] truncate" title={q.vehicleDetails}>
+                        {q.vehicleDetails}
                       </td>
-
-                      <td className="py-3.5 whitespace-nowrap">
-                        {item.isTowingRange ? (
-                          <div>
-                            <span className="font-semibold text-slate-900 block">
-                              {formatCurrency(item.towingFeeMin)} –{' '}
-                              {formatCurrency(item.towingFeeMax)}
-                            </span>
-                            <span className="text-[10px] text-amber-700 font-medium block">
-                              Subject to final dispatch confirmation
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="font-semibold text-slate-900">
-                            {formatCurrency(item.towingFeeMin || item.towingFeeMax)}
-                          </span>
-                        )}
+                      <td className="py-3 px-3 text-slate-600 max-w-[180px] truncate" title={q.route}>
+                        {q.route}
                       </td>
-
-                      <td className="py-3.5 whitespace-nowrap">
-                        <div className="font-bold text-brand-navy-950">
-                          {item.isTowingRange ? (
-                            <span>
-                              {formatCurrency(item.totalUsdMin)} –{' '}
-                              {formatCurrency(item.totalUsdMax)}
-                            </span>
-                          ) : (
-                            <span>{formatCurrency(item.totalUsdMax || item.totalUsdMin)}</span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-medium">
-                          {item.isTowingRange ? (
-                            <span>
-                              {formatAED(item.totalAedMin)} – {formatAED(item.totalAedMax)}
-                            </span>
-                          ) : (
-                            <span>{formatAED(item.totalAedMax || item.totalAedMin)}</span>
-                          )}
-                        </div>
+                      <td className="py-3 px-3 text-end font-semibold text-slate-900 whitespace-nowrap">
+                        {hasRange
+                          ? `${formatCurrency(q.totalUsdMin)} – ${formatCurrency(q.totalUsdMax)}`
+                          : formatCurrency(q.totalUsdMax || q.totalUsdMin)}
                       </td>
-
-                      <td className="py-3.5 text-end whitespace-nowrap">
+                      <td className="py-3 px-3 text-end font-bold text-brand-orange-600 whitespace-nowrap">
+                        {hasRange
+                          ? `${formatAED(q.totalAedMin)} – ${formatAED(q.totalAedMax)}`
+                          : formatAED(q.totalAedMax || q.totalAedMin)}
+                      </td>
+                      <td className="py-3 px-3 text-center">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setSelectedQuote(item)}
-                          startIcon={<Eye className="w-3.5 h-3.5 text-brand-orange-500" />}
-                          className="text-xs py-1 px-2.5 font-bold whitespace-nowrap"
+                          onClick={() => setSelectedQuote(q)}
+                          startIcon={<Eye className="w-3 h-3" />}
+                          className="text-[11px] font-bold px-2 py-1"
                         >
                           View Details
                         </Button>
@@ -237,245 +247,490 @@ export const AdminQuotationsPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Detailed Quotation Breakdown Modal */}
-      {selectedQuote && (
-        <Modal
-          isOpen={Boolean(selectedQuote)}
-          onClose={() => setSelectedQuote(null)}
-          title={`Quotation Breakdown: ${selectedQuote.referenceNumber}`}
-        >
-          <div className="space-y-4 text-xs pt-2">
-            {/* Header Snapshot */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                  Customer
-                </span>
-                <strong className="text-slate-900 block text-sm">
-                  {selectedQuote.customerName}
-                </strong>
-                <span className="text-slate-600 font-mono">{selectedQuote.customerPhone}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Route</span>
-                <strong className="text-slate-800 block">{selectedQuote.route}</strong>
-                <span className="text-slate-500 block">{selectedQuote.vehicleDetails}</span>
-              </div>
-            </div>
+      {/* Reorganized Authoritative Quotation Breakdown Modal (Sections A through G) */}
+      {selectedQuote && (() => {
+        const rate = selectedQuote.exchangeRate || 3.6725;
+        const declaredValue = selectedQuote.declaredValueUsd || 0;
+        const oceanFreight = selectedQuote.oceanFreightUsd || 0;
+        const towingMin = selectedQuote.towingFeeMin || 0;
+        const towingMax = selectedQuote.towingFeeMax || 0;
+        const effectiveTowing = selectedQuote.isTowingRange ? towingMax : (towingMin || towingMax);
+        const portHandling = selectedQuote.portHandlingUsd || 200;
+        const clearance = selectedQuote.customsClearanceUsd || 150;
+        const surcharges = selectedQuote.surchargesUsd || 0;
 
-            {/* Towing Notice Badge */}
-            {selectedQuote.isTowingRange && (
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2 text-xs">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="block font-bold">Inland Towing Notice:</strong>
-                  <span>
-                    Inland towing for this auction site is provided as an estimated range (
-                    {formatCurrency(selectedQuote.towingFeeMin)} –{' '}
-                    {formatCurrency(selectedQuote.towingFeeMax)}). Final towing amount is subject to
-                    carrier confirmation upon vehicle pickup.
+        // Subtotal of shipping charges (strictly services, NO vehicle purchase price)
+        const subtotalShippingUsd = oceanFreight + effectiveTowing + portHandling + clearance + surcharges;
+        const subtotalShippingAed = subtotalShippingUsd * rate;
+
+        // CIF Base & Government Charges
+        const cifUsd = selectedQuote.cifMax || (declaredValue + oceanFreight);
+        const customsDutyUsd = selectedQuote.customsDutyUsd || (cifUsd * 0.05);
+        const vatBaseUsd = cifUsd + customsDutyUsd;
+        const importVatUsd = selectedQuote.importVatUsd || (vatBaseUsd * 0.05);
+        const totalGovChargesUsd = customsDutyUsd + importVatUsd;
+        const totalGovChargesAed = totalGovChargesUsd * rate;
+
+        // Grand Totals
+        const grandTotalShippingAndGovUsd = subtotalShippingUsd + totalGovChargesUsd;
+        const grandTotalShippingAndGovAed = grandTotalShippingAndGovUsd * rate;
+
+        const createdDate = new Date(selectedQuote.createdAt);
+        const validUntilDate = new Date(createdDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+        const snap = (selectedQuote.pricingSnapshot as Record<string, unknown>) || {};
+        const originPort = (snap.originPort as string) || selectedQuote.route.split('→')[0]?.trim() || 'USA Port / Auction';
+        const destinationPort = (snap.destinationPort as string) || selectedQuote.route.split('→')[1]?.trim() || 'UAE Port (Jebel Ali)';
+
+        return (
+          <Modal
+            isOpen={Boolean(selectedQuote)}
+            onClose={() => setSelectedQuote(null)}
+            title={`Official Quotation Breakdown: ${selectedQuote.referenceNumber}`}
+            className="max-w-3xl"
+          >
+            <div className="space-y-6 text-xs pt-1 pb-2">
+              {/* SECTION A: Quotation & Reference Info */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-brand-navy-950 text-white text-[10px] font-black flex items-center justify-center">
+                      A
+                    </span>
+                    <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                      Quotation & Reference Information
+                    </h3>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> Locked Tariffs Active
                   </span>
                 </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Quotation ID
+                    </span>
+                    <strong className="font-mono text-slate-900 font-bold block text-sm">
+                      {selectedQuote.referenceNumber}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Issue Date
+                    </span>
+                    <span className="text-slate-700 font-medium">
+                      {createdDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Valid Until
+                    </span>
+                    <span className="text-slate-700 font-medium">
+                      {validUntilDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Customer Type
+                    </span>
+                    <span className="text-slate-700 font-medium">
+                      Individual / Commercial
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
 
-            {/* Cost Breakdown Table */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="py-2 px-3 text-start">Component</th>
-                    <th className="py-2 px-3 text-end">Amount (USD)</th>
-                    <th className="py-2 px-3 text-end">Amount (AED)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800">
-                  {/* Vehicle Declared Value & CIF */}
-                  {(selectedQuote.declaredValueUsd !== undefined && selectedQuote.declaredValueUsd > 0) && (
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2 px-3 flex items-center gap-1.5 text-slate-600">
-                        <FileText className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Declared Buying Value</span>
-                      </td>
-                      <td className="py-2 px-3 text-end font-medium text-slate-600">
-                        {formatCurrency(selectedQuote.declaredValueUsd)}
-                      </td>
-                      <td className="py-2 px-3 text-end text-slate-400">
-                        {formatAED(selectedQuote.declaredValueUsd * (selectedQuote.exchangeRate || 3.6725))}
-                      </td>
-                    </tr>
-                  )}
+              {/* SECTION B: Customer & Contact Details */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-100">
+                  <span className="w-5 h-5 rounded-full bg-brand-navy-950 text-white text-[10px] font-black flex items-center justify-center">
+                    B
+                  </span>
+                  <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                    Customer & Contact Details
+                  </h3>
+                </div>
 
-                  {Boolean(selectedQuote.cifMax && selectedQuote.cifMax > 0) && (
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2 px-3 flex items-center gap-1.5 text-slate-600">
-                        <FileText className="w-3.5 h-3.5 text-slate-400" />
-                        <span>CIF Valuation Base</span>
-                      </td>
-                      <td className="py-2 px-3 text-end font-medium text-slate-600">
-                        {selectedQuote.isTowingRange && selectedQuote.cifMin !== selectedQuote.cifMax
-                          ? `${formatCurrency(selectedQuote.cifMin || 0)} – ${formatCurrency(selectedQuote.cifMax || 0)}`
-                          : formatCurrency(selectedQuote.cifMax || 0)}
-                      </td>
-                      <td className="py-2 px-3 text-end text-slate-400">
-                        {formatAED((selectedQuote.cifMax || 0) * (selectedQuote.exchangeRate || 3.6725))}
-                      </td>
-                    </tr>
-                  )}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Client Full Name
+                    </span>
+                    <strong className="text-slate-900 block text-xs">
+                      {selectedQuote.customerName}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Phone / WhatsApp
+                    </span>
+                    <span className="text-slate-700 font-mono">
+                      {selectedQuote.customerPhone}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Email Address
+                    </span>
+                    <span className="text-slate-700 truncate block">
+                      {selectedQuote.customerEmail || 'Not provided'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                      Destination Country / Emirate
+                    </span>
+                    <span className="text-slate-700 font-medium">
+                      United Arab Emirates (Dubai / Sharjah)
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-                  {/* Ocean Freight */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <Ship className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Ocean Freight (Base Rate)</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {formatCurrency(selectedQuote.oceanFreightUsd)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED(selectedQuote.oceanFreightUsd * (selectedQuote.exchangeRate || 3.6725))}
-                    </td>
-                  </tr>
+              {/* SECTION C: Vehicle & Shipping Route */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-100">
+                  <span className="w-5 h-5 rounded-full bg-brand-navy-950 text-white text-[10px] font-black flex items-center justify-center">
+                    C
+                  </span>
+                  <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                    Vehicle & Shipping Route
+                  </h3>
+                </div>
 
-                  {/* Inland Towing */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-brand-orange-500" />
-                      <span>Inland Towing ({selectedQuote.isTowingRange ? 'Range' : 'Fixed'})</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {selectedQuote.isTowingRange
-                        ? `${formatCurrency(selectedQuote.towingFeeMin)} – ${formatCurrency(selectedQuote.towingFeeMax)}`
-                        : formatCurrency(selectedQuote.towingFeeMin || selectedQuote.towingFeeMax)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {selectedQuote.isTowingRange
-                        ? `${formatAED(selectedQuote.towingFeeMin * (selectedQuote.exchangeRate || 3.6725))} – ${formatAED(selectedQuote.towingFeeMax * (selectedQuote.exchangeRate || 3.6725))}`
-                        : formatAED(
-                            (selectedQuote.towingFeeMin || selectedQuote.towingFeeMax) * (selectedQuote.exchangeRate || 3.6725)
-                          )}
-                    </td>
-                  </tr>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block flex items-center gap-1">
+                      <Car className="w-3 h-3 text-brand-orange-500" /> Vehicle Specification
+                    </span>
+                    <strong className="text-slate-900 block">
+                      {selectedQuote.vehicleDetails}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-blue-500" /> Origin / Dispatch Port
+                    </span>
+                    <span className="text-slate-700 font-medium block">
+                      {originPort}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block flex items-center gap-1">
+                      <Ship className="w-3 h-3 text-emerald-500" /> Destination Port & Transit
+                    </span>
+                    <span className="text-slate-700 font-medium block">
+                      {destinationPort} (~30-45 Days)
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-                  {/* Surcharges if any */}
-                  {(selectedQuote.surchargesUsd !== undefined && selectedQuote.surchargesUsd > 0) && (
-                    <tr>
-                      <td className="py-2 px-3 flex items-center gap-1.5 text-amber-800">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Condition / Fuel Surcharges</span>
-                      </td>
-                      <td className="py-2 px-3 text-end font-semibold text-amber-800">
-                        {formatCurrency(selectedQuote.surchargesUsd)}
-                      </td>
-                      <td className="py-2 px-3 text-end text-slate-500">
-                        {formatAED(selectedQuote.surchargesUsd * (selectedQuote.exchangeRate || 3.6725))}
-                      </td>
-                    </tr>
-                  )}
+              {/* SECTION D: Vehicle Value & CIF Base */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-200">
+                  <span className="w-5 h-5 rounded-full bg-brand-navy-950 text-white text-[10px] font-black flex items-center justify-center">
+                    D
+                  </span>
+                  <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                    Vehicle Value & CIF Valuation Base
+                  </h3>
+                </div>
 
-                  {/* Customs Clearance */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-slate-500" />
-                      <span>UAE Customs Clearance Fee</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {formatCurrency(selectedQuote.customsClearanceUsd || 150)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED((selectedQuote.customsClearanceUsd || 150) * (selectedQuote.exchangeRate || 3.6725))}
-                    </td>
-                  </tr>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                        <th className="py-1.5 px-2 text-start">Valuation Parameter</th>
+                        <th className="py-1.5 px-2 text-end">Amount (USD)</th>
+                        <th className="py-1.5 px-2 text-end">Amount (AED)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/60 text-slate-700">
+                      <tr>
+                        <td className="py-1.5 px-2">Declared Vehicle Purchase Value</td>
+                        <td className="py-1.5 px-2 text-end font-medium">
+                          {declaredValue > 0 ? formatCurrency(declaredValue) : 'Not Declared ($0.00)'}
+                        </td>
+                        <td className="py-1.5 px-2 text-end text-slate-500">
+                          {declaredValue > 0 ? formatAED(declaredValue * rate) : 'AED 0.00'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 px-2">Eligible Ocean Freight (included in CIF)</td>
+                        <td className="py-1.5 px-2 text-end font-medium">{formatCurrency(oceanFreight)}</td>
+                        <td className="py-1.5 px-2 text-end text-slate-500">{formatAED(oceanFreight * rate)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 px-2">Transit Marine Cargo Insurance</td>
+                        <td className="py-1.5 px-2 text-end font-medium">Included / Standard</td>
+                        <td className="py-1.5 px-2 text-end text-slate-500">Carrier Terms</td>
+                      </tr>
+                      <tr className="font-bold bg-white/60">
+                        <td className="py-2 px-2 text-brand-navy-950">Total Official CIF Valuation Base</td>
+                        <td className="py-2 px-2 text-end text-brand-navy-950 font-bold">{formatCurrency(cifUsd)}</td>
+                        <td className="py-2 px-2 text-end text-brand-orange-600 font-bold">{formatAED(cifUsd * rate)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-                  {/* Port Handling */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <Ship className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Port Handling & Terminal Charges</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {formatCurrency(selectedQuote.portHandlingUsd || 200)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED((selectedQuote.portHandlingUsd || 200) * (selectedQuote.exchangeRate || 3.6725))}
-                    </td>
-                  </tr>
+              {/* SECTION E: Itemized Shipping & Logistics Charges */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-brand-navy-950 text-white text-[10px] font-black flex items-center justify-center">
+                      E
+                    </span>
+                    <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                      Itemized Shipping & Logistics Charges
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    Excludes Vehicle Purchase Price
+                  </span>
+                </div>
 
-                  {/* Customs Duty */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>UAE Customs Duty (5% of CIF)</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {formatCurrency(selectedQuote.customsDutyUsd)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED(selectedQuote.customsDutyUsd * (selectedQuote.exchangeRate || 3.6725))}
-                    </td>
-                  </tr>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] font-bold text-slate-500 uppercase border-b border-slate-100 bg-slate-50/50">
+                        <th className="py-2 px-3 text-start">Logistics Service Item</th>
+                        <th className="py-2 px-3 text-start">Notes</th>
+                        <th className="py-2 px-3 text-end">Amount (USD)</th>
+                        <th className="py-2 px-3 text-end">Amount (AED)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      <tr>
+                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-brand-orange-500" /> Inland Towing (Origin Auction to US Port)
+                        </td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">
+                          {selectedQuote.isTowingRange ? 'Carrier Range Bracket' : 'Fixed Station Rate'}
+                        </td>
+                        <td className="py-2 px-3 text-end font-semibold">
+                          {selectedQuote.isTowingRange
+                            ? `${formatCurrency(towingMin)} – ${formatCurrency(towingMax)}`
+                            : formatCurrency(towingMin || towingMax)}
+                        </td>
+                        <td className="py-2 px-3 text-end text-slate-500">
+                          {selectedQuote.isTowingRange
+                            ? `${formatAED(towingMin * rate)} – ${formatAED(towingMax * rate)}`
+                            : formatAED((towingMin || towingMax) * rate)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                          <Ship className="w-3.5 h-3.5 text-blue-500" /> Ocean Freight (US Port to UAE)
+                        </td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Containerized Cargo Carrier</td>
+                        <td className="py-2 px-3 text-end font-semibold">{formatCurrency(oceanFreight)}</td>
+                        <td className="py-2 px-3 text-end text-slate-500">{formatAED(oceanFreight * rate)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                          <Ship className="w-3.5 h-3.5 text-indigo-500" /> Destination Port Handling & Terminal Charges
+                        </td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Non-VAT Base / Destination Service</td>
+                        <td className="py-2 px-3 text-end font-semibold">{formatCurrency(portHandling)}</td>
+                        <td className="py-2 px-3 text-end text-slate-500">{formatAED(portHandling * rate)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-slate-500" /> UAE Customs Clearance & Documentation
+                        </td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Agency filing & port paperwork</td>
+                        <td className="py-2 px-3 text-end font-semibold">{formatCurrency(clearance)}</td>
+                        <td className="py-2 px-3 text-end text-slate-500">{formatAED(clearance * rate)}</td>
+                      </tr>
+                      {surcharges > 0 && (
+                        <tr>
+                          <td className="py-2 px-3 font-medium flex items-center gap-1.5 text-amber-800">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Condition / Fuel Surcharges
+                          </td>
+                          <td className="py-2 px-3 text-[11px] text-amber-600">Non-runner or specialized handling</td>
+                          <td className="py-2 px-3 text-end font-semibold text-amber-800">{formatCurrency(surcharges)}</td>
+                          <td className="py-2 px-3 text-end text-slate-500">{formatAED(surcharges * rate)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-brand-orange-50/50 border-t-2 border-brand-orange-200 font-bold text-brand-navy-950">
+                        <td colSpan={2} className="py-2.5 px-3">
+                          Subtotal of Shipping & Logistics Services
+                        </td>
+                        <td className="py-2.5 px-3 text-end font-black text-brand-navy-950">
+                          {formatCurrency(subtotalShippingUsd)}
+                        </td>
+                        <td className="py-2.5 px-3 text-end font-black text-brand-orange-600">
+                          {formatAED(subtotalShippingAed)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
 
-                  {/* Import VAT */}
-                  <tr>
-                    <td className="py-2 px-3 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>UAE Import VAT (5% of VAT Base)</span>
-                    </td>
-                    <td className="py-2 px-3 text-end font-semibold">
-                      {formatCurrency(selectedQuote.importVatUsd)}
-                    </td>
-                    <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED(selectedQuote.importVatUsd * (selectedQuote.exchangeRate || 3.6725))}
-                    </td>
-                  </tr>
+              {/* SECTION F: UAE Customs & Import VAT */}
+              <div className="bg-emerald-50/30 border border-emerald-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-emerald-200">
+                  <span className="w-5 h-5 rounded-full bg-emerald-700 text-white text-[10px] font-black flex items-center justify-center">
+                    F
+                  </span>
+                  <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                    UAE Customs Duty & Import VAT (Statutory Government Fees)
+                  </h3>
+                </div>
 
-                  {/* Grand Total */}
-                  <tr className="bg-slate-50/90 font-black text-brand-navy-950 border-t-2 border-slate-300">
-                    <td className="py-2.5 px-3">Total Estimated Shipping</td>
-                    <td className="py-2.5 px-3 text-end text-sm">
-                      {selectedQuote.isTowingRange
-                        ? `${formatCurrency(selectedQuote.totalUsdMin)} – ${formatCurrency(selectedQuote.totalUsdMax)}`
-                        : formatCurrency(selectedQuote.totalUsdMax || selectedQuote.totalUsdMin)}
-                    </td>
-                    <td className="py-2.5 px-3 text-end text-sm text-brand-orange-600">
-                      {selectedQuote.isTowingRange
-                        ? `${formatAED(selectedQuote.totalAedMin)} – ${formatAED(selectedQuote.totalAedMax)}`
-                        : formatAED(selectedQuote.totalAedMax || selectedQuote.totalAedMin)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] font-bold text-slate-500 uppercase border-b border-emerald-200">
+                        <th className="py-1.5 px-2 text-start">Government Fee Component</th>
+                        <th className="py-1.5 px-2 text-start">Calculation Basis</th>
+                        <th className="py-1.5 px-2 text-end">Amount (USD)</th>
+                        <th className="py-1.5 px-2 text-end">Amount (AED)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-emerald-200/50 text-slate-700">
+                      <tr>
+                        <td className="py-2 px-2 font-medium">UAE Customs Duty (5%)</td>
+                        <td className="py-2 px-2 text-[11px] text-slate-500">5.0% × CIF Base ({formatCurrency(cifUsd)})</td>
+                        <td className="py-2 px-2 text-end font-semibold">{formatCurrency(customsDutyUsd)}</td>
+                        <td className="py-2 px-2 text-end text-slate-500">{formatAED(customsDutyUsd * rate)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-medium">UAE Import VAT (5%)</td>
+                        <td className="py-2 px-2 text-[11px] text-slate-500">5.0% × [CIF + Duty] ({formatCurrency(vatBaseUsd)})</td>
+                        <td className="py-2 px-2 text-end font-semibold">{formatCurrency(importVatUsd)}</td>
+                        <td className="py-2 px-2 text-end text-slate-500">{formatAED(importVatUsd * rate)}</td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-emerald-100/50 font-bold border-t border-emerald-300 text-emerald-950">
+                        <td colSpan={2} className="py-2 px-2">Total UAE Government Charges</td>
+                        <td className="py-2 px-2 text-end font-black">{formatCurrency(totalGovChargesUsd)}</td>
+                        <td className="py-2 px-2 text-end font-black text-emerald-700">{formatAED(totalGovChargesAed)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* SECTION G: Quotation Grand Totals */}
+              <div className="bg-brand-navy-950 text-white rounded-2xl p-5 shadow-lg border border-brand-navy-800">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-brand-navy-800">
+                  <span className="w-5 h-5 rounded-full bg-brand-orange-500 text-white text-[10px] font-black flex items-center justify-center">
+                    G
+                  </span>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Quotation Grand Totals (Landed Services Summary)
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div className="p-3 rounded-xl bg-brand-navy-900 border border-brand-navy-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Total Logistics & Shipping
+                    </span>
+                    <strong className="text-white text-base block mt-0.5">
+                      {formatCurrency(subtotalShippingUsd)}
+                    </strong>
+                    <span className="text-[11px] text-brand-orange-400 font-semibold">
+                      {formatAED(subtotalShippingAed)}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-brand-navy-900 border border-brand-navy-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Total Government Charges
+                    </span>
+                    <strong className="text-emerald-300 text-base block mt-0.5">
+                      {formatCurrency(totalGovChargesUsd)}
+                    </strong>
+                    <span className="text-[11px] text-emerald-400 font-semibold">
+                      {formatAED(totalGovChargesAed)}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-brand-orange-500 text-white border border-brand-orange-400 shadow-orange-glow">
+                    <span className="text-[10px] text-orange-100 uppercase font-black block">
+                      Quotation Grand Total
+                    </span>
+                    <strong className="text-white text-lg block font-black mt-0.5">
+                      {formatCurrency(grandTotalShippingAndGovUsd)}
+                    </strong>
+                    <span className="text-xs text-white font-bold block">
+                      {formatAED(grandTotalShippingAndGovAed)}
+                    </span>
+                  </div>
+                </div>
+
+                {declaredValue > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-3 pt-2 border-t border-brand-navy-800/80">
+                    * Total Estimated Landed Investment (Vehicle Purchase + Shipping + UAE Government Charges):{' '}
+                    <strong className="text-white font-bold">
+                      {formatCurrency(declaredValue + grandTotalShippingAndGovUsd)}
+                    </strong>{' '}
+                    ({formatAED((declaredValue + grandTotalShippingAndGovUsd) * rate)})
+                  </p>
+                )}
+              </div>
+
+              {/* Disclaimer */}
+              {selectedQuote.disclaimer && (
+                <p className="text-[11px] text-slate-400 italic leading-relaxed px-1">
+                  {selectedQuote.disclaimer}
+                </p>
+              )}
+
+              {/* Action Buttons: Download PDF, Print, Close */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleDownloadPdf(selectedQuote)}
+                    disabled={isDownloadingPdf}
+                    startIcon={
+                      isDownloadingPdf ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )
+                    }
+                    className="flex-1 sm:flex-initial text-xs font-bold bg-brand-orange-500 hover:bg-brand-orange-600 shadow-sm"
+                  >
+                    <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.print()}
+                    startIcon={<Printer className="w-3.5 h-3.5" />}
+                    className="flex-1 sm:flex-initial text-xs font-bold border-slate-300"
+                  >
+                    <span>Print Quotation</span>
+                  </Button>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedQuote(null)}
+                  className="w-full sm:w-auto text-xs font-bold text-slate-600"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
-
-            {selectedQuote.disclaimer && (
-              <p className="text-[11px] text-slate-400 italic leading-relaxed">
-                {selectedQuote.disclaimer}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 text-xs font-bold"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Quotation</span>
-              </Button>
-
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setSelectedQuote(null)}
-                className="text-xs font-bold"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
     </div>
   );
 };

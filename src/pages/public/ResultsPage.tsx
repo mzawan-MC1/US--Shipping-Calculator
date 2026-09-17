@@ -10,6 +10,7 @@ import { quotationService } from '../../services/quotationService';
 import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
+import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
 import {
   Clock,
   Car,
@@ -24,6 +25,7 @@ import {
   Receipt,
   CheckCircle2,
   Share2,
+  Printer,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
@@ -157,15 +159,49 @@ export const ResultsPage: React.FC = () => {
 
   const whatsappHref = getWhatsAppLink(whatsappMessage);
 
-  const handleDownloadQuotation = () => {
-    const originalTitle = document.title;
-    document.title = `quotation-${quote.referenceNumber}`;
-    window.print();
-    setDownloadSuccess(true);
-    setTimeout(() => {
-      document.title = originalTitle;
-      setDownloadSuccess(false);
-    }, 5000);
+  const handleDownloadQuotation = async () => {
+    try {
+      const pdfData: PdfQuotationData = {
+        referenceNumber: quote.referenceNumber,
+        enquiryReference: quote.enquiryReference,
+        createdAt: quote.createdAt,
+        customerName: quote.input.customerName || 'Valued Customer',
+        customerPhone: quote.input.customerPhone || 'N/A',
+        customerEmail: quote.input.customerEmail,
+        vehicleDetails: `${quote.input.year} ${quote.input.make} ${quote.input.model}`.trim(),
+        originPort: originDisplay.name,
+        destinationPort: destDisplay.name,
+        shippingMethod: quote.input.shippingMethod || 'Containerized Ocean Freight',
+        transitTime: `${quote.estimatedTransitDaysMin || quote.estimatedTransitDays || 30}-${quote.estimatedTransitDaysMax || 45} Days`,
+        declaredValueUsd: quote.input.buyingPrice,
+        oceanFreightUsd: quote.oceanFreight,
+        towingFeeMin: quote.towingFeeMin || 0,
+        towingFeeMax: quote.towingFeeMax || 0,
+        isTowingRange: Boolean(quote.isTowingRange),
+        clearanceFeeUsd: quote.customsClearance,
+        portHandlingFeeUsd: quote.destinationCharges,
+        surchargesUsd: (quote.powertrainSurcharge || 0) + (quote.vehicleTypeSurcharge || 0),
+        cifUsd: quote.cifMax || quote.cifMin || ((quote.input.buyingPrice || 0) + quote.oceanFreight),
+        customsDutyUsd: quote.customsDuty,
+        importVatUsd: quote.vat,
+        totalUsdMin: quote.totalChargesUsdMin || quote.totalChargesUsd,
+        totalUsdMax: quote.totalChargesUsdMax || quote.totalChargesUsd,
+        totalAedMin: quote.totalChargesAedMin || convertUsdToAed(quote.totalChargesUsdMin || quote.totalChargesUsd),
+        totalAedMax: quote.totalChargesAedMax || convertUsdToAed(quote.totalChargesUsdMax || quote.totalChargesUsd),
+        exchangeRate: (quote.snapshot?.exchangeRate as number) || 3.6725,
+        disclaimer: quote.disclaimer,
+        rules: quote.rules,
+      };
+      await generateQuotationPdf(pdfData, branding);
+      setDownloadSuccess(true);
+      setTimeout(() => {
+        setDownloadSuccess(false);
+      }, 5000);
+    } catch (err) {
+      console.error('Failed to generate PDF quotation:', err);
+      // Fallback to window.print if PDF generation encounters an issue
+      window.print();
+    }
   };
 
   const handleShare = async () => {
@@ -544,6 +580,41 @@ export const ResultsPage: React.FC = () => {
             </div>
           </Card>
 
+          {/* Rules & Regulations Terms Snapshot */}
+          {quote.rules && quote.rules.length > 0 && (
+            <Card className="p-5 sm:p-6 bg-white border border-slate-200">
+              <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-100">
+                <ShieldCheck className="w-4 h-4 text-brand-orange-500" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-brand-navy-950">
+                  {isAr ? 'الشروط والأحكام واللوائح الرسمية' : 'Quotation Rules, Terms & Regulations'}
+                </h4>
+              </div>
+              <div className="space-y-3">
+                {quote.rules.map((rule, idx) => {
+                  const ruleTitle = (isAr ? rule.title_ar : null) || rule.title || rule.title_en || 'Quotation Rule';
+                  const ruleContent = (isAr ? rule.content_ar : null) || rule.content || rule.content_en || '';
+                  return (
+                    <div key={rule.ruleKey || rule.rule_key || rule.id || idx} className="text-xs">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-4 h-4 rounded-full bg-brand-navy-900 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <strong className="text-slate-900 font-bold block mb-0.5">
+                            {ruleTitle}
+                          </strong>
+                          <p className="text-[11px] text-slate-600 leading-relaxed">
+                            {ruleContent}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
           {/* Authoritative Disclaimer from Database Engine */}
           <Alert variant="info" title="Authoritative Quotation Disclaimer" className="print:border-slate-300 print:text-slate-700">
             {quote.disclaimer || t.demoDataDisclaimer}
@@ -554,7 +625,7 @@ export const ResultsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
-                  Authoritative quotation snapshot recorded. Stamped PDF dispatch ready (Ref:{' '}
+                  Authoritative quotation PDF downloaded successfully (Ref:{' '}
                   <strong>{quote.referenceNumber}</strong>).
                 </span>
               </div>
@@ -590,35 +661,45 @@ export const ResultsPage: React.FC = () => {
               </Button>
             </a>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <Button
                 variant="secondary"
                 size="md"
-                className="w-full font-bold"
+                className="w-full font-bold text-xs"
                 onClick={handleShare}
-                startIcon={<Share2 className="w-4 h-4" />}
+                startIcon={<Share2 className="w-3.5 h-3.5" />}
               >
-                {isAr ? 'مشاركة العرض' : 'Share Quote'}
+                {isAr ? 'مشاركة' : 'Share'}
+              </Button>
+
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full font-bold text-xs bg-brand-orange-500 hover:bg-brand-orange-600 shadow-sm"
+                onClick={handleDownloadQuotation}
+                startIcon={<Download className="w-3.5 h-3.5" />}
+              >
+                {isAr ? 'تحميل PDF' : 'Download PDF'}
               </Button>
 
               <Button
                 variant="outline"
                 size="md"
-                className="w-full font-bold"
-                onClick={handleDownloadQuotation}
-                startIcon={<Download className="w-4 h-4" />}
+                className="w-full font-bold text-xs"
+                onClick={() => window.print()}
+                startIcon={<Printer className="w-3.5 h-3.5" />}
               >
-                {t.btnDownloadQuote}
+                {isAr ? 'طباعة' : 'Print'}
               </Button>
 
               <Link to="/calculator" className="w-full">
                 <Button
                   variant="outline"
                   size="md"
-                  className="w-full font-bold"
-                  startIcon={<RotateCcw className="w-4 h-4" />}
+                  className="w-full font-bold text-xs"
+                  startIcon={<RotateCcw className="w-3.5 h-3.5" />}
                 >
-                  {t.btnRecalculate}
+                  {isAr ? 'إعادة الحساب' : 'Recalculate'}
                 </Button>
               </Link>
             </div>

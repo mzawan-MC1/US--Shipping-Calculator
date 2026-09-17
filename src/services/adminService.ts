@@ -1713,4 +1713,120 @@ export const adminService = {
       newData: a.new_data || undefined,
     }));
   },
+
+  async getQuotationRules(): Promise<AdminQuotationRule[]> {
+    const { data, error } = await supabase
+      .from('quotation_rules')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map((r) => ({
+      id: r.id,
+      ruleKey: r.rule_key,
+      title: r.title,
+      content: r.content,
+      category: r.category,
+      isActive: r.is_active,
+      displayOrder: r.display_order,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  },
+
+  async createQuotationRule(
+    rule: Omit<AdminQuotationRule, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<AdminQuotationRule> {
+    const { data, error } = await supabase
+      .from('quotation_rules')
+      .insert({
+        rule_key: rule.ruleKey,
+        title: rule.title,
+        content: rule.content,
+        category: rule.category || 'terms',
+        display_order: rule.displayOrder,
+        is_active: rule.isActive ?? true,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      ruleKey: data.rule_key,
+      title: data.title,
+      content: data.content,
+      category: data.category,
+      isActive: data.is_active,
+      displayOrder: data.display_order,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  },
+
+  async updateQuotationRule(
+    id: string,
+    updates: Partial<Omit<AdminQuotationRule, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<void> {
+    const payload: Database['public']['Tables']['quotation_rules']['Update'] = {
+      updated_at: new Date().toISOString(),
+    };
+    if (updates.ruleKey !== undefined) payload.rule_key = updates.ruleKey;
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.content !== undefined) payload.content = updates.content;
+    if (updates.category !== undefined) payload.category = updates.category;
+    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    const { error } = await supabase
+      .from('quotation_rules')
+      .update(payload)
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async toggleQuotationRuleStatus(id: string, isActive: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('quotation_rules')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async deleteQuotationRule(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('quotation_rules')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async reorderQuotationRules(
+    ruleOrders: Array<{ id: string; displayOrder: number }>
+  ): Promise<void> {
+    for (const item of ruleOrders) {
+      const { error } = await supabase
+        .from('quotation_rules')
+        .update({ display_order: item.displayOrder, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+      if (error) throw error;
+    }
+  },
 };
+
+export interface AdminQuotationRule {
+  id: string;
+  ruleKey: string;
+  title: string;
+  content: string;
+  category: string;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}

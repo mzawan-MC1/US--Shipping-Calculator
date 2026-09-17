@@ -85,6 +85,21 @@ export interface QuotationRouteInfo {
   transit_days_max?: number;
 }
 
+export interface QuotationRuleItem {
+  id: string;
+  ruleKey?: string;
+  rule_key?: string;
+  title?: string;
+  title_en?: string;
+  title_ar?: string;
+  content?: string;
+  content_en?: string;
+  content_ar?: string;
+  category?: string;
+  display_order: number;
+  version?: number;
+}
+
 export interface QuotationBreakdown {
   id: string;
   referenceNumber: string;
@@ -122,6 +137,7 @@ export interface QuotationBreakdown {
   disclaimer?: string;
   lineItems?: QuotationLineItem[];
   routeInfo?: QuotationRouteInfo;
+  rules?: QuotationRuleItem[];
   snapshot?: Record<string, unknown>;
   isIdempotentReplay?: boolean;
 }

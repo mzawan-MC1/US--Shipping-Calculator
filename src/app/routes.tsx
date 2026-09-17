@@ -59,6 +59,9 @@ const AdminSettingsPage = lazy(() =>
 const AdminActivityPage = lazy(() =>
   import('../pages/admin/AdminActivityPage').then((m) => ({ default: m.AdminActivityPage }))
 );
+const AdminProfilePage = lazy(() =>
+  import('../pages/admin/AdminProfilePage').then((m) => ({ default: m.AdminProfilePage }))
+);
 
 const SuspenseLoader: React.FC = () => (
   <div className="min-h-[50vh] flex flex-col items-center justify-center p-8">
@@ -245,6 +248,20 @@ export const AppRoutes: React.FC = () => {
               </AdminLayout>
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <AdminProfilePage />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/cms"
+          element={<Navigate to="/admin/content" replace />}
         />
 
         {/* Fallback */}

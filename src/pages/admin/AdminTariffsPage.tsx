@@ -17,6 +17,7 @@ import {
   AdminPowertrain,
   AdminPurchaseLocation,
   AdminAdditionalChargeRule,
+  AdminQuotationRule,
 } from '../../services/adminService';
 import { formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../features/auth/AuthContext';
@@ -36,13 +37,16 @@ import {
   Search,
   Filter,
   Sliders,
+  FileText,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 export const AdminTariffsPage: React.FC = () => {
   const { hasPermission } = useAuth();
   const canManagePricing = hasPermission('pricing.manage');
 
-  const [activeTab, setActiveTab] = useState<'freight' | 'towing' | 'surcharges' | 'exchange'>('freight');
+  const [activeTab, setActiveTab] = useState<'freight' | 'towing' | 'surcharges' | 'rules' | 'exchange'>('freight');
   const [freightRates, setFreightRates] = useState<AdminFreightRate[]>([]);
   const [towingRates, setTowingRates] = useState<AdminTowingRate[]>([]);
   const [routes, setRoutes] = useState<AdminRoute[]>([]);
@@ -114,9 +118,22 @@ export const AdminTariffsPage: React.FC = () => {
   const [chargeRuleVatBase, setChargeRuleVatBase] = useState(false);
   const [isSavingCharge, setIsSavingCharge] = useState(false);
 
+  // Quotation Rules State
+  const [quotationRules, setQuotationRules] = useState<AdminQuotationRule[]>([]);
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [ruleModalMode, setRuleModalMode] = useState<'create' | 'edit'>('create');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [ruleFormKey, setRuleFormKey] = useState('');
+  const [ruleFormTitle, setRuleFormTitle] = useState('');
+  const [ruleFormContent, setRuleFormContent] = useState('');
+  const [ruleFormCategory, setRuleFormCategory] = useState('terms');
+  const [ruleFormDisplayOrder, setRuleFormDisplayOrder] = useState('1');
+  const [ruleFormIsActive, setRuleFormIsActive] = useState(true);
+  const [isSavingRule, setIsSavingRule] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
-      const [f, t, e, r, p, vc, sm, pt, pl, ac] = await Promise.all([
+      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr] = await Promise.all([
         adminService.getFreightRates(),
         adminService.getTowingRates(),
         adminService.getExchangeRate(),
@@ -127,6 +144,7 @@ export const AdminTariffsPage: React.FC = () => {
         adminService.getPowertrains(),
         adminService.getPurchaseLocations(),
         adminService.getAdditionalChargeRules(),
+        adminService.getQuotationRules(),
       ]);
       setFreightRates(f);
       setTowingRates(t);
@@ -139,6 +157,7 @@ export const AdminTariffsPage: React.FC = () => {
       setPowertrains(pt);
       setPurchaseLocations(pl);
       setAdditionalCharges(ac);
+      setQuotationRules(qr);
 
       if (r.length > 0 && !freightFormRouteId) {
         setFreightFormRouteId(r[0].id);
@@ -481,6 +500,119 @@ export const AdminTariffsPage: React.FC = () => {
     }
   };
 
+  // Quotation Rules Handlers
+  const handleOpenCreateRule = () => {
+    setRuleModalMode('create');
+    setEditingRuleId(null);
+    setRuleFormKey('');
+    setRuleFormTitle('');
+    setRuleFormContent('');
+    setRuleFormCategory('terms');
+    setRuleFormDisplayOrder((quotationRules.length + 1).toString());
+    setRuleFormIsActive(true);
+    setIsRuleModalOpen(true);
+  };
+
+  const handleOpenEditRule = (r: AdminQuotationRule) => {
+    setRuleModalMode('edit');
+    setEditingRuleId(r.id);
+    setRuleFormKey(r.ruleKey);
+    setRuleFormTitle(r.title);
+    setRuleFormContent(r.content);
+    setRuleFormCategory(r.category);
+    setRuleFormDisplayOrder(r.displayOrder.toString());
+    setRuleFormIsActive(r.isActive);
+    setIsRuleModalOpen(true);
+  };
+
+  const handleSaveRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ruleFormTitle.trim() || !ruleFormContent.trim()) {
+      setActionError('Rule title and content are required.');
+      return;
+    }
+    const order = parseInt(ruleFormDisplayOrder, 10) || 1;
+    const key = ruleFormKey.trim() || ruleFormTitle.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+    setIsSavingRule(true);
+    setActionError(null);
+    setActionSuccess(null);
+
+    try {
+      if (ruleModalMode === 'create') {
+        await adminService.createQuotationRule({
+          ruleKey: key,
+          title: ruleFormTitle.trim(),
+          content: ruleFormContent.trim(),
+          category: ruleFormCategory,
+          displayOrder: order,
+          isActive: ruleFormIsActive,
+        });
+        setActionSuccess('Quotation rule created successfully.');
+      } else if (editingRuleId) {
+        await adminService.updateQuotationRule(editingRuleId, {
+          ruleKey: key,
+          title: ruleFormTitle.trim(),
+          content: ruleFormContent.trim(),
+          category: ruleFormCategory,
+          displayOrder: order,
+          isActive: ruleFormIsActive,
+        });
+        setActionSuccess('Quotation rule updated successfully.');
+      }
+      setIsRuleModalOpen(false);
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save quotation rule';
+      setActionError(msg);
+    } finally {
+      setIsSavingRule(false);
+    }
+  };
+
+  const handleToggleRuleStatus = async (id: string, currentStatus: boolean) => {
+    setActionError(null);
+    try {
+      await adminService.toggleQuotationRuleStatus(id, !currentStatus);
+      setActionSuccess(`Rule ${!currentStatus ? 'activated' : 'deactivated'} successfully.`);
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to toggle rule status';
+      setActionError(msg);
+    }
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this quotation rule?')) return;
+    setActionError(null);
+    try {
+      await adminService.deleteQuotationRule(id);
+      setActionSuccess('Quotation rule deleted.');
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete rule';
+      setActionError(msg);
+    }
+  };
+
+  const handleMoveRule = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= quotationRules.length) return;
+
+    const currentItem = quotationRules[index];
+    const targetItem = quotationRules[targetIndex];
+
+    try {
+      await adminService.reorderQuotationRules([
+        { id: currentItem.id, displayOrder: targetItem.displayOrder },
+        { id: targetItem.id, displayOrder: currentItem.displayOrder },
+      ]);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to reorder rules:', err);
+    }
+  };
+
   return (
     <div className="space-y-6 w-full max-w-full">
       {/* Header */}
@@ -538,6 +670,18 @@ export const AdminTariffsPage: React.FC = () => {
               Add Towing Bracket
             </Button>
           )}
+
+          {canManagePricing && activeTab === 'rules' && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleOpenCreateRule}
+              className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Quotation Rule
+            </Button>
+          )}
         </div>
       </div>
 
@@ -588,6 +732,18 @@ export const AdminTariffsPage: React.FC = () => {
         >
           <Sliders className="w-4 h-4" />
           <span>Port Surcharges & Rules ({additionalCharges.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'rules'
+              ? 'border-brand-orange-500 text-brand-navy-950'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Rules & Regulations ({quotationRules.length})</span>
         </button>
 
         <button
@@ -935,7 +1091,9 @@ export const AdminTariffsPage: React.FC = () => {
                                 In 5% VAT Base
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">Exempt / Non-VAT</span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Separate / Non-VAT Base
+                              </span>
                             )}
                           </td>
                           <td className="py-3.5 px-4">
@@ -991,7 +1149,154 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 4: EXCHANGE RATE */}
+          {/* TAB 4: RULES & REGULATIONS */}
+          {activeTab === 'rules' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
+                <div>
+                  <h3 className="text-sm font-bold text-brand-navy-950">
+                    Official Quotation Terms, Conditions & Rules
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Terms defined here are automatically snapshotted onto every generated quotation and shown in PDF exports and results.
+                  </p>
+                </div>
+                {canManagePricing && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleOpenCreateRule}
+                    className="flex items-center gap-1.5 text-xs font-bold shadow-sm whitespace-nowrap self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Quotation Rule
+                  </Button>
+                )}
+              </div>
+
+              <Card className="bg-white border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-start text-xs min-w-[700px]">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-4 text-center w-16">Order</th>
+                        <th className="py-3 px-4">Rule Key</th>
+                        <th className="py-3 px-4">Title & Description</th>
+                        <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Status</th>
+                        {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {quotationRules.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            No quotation rules configured. Click "Add Quotation Rule" to create one.
+                          </td>
+                        </tr>
+                      ) : (
+                        quotationRules.map((r, idx) => (
+                          <tr key={r.id} className="hover:bg-slate-50/50">
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="font-bold text-slate-600 w-4 text-center">
+                                  {r.displayOrder}
+                                </span>
+                                {canManagePricing && (
+                                  <div className="flex flex-col">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveRule(idx, 'up')}
+                                      className="p-0.5 text-slate-400 hover:text-brand-orange-500 disabled:opacity-20"
+                                      title="Move up"
+                                    >
+                                      <ArrowUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === quotationRules.length - 1}
+                                      onClick={() => handleMoveRule(idx, 'down')}
+                                      className="p-0.5 text-slate-400 hover:text-brand-orange-500 disabled:opacity-20"
+                                      title="Move down"
+                                    >
+                                      <ArrowDown className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-brand-navy-950">
+                              {r.ruleKey}
+                            </td>
+                            <td className="py-3.5 px-4 max-w-md">
+                              <strong className="block text-slate-900 font-bold mb-0.5">{r.title}</strong>
+                              <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                                {r.content}
+                              </p>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
+                                {r.category}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <button
+                                type="button"
+                                disabled={!canManagePricing}
+                                onClick={() => handleToggleRuleStatus(r.id, r.isActive)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                  r.isActive
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                }`}
+                              >
+                                {r.isActive ? (
+                                  <>
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3 h-3 text-slate-400" /> Inactive
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                            {canManagePricing && (
+                              <td className="py-3.5 px-4 text-end whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleOpenEditRule(r)}
+                                    className="text-[11px] py-1 px-2.5 font-bold"
+                                  >
+                                    <Edit2 className="w-3 h-3 me-1" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteRule(r.id)}
+                                    className="text-[11px] py-1 px-2 font-bold text-rose-600 hover:bg-rose-50 border-rose-200"
+                                    title="Delete rule"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 5: EXCHANGE RATE */}
           {activeTab === 'exchange' && (
             <Card className="p-6 bg-white border border-slate-200 max-w-xl">
               <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
@@ -1503,6 +1808,116 @@ export const AdminTariffsPage: React.FC = () => {
               className="font-bold"
             >
               {isUpdatingExchange ? 'Saving...' : 'Apply New Rate'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Quotation Rule Create/Edit Modal */}
+      <Modal
+        isOpen={isRuleModalOpen}
+        onClose={() => setIsRuleModalOpen(false)}
+        title={ruleModalMode === 'create' ? 'Add Quotation Rule' : 'Edit Quotation Rule'}
+      >
+        <form onSubmit={handleSaveRule} className="space-y-4 pt-2 text-xs">
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Rule Title <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. Quotation Validity Period"
+              value={ruleFormTitle}
+              onChange={(e) => setRuleFormTitle(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Rule Key (Identifier)
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. validity_period (auto-generated if blank)"
+              value={ruleFormKey}
+              onChange={(e) => setRuleFormKey(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Category</label>
+              <select
+                value={ruleFormCategory}
+                onChange={(e) => setRuleFormCategory(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-brand-orange-500"
+              >
+                <option value="terms">General Terms</option>
+                <option value="storage">Storage & Demurrage</option>
+                <option value="customs">Customs & Inspection</option>
+                <option value="shipping">Ocean & Towing</option>
+                <option value="payment">Payment & Settlement</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Display Order</label>
+              <Input
+                type="number"
+                min="1"
+                value={ruleFormDisplayOrder}
+                onChange={(e) => setRuleFormDisplayOrder(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Official Rule Text / Content <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              required
+              value={ruleFormContent}
+              onChange={(e) => setRuleFormContent(e.target.value)}
+              placeholder="Full description and conditions of the rule to appear on customer quotations..."
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="ruleFormIsActive"
+              checked={ruleFormIsActive}
+              onChange={(e) => setRuleFormIsActive(e.target.checked)}
+              className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+            />
+            <label htmlFor="ruleFormIsActive" className="font-bold text-slate-700">
+              Active Rule (Included in new quotation snapshots)
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRuleModalOpen(false)}
+              disabled={isSavingRule}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSavingRule}
+              className="font-bold"
+            >
+              {isSavingRule ? 'Saving...' : 'Save Rule'}
             </Button>
           </div>
         </form>
