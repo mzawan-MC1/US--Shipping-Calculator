@@ -38,15 +38,36 @@ interface EnquiryQueryResult {
   quotations: EnquiryRowQuotation[] | null;
 }
 
+export type ContactEnquirySubject =
+  | 'shipping_quote_assistance'
+  | 'vehicle_pickup_towing'
+  | 'port_route_information'
+  | 'existing_quotation'
+  | 'general_enquiry'
+  | 'other';
+
 export interface ContactEnquiryInput {
   full_name: string;
   phone: string;
   email?: string;
-  subject?: string;
+  subject: ContactEnquirySubject;
   message: string;
   preferred_contact_method?: 'phone' | 'whatsapp' | 'email';
   consent: boolean;
 }
+
+export const formatContactSubject = (subject?: string | null): string => {
+  if (!subject) return 'Direct Contact Inquiry';
+  const mapping: Record<string, string> = {
+    shipping_quote_assistance: 'Shipping Quote Assistance',
+    vehicle_pickup_towing: 'Vehicle Pickup & Towing',
+    port_route_information: 'Port & Route Information',
+    existing_quotation: 'Existing Quotation Inquiry',
+    general_enquiry: 'General Inquiry',
+    other: 'Other',
+  };
+  return mapping[subject] || subject.replace(/_/g, ' ');
+};
 
 export const enquiryService = {
   async getRecentEnquiries(): Promise<CustomerEnquiry[]> {
@@ -96,7 +117,7 @@ export const enquiryService = {
       const isContact = item.source === 'contact_form';
 
       const vehicleDesc = isContact
-        ? item.subject || 'Direct Contact Inquiry'
+        ? formatContactSubject(item.subject)
         : snapshot?.vehicle
         ? `${snapshot.vehicle.year || ''} ${snapshot.vehicle.make || ''} ${snapshot.vehicle.model || ''} (${snapshot.vehicle.category_id || 'sedan'})`.trim()
         : 'Vehicle Shipping';
@@ -127,7 +148,7 @@ export const enquiryService = {
 
   async submitContactEnquiry(
     input: ContactEnquiryInput
-  ): Promise<{ success: boolean; reference_number: string; enquiry_id: string }> {
+  ): Promise<{ success: boolean; reference_number: string }> {
     const rpcFn = supabase.rpc as unknown as (
       fn: string,
       args?: Record<string, unknown>
@@ -145,7 +166,7 @@ export const enquiryService = {
       );
     }
 
-    return data as { success: boolean; reference_number: string; enquiry_id: string };
+    return data as { success: boolean; reference_number: string };
   },
 
   async updateEnquiryStatus(

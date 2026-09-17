@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
-import { enquiryService } from '../../services/enquiryService';
+import { enquiryService, ContactEnquirySubject } from '../../services/enquiryService';
 import { normalizePhone } from '../../lib/utils';
 import {
   MapPin,
@@ -43,9 +43,7 @@ export const ContactPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [subject, setSubject] = useState(
-    isAr ? 'حساب تكلفة الشحن' : 'Shipping Rate Calculation'
-  );
+  const [subject, setSubject] = useState<ContactEnquirySubject>('shipping_quote_assistance');
   const [message, setMessage] = useState('');
   const [preferredMethod, setPreferredMethod] = useState<'phone' | 'whatsapp' | 'email'>('whatsapp');
   const [consent, setConsent] = useState(true);
@@ -112,35 +110,45 @@ export const ContactPage: React.FC = () => {
     }
 
     // Validation
-    if (fullName.trim().length < 2) {
+    if (fullName.trim().length < 2 || fullName.trim().length > 120) {
       setSubmitError(
-        isAr ? 'يرجى إدخال الاسم الكامل.' : 'Please enter your full name (at least 2 characters).'
+        isAr ? 'يجب أن يكون الاسم الكامل بين 2 و 120 حرفاً.' : 'Please enter your full name (2 to 120 characters).'
       );
       return;
     }
 
     const cleanedPhone = normalizePhone(phone);
-    if (cleanedPhone.length < 7) {
+    if (cleanedPhone.length < 7 || cleanedPhone.length > 20) {
       setSubmitError(
         isAr
-          ? 'يرجى إدخال رقم هاتف صحيح متضمناً مفتاح الدولة.'
-          : 'Please enter a valid phone number with country code.'
+          ? 'يرجى إدخال رقم هاتف دولي صحيح (بين 7 و 20 رقماً).'
+          : 'Please enter a valid international phone number (7 to 20 digits).'
       );
       return;
     }
 
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    const emailClean = email.trim().toLowerCase();
+    if (emailClean && (emailClean.length > 254 || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(emailClean))) {
       setSubmitError(
         isAr ? 'صيغة البريد الإلكتروني غير صحيحة.' : 'Please enter a valid email address.'
       );
       return;
     }
 
-    if (message.trim().length < 5) {
+    if (preferredMethod === 'email' && (!emailClean || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(emailClean))) {
       setSubmitError(
         isAr
-          ? 'يرجى كتابة رسالتك أو تفاصيل الاستفسار.'
-          : 'Please write your message or shipping questions (at least 5 characters).'
+          ? 'يرجى إدخال بريد إلكتروني صحيح عند اختيار البريد كوسيلة مفضلة.'
+          : 'Please enter a valid email address when email is selected as your preferred contact method.'
+      );
+      return;
+    }
+
+    if (message.trim().length < 10 || message.trim().length > 5000) {
+      setSubmitError(
+        isAr
+          ? 'يجب أن تكون رسالتك بين 10 و 5,000 حرف.'
+          : 'Please write your message or shipping questions (between 10 and 5,000 characters).'
       );
       return;
     }
@@ -160,8 +168,8 @@ export const ContactPage: React.FC = () => {
       const result = await enquiryService.submitContactEnquiry({
         full_name: fullName.trim(),
         phone: cleanedPhone,
-        email: email.trim() || undefined,
-        subject: subject.trim(),
+        email: emailClean || undefined,
+        subject,
         message: message.trim(),
         preferred_contact_method: preferredMethod,
         consent: true,
@@ -175,14 +183,50 @@ export const ContactPage: React.FC = () => {
       setPhone('');
       setEmail('');
       setMessage('');
+      setSubject('shipping_quote_assistance');
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : isAr
+      const raw = err instanceof Error ? err.message : String(err || '');
+      let mappedMsg: string;
+
+      if (raw.includes('Consent is required')) {
+        mappedMsg = isAr
+          ? 'يرجى الموافقة على التواصل معك لمتابعة الاستفسار.'
+          : 'Consent is required to submit an inquiry.';
+      } else if (raw.includes('Full name must be between')) {
+        mappedMsg = isAr
+          ? 'يجب أن يكون الاسم الكامل بين 2 و 120 حرفاً.'
+          : 'Full name must be between 2 and 120 characters.';
+      } else if (raw.includes('Valid international phone')) {
+        mappedMsg = isAr
+          ? 'يرجى إدخال رقم هاتف دولي صحيح متضمناً رمز الدولة.'
+          : 'Please provide a valid international phone number with country code.';
+      } else if (raw.includes('valid email address is required') || raw.includes('Invalid email address format')) {
+        mappedMsg = isAr
+          ? 'يرجى إدخال عنوان بريد إلكتروني صحيح.'
+          : 'Please enter a valid email address.';
+      } else if (raw.includes('valid inquiry subject is required')) {
+        mappedMsg = isAr
+          ? 'يرجى اختيار موضوع استفسار صحيح.'
+          : 'Please select a valid inquiry subject.';
+      } else if (raw.includes('Message must be between')) {
+        mappedMsg = isAr
+          ? 'يجب أن تكون الرسالة بين 10 و 5,000 حرف.'
+          : 'Message must be between 10 and 5,000 characters.';
+      } else if (raw.includes('Too many inquiries received')) {
+        mappedMsg = isAr
+          ? 'تم استلام عدد كبير من الاستفسارات من هذا الرقم. يرجى الانتظار بضع دقائق أو التواصل عبر واتساب.'
+          : 'Too many inquiries received. Please wait a few minutes before trying again or reach out on WhatsApp.';
+      } else if (raw.includes('duplicate inquiry has already been received')) {
+        mappedMsg = isAr
+          ? 'تم استلام هذا الاستفسار مسبقاً. يرجى الانتظار قبل إرسال استفسار جديد.'
+          : 'A duplicate inquiry has already been received. Please wait before submitting again.';
+      } else {
+        mappedMsg = isAr
           ? 'تعذر إرسال الاستفسار في الوقت الحالي. يرجى المحاولة لاحقاً أو التواصل عبر واتساب.'
-          : 'Unable to submit your inquiry at this moment. Please try again or reach out via WhatsApp.';
-      setSubmitError(msg);
+          : 'Unable to submit your inquiry at this moment. Please try again later or reach out via WhatsApp.';
+      }
+
+      setSubmitError(mappedMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -452,24 +496,27 @@ export const ContactPage: React.FC = () => {
                     </label>
                     <select
                       value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
+                      onChange={(e) => setSubject(e.target.value as ContactEnquirySubject)}
                       disabled={isSubmitting}
                       className="w-full text-xs font-medium bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
                     >
-                      <option value="Shipping Rate Calculation">
-                        {isAr ? 'حساب تكلفة الشحن' : 'Shipping Rate Calculation'}
+                      <option value="shipping_quote_assistance">
+                        {isAr ? 'مساعدة في تسعير الشحن' : 'Shipping Quote Assistance'}
                       </option>
-                      <option value="Auction Towing & Transport">
-                        {isAr ? 'نقل وسحب سيارات المزاد' : 'Auction Towing & Transport'}
+                      <option value="vehicle_pickup_towing">
+                        {isAr ? 'سحب ونقل سيارات المزاد' : 'Vehicle Pickup & Towing'}
                       </option>
-                      <option value="Cargo Tracking & Status">
-                        {isAr ? 'تتبع شحنة جارية' : 'Cargo Tracking & Status'}
+                      <option value="port_route_information">
+                        {isAr ? 'معلومات الموانئ والمسارات' : 'Port & Route Information'}
                       </option>
-                      <option value="Customs Clearance & Duty">
-                        {isAr ? 'التخليص الجمركي والرسوم' : 'Customs Clearance & Duty'}
+                      <option value="existing_quotation">
+                        {isAr ? 'استفسار عن تسعيرة سابقة' : 'Existing Quotation Inquiry'}
                       </option>
-                      <option value="General Inquiry">
+                      <option value="general_enquiry">
                         {isAr ? 'استفسار عام' : 'General Inquiry'}
+                      </option>
+                      <option value="other">
+                        {isAr ? 'موضوع آخر' : 'Other'}
                       </option>
                     </select>
                   </div>

@@ -7,7 +7,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
-import { enquiryService } from '../../services/enquiryService';
+import { enquiryService, formatContactSubject } from '../../services/enquiryService';
 import { formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../features/auth/AuthContext';
 import { CustomerEnquiry, EnquiryStatus } from '../../types/admin';
@@ -374,7 +374,7 @@ export const AdminEnquiriesPage: React.FC = () => {
                   )}
                 </div>
                 <p className="font-bold text-slate-900 text-sm">
-                  {selectedEnquiry.subject || 'Direct Contact Inquiry'}
+                  {formatContactSubject(selectedEnquiry.subject)}
                 </p>
                 <div className="pt-2 border-t border-blue-100">
                   <span className="text-[10px] font-bold text-blue-900 uppercase block mb-1">
