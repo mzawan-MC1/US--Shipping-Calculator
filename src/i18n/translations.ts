@@ -52,7 +52,7 @@ export interface Translations {
   featureVehicleInspection: string;
   featureSupport247: string;
 
-  // Calculator Steps
+  // Calculator Steps (Legacy)
   calcStep1Title: string;
   calcStep2Title: string;
   calcStep3Title: string;
@@ -60,6 +60,31 @@ export interface Translations {
   calcStep5Title: string;
   calcStep6Title: string;
   calcStep7Title: string;
+
+  // 4-Phase Operational Sequence Titles
+  calcPhase1Title: string;
+  calcPhase2Title: string;
+  calcPhase3Title: string;
+  calcPhase4Title: string;
+
+  // Vehicle Condition Labels & Descriptions
+  conditionOperable: string;
+  conditionOperableDesc: string;
+  conditionNonRunner: string;
+  conditionNonRunnerDesc: string;
+  conditionSalvage: string;
+  conditionSalvageDesc: string;
+
+  // Towing & Shipping
+  towingModeInlandTitle: string;
+  towingModeInlandSubtitle: string;
+  towingModeDirectTitle: string;
+  towingModeDirectSubtitle: string;
+  towingAutoSelectedNotice: string;
+  towingNoPortsAvailable: string;
+  vehicleDetailsChangedNotice: string;
+  shippingMethodConsolidatedDesc: string;
+  shippingMethodDedicatedDesc: string;
 
   // Calculator Labels & Options
   vehicleTypeSedan: string;
@@ -207,6 +232,28 @@ export const dictionaries: Record<Language, Translations> = {
     calcStep6Title: 'BUYING & TOWING DETAILS',
     calcStep7Title: 'CUSTOMER DETAILS & REVIEW',
 
+    calcPhase1Title: 'VEHICLE SPECIFICATIONS',
+    calcPhase2Title: 'INLAND TOWING & PICKUP',
+    calcPhase3Title: 'OCEAN SHIPPING & ROUTE',
+    calcPhase4Title: 'CALCULATION & REVIEW',
+
+    conditionOperable: 'Operable / Running',
+    conditionOperableDesc: 'Starts, drives and steers independently under its own power.',
+    conditionNonRunner: 'Non-Runner / Rolling',
+    conditionNonRunnerDesc: 'Does not start or run, but tires roll and steering functions for winch loading.',
+    conditionSalvage: 'Salvage / Damaged',
+    conditionSalvageDesc: 'Severe structural damage, locked wheels, or forklift loading required.',
+
+    towingModeInlandTitle: 'Include Inland Towing / Vehicle Pickup',
+    towingModeInlandSubtitle: 'We dispatch a licensed carrier to pick up the vehicle from the auction yard or seller and transport it to the port warehouse.',
+    towingModeDirectTitle: 'Direct Port Delivery',
+    towingModeDirectSubtitle: 'You or your dealer deliver the vehicle directly to the loading port terminal. Inland towing fee will be $0.00.',
+    towingAutoSelectedNotice: 'Designated loading port automatically assigned based on your pickup location.',
+    towingNoPortsAvailable: 'No active shipping ports configured for this pickup location.',
+    vehicleDetailsChangedNotice: 'Vehicle specifications updated. Dependent towing and shipping options have been refreshed.',
+    shippingMethodConsolidatedDesc: 'Your vehicle is securely lashed in a 40ft/45ft High Cube container with other vehicles. Most economical and safe.',
+    shippingMethodDedicatedDesc: 'Dedicated 20ft or 40ft exclusive container for luxury, exotic, or high-value vehicles with direct loading.',
+
     vehicleTypeSedan: 'Sedan',
     vehicleTypeSuv: 'SUV',
     vehicleTypeVan: 'Van',
@@ -347,6 +394,28 @@ export const dictionaries: Record<Language, Translations> = {
     calcStep5Title: 'ميناء الوصول (الإمارات)',
     calcStep6Title: 'بيانات الشراء والسحب الداخلي',
     calcStep7Title: 'بيانات العميل والمراجعة',
+
+    calcPhase1Title: 'مواصفات وحالة المركبة',
+    calcPhase2Title: 'النقل البري والسحب الداخلي',
+    calcPhase3Title: 'الشحن البحري ومسار الرحلة',
+    calcPhase4Title: 'الاحتساب ومراجعة العرض',
+
+    conditionOperable: 'تعمل وقابلة للقيادة (Operable)',
+    conditionOperableDesc: 'المركبة تدور وتتحرك وتنعطف بشكل سليم بقوتها الذاتية.',
+    conditionNonRunner: 'لا تعمل ولكن تتدحرج (Non-Runner)',
+    conditionNonRunnerDesc: 'المحرك لا يعمل، ولكن العجلات تتدحرج والمقود يوجه لسحبها بالونش بأمان.',
+    conditionSalvage: 'حوادث بالغة / أضرار هيكلية (Salvage)',
+    conditionSalvageDesc: 'أضرار تصادم بالغة، أو عجلات مقفلة تتطلب تحميل رافعة شوكية (Forklift).',
+
+    towingModeInlandTitle: 'تضمين النقل البري الداخلي / سحب السيارة',
+    towingModeInlandSubtitle: 'نقوم بإرسال ناقلة مرخصة لاستلام السيارة من ساحة المزاد أو المعرض ونقلها مباشرة لمستودع ميناء الشحن.',
+    towingModeDirectTitle: 'تسليم مباشر إلى الميناء',
+    towingModeDirectSubtitle: 'تقوم أنت أو البائع بتسليم السيارة مباشرة إلى مستودع الميناء المعتمد. رسوم السحب الداخلي $0.00.',
+    towingAutoSelectedNotice: 'تم تحديد ميناء الشحن المعتمد تلقائياً بناءً على موقع السحب المختار.',
+    towingNoPortsAvailable: 'لا تتوفر موانئ شحن نشطة مرتبطة بموقع السحب المحدد حالياً.',
+    vehicleDetailsChangedNotice: 'تم تحديث مواصفات المركبة وتحديث خيارات السحب والشحن المتوافقة تلقائياً.',
+    shippingMethodConsolidatedDesc: 'تحميل سيارتك وتثبيتها بأمان داخل حاوية مشتركة (40/45 قدم عالية السقف) مع سيارات أخرى. الخيار الأكثر اقتصادية وأماناً.',
+    shippingMethodDedicatedDesc: 'حاوية خاصة مستقلة (20 أو 40 قدم) مخصصة لسياراتك فقط، ملائمة للسيارات الفارهة والكلاسيكية.',
 
     vehicleTypeSedan: 'سيدان (صالون)',
     vehicleTypeSuv: 'دفع رباعي (SUV)',

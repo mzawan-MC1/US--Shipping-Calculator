@@ -1580,6 +1580,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_calculator_availability_v1: {
+        Args: { input_json: Json }
+        Returns: Json
+      }
       get_user_permissions: {
         Args: { target_user_id?: string }
         Returns: {

@@ -1,4 +1,10 @@
-import { CalculatorFormData, QuotationBreakdown, QuotationLineItem, QuotationRuleItem } from '../types/calculator';
+import {
+  CalculatorFormData,
+  QuotationBreakdown,
+  QuotationLineItem,
+  QuotationRuleItem,
+  CalculatorAvailabilityResponse,
+} from '../types/calculator';
 import { supabase } from '../lib/supabase';
 import { PORT_SLUG_TO_UUID } from './referenceDataService';
 
@@ -71,7 +77,7 @@ export const quotationService = {
         destination_port_id: destPortId,
         vehicle_category_id: categoryId,
         powertrain_id: input.powertrain,
-        condition_id: 'operable',
+        condition_id: input.conditionId || 'operable',
         shipping_method_id: input.shippingMethod || 'consolidated_container',
         purchase_source_id: input.purchaseSource,
         include_inland_towing: input.includeInlandTowing !== false,
@@ -89,6 +95,9 @@ export const quotationService = {
         console.error('[QuotationService] Live RPC calculation error:', error);
         const msg = error.message || '';
         if (
+          msg.includes('No active ocean freight tariff') ||
+          msg.includes('No inland towing tariff') ||
+          msg.includes('No active shipping route') ||
           msg.includes('Please contact us for assistance') ||
           msg.includes('Purchase location is required') ||
           msg.includes('Selected pickup location does not exist') ||
@@ -240,10 +249,61 @@ export const quotationService = {
       return liveQuote;
     } catch (err: unknown) {
       console.error('[QuotationService] Calculation error:', err);
+      if (err instanceof Error) {
+        const msg = err.message || '';
+        if (
+          msg.includes('No active ocean freight tariff') ||
+          msg.includes('No inland towing tariff') ||
+          msg.includes('No active shipping route') ||
+          msg.includes('Please contact us for assistance') ||
+          msg.includes('Purchase location is required') ||
+          msg.includes('Selected pickup location does not exist') ||
+          msg.includes('Customer full name is required') ||
+          msg.includes('Customer phone number is required')
+        ) {
+          throw err;
+        }
+      }
       // Safe, non-technical customer message
       const message = 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.';
       throw new Error(message);
     }
+  },
+
+  async getCalculatorAvailability(params: {
+    vehicleCategoryId?: string;
+    conditionId?: string;
+    powertrainId?: string;
+    purchaseSourceId?: string;
+    purchaseLocationId?: string;
+    originPortId?: string;
+    destinationPortId?: string;
+    includeInlandTowing?: boolean;
+  }): Promise<CalculatorAvailabilityResponse> {
+    const { data, error } = await supabase.rpc('get_calculator_availability_v1', {
+      input_json: {
+        vehicle_category_id: params.vehicleCategoryId || 'sedan',
+        condition_id: params.conditionId || 'operable',
+        powertrain_id: params.powertrainId || 'petrol',
+        purchase_source_id: params.purchaseSourceId || null,
+        purchase_location_id: params.purchaseLocationId || null,
+        origin_port_id: params.originPortId || null,
+        destination_port_id: params.destinationPortId || null,
+        include_inland_towing: params.includeInlandTowing !== false,
+      },
+    });
+
+    if (error) {
+      console.error('[QuotationService] Failed to load calculator availability:', error);
+      throw error;
+    }
+
+    return (data as unknown as CalculatorAvailabilityResponse) || {
+      eligible_pickup_locations: [],
+      eligible_origin_ports: [],
+      eligible_destination_ports: [],
+      eligible_shipping_methods: [],
+    };
   },
 
   getActiveQuote(): QuotationBreakdown | null {

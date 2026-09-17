@@ -30,6 +30,7 @@ export interface PortOption {
 export interface CalculatorFormData {
   vehicleType: VehicleType;
   powertrain: Powertrain;
+  conditionId?: string;
   purchaseSource: PurchaseSource;
   loadingPort: UsLoadingPort;
   destinationPort: UaeDestinationPort;
@@ -150,5 +151,52 @@ export interface QuotationBreakdown {
   rules?: QuotationRuleItem[];
   snapshot?: Record<string, unknown>;
   isIdempotentReplay?: boolean;
+}
+
+export interface EligiblePickupLocation {
+  id: string;
+  name: string;
+  state_code: string;
+  purchase_source_id: string;
+  available_ports_count: number;
+}
+
+export interface EligibleOriginPort {
+  id: string;
+  name: string;
+  name_ar?: string;
+  code: string;
+  state_or_city: string;
+  country_code: string;
+  towing_rate_type?: 'fixed' | 'range' | 'none';
+  towing_fixed_amount?: number | null;
+  towing_min_amount?: number | null;
+  towing_max_amount?: number | null;
+}
+
+export interface EligibleDestinationPort {
+  id: string;
+  name: string;
+  name_ar?: string;
+  code: string;
+  state_or_city: string;
+  country_code: string;
+  route_id: string;
+  transit_days_min: number;
+  transit_days_max: number;
+}
+
+export interface EligibleShippingMethod {
+  id: string;
+  name: string;
+  base_amount: number;
+  currency: string;
+}
+
+export interface CalculatorAvailabilityResponse {
+  eligible_pickup_locations: EligiblePickupLocation[];
+  eligible_origin_ports: EligibleOriginPort[];
+  eligible_destination_ports: EligibleDestinationPort[];
+  eligible_shipping_methods: EligibleShippingMethod[];
 }
 

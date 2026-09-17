@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,17 +10,17 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
+import { Badge } from '../../components/ui/Badge';
 import { quotationService } from '../../services/quotationService';
 import {
   referenceDataService,
   CountryOption,
   ManagedPortOption,
   RouteOption,
-  ShippingMethodOption,
   VehicleCategoryOption,
   PowertrainOption,
+  VehicleConditionOption,
   PurchaseSourceOption,
-  PurchaseLocationOption,
   PORT_SLUG_TO_UUID,
 } from '../../services/referenceDataService';
 import {
@@ -49,73 +49,113 @@ import {
   Clock,
   Loader2,
   Globe2,
+  ShieldAlert,
+  Wrench,
+  Search,
+  Check,
+  MapPin,
 } from 'lucide-react';
-import { CalculatorFormData } from '../../types/calculator';
+import {
+  CalculatorFormData,
+  CalculatorAvailabilityResponse,
+  EligibleOriginPort,
+} from '../../types/calculator';
 
 const calculatorSchema = z
   .object({
+    // Step 1: Vehicle Specifications
     vehicleType: z.string().min(1, 'Vehicle category is required'),
     powertrain: z.string().min(1, 'Powertrain is required'),
+    conditionId: z.string().min(1, 'Vehicle condition is required'),
+    make: z.string().optional(),
+    model: z.string().optional(),
+    year: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+      z.number().optional()
+    ),
+    vin: z.string().optional(),
+    lotNumber: z.string().optional(),
+
+    // Step 2: Towing Details
+    includeInlandTowing: z.boolean().default(true),
     purchaseSource: z.string().min(1, 'Purchase source is required'),
+    purchaseLocationId: z.string().optional(),
+    towFromLocation: z.string().optional(),
+
+    // Step 3: Maritime Shipping Route & Method
     loadingPort: z.string().min(1, 'Loading port is required'),
     destinationPort: z.string().min(1, 'Destination port is required'),
-    shippingMethod: z.string().default('consolidated_container'),
+    shippingMethod: z.string().min(1, 'Shipping method is required'),
+
+    // Step 4: Value, Contact & Calculation
     buyingPrice: z.number().min(100, 'Please enter a valid vehicle purchase price ($100 minimum)'),
-    includeInlandTowing: z.boolean().default(true),
-    towFromLocation: z.string().optional(),
-    purchaseLocationId: z.string().optional(),
     customerName: z.string().min(2, 'Name is required (minimum 2 characters)'),
     customerPhone: z.string().min(7, 'Valid phone / WhatsApp number is required'),
     customerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
     notes: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.includeInlandTowing && (!data.towFromLocation || data.towFromLocation.trim().length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Pickup location is required when inland towing is included',
-        path: ['towFromLocation'],
-      });
+    if (data.includeInlandTowing) {
+      if (!data.purchaseLocationId || !data.towFromLocation || data.towFromLocation.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Please select an authorized pickup location for inland towing',
+          path: ['purchaseLocationId'],
+        });
+      }
     }
   });
 
 type FormData = z.infer<typeof calculatorSchema>;
 
 const STEPS = [
-  { id: 1, titleKey: 'calcStep1Title', short: 'Vehicle' },
-  { id: 2, titleKey: 'calcStep3Title', short: 'Source' },
-  { id: 3, titleKey: 'calcStep4Title', short: 'Route' },
-  { id: 4, titleKey: 'Shipping Method', short: 'Method' },
-  { id: 5, titleKey: 'calcStep6Title', short: 'Buying & Tow' },
-  { id: 6, titleKey: 'calcStep7Title', short: 'Contact' },
-  { id: 7, titleKey: 'Review & Estimate', short: 'Review' },
+  { id: 1, titleKey: 'calcPhase1Title', short: 'Vehicle' },
+  { id: 2, titleKey: 'calcPhase2Title', short: 'Towing' },
+  { id: 3, titleKey: 'calcPhase3Title', short: 'Shipping' },
+  { id: 4, titleKey: 'calcPhase4Title', short: 'Calculation' },
 ];
 
 export const CalculatorPage: React.FC = () => {
   const { t, language, direction } = useI18n();
-  const { branding, getWhatsAppLink, getPhoneTel } = useWebsiteSettings();
+  const { branding, getWhatsAppLink } = useWebsiteSettings();
   const navigate = useNavigate();
   const isAr = language === 'ar';
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [dependencyNotice, setDependencyNotice] = useState<string | null>(null);
 
   // Managed Reference Data State
   const [countries, setCountries] = useState<CountryOption[]>([]);
-  const [loadingPorts, setLoadingPorts] = useState<ManagedPortOption[]>([]);
-  const [destinationPorts, setDestinationPorts] = useState<ManagedPortOption[]>([]);
+  const [allLoadingPorts, setAllLoadingPorts] = useState<ManagedPortOption[]>([]);
+  const [allDestPorts, setAllDestPorts] = useState<ManagedPortOption[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
-  const [shippingMethods, setShippingMethods] = useState<ShippingMethodOption[]>([]);
   const [vehicleCategories, setVehicleCategories] = useState<VehicleCategoryOption[]>([]);
   const [powertrains, setPowertrains] = useState<PowertrainOption[]>([]);
+  const [, setVehicleConditions] = useState<VehicleConditionOption[]>([]);
   const [purchaseSources, setPurchaseSources] = useState<PurchaseSourceOption[]>([]);
-  const [purchaseLocations, setPurchaseLocations] = useState<PurchaseLocationOption[]>([]);
 
-  const [selectedOriginCountry, setSelectedOriginCountry] = useState<string>('USA');
   const [selectedDestCountry, setSelectedDestCountry] = useState<string>('ARE');
   const [isLoadingRefData, setIsLoadingRefData] = useState<boolean>(true);
   const [refDataError, setRefDataError] = useState<string | null>(null);
+
+  // Dynamic Availability State
+  const [availability, setAvailability] = useState<CalculatorAvailabilityResponse>({
+    eligible_pickup_locations: [],
+    eligible_origin_ports: [],
+    eligible_destination_ports: [],
+    eligible_shipping_methods: [],
+  });
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState<boolean>(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState<string>('');
+  const [autoSelectedPort, setAutoSelectedPort] = useState<EligibleOriginPort | null>(null);
+
+  const prevVehicleRef = useRef<{ category: string; condition: string; powertrain: string }>({
+    category: 'sedan',
+    condition: 'operable',
+    powertrain: 'petrol',
+  });
 
   const {
     control,
@@ -129,13 +169,20 @@ export const CalculatorPage: React.FC = () => {
     defaultValues: {
       vehicleType: 'sedan',
       powertrain: 'petrol',
+      conditionId: 'operable',
+      make: '',
+      model: '',
+      year: undefined,
+      vin: '',
+      lotNumber: '',
+      includeInlandTowing: true,
       purchaseSource: 'copart',
-      loadingPort: 'savannah',
-      destinationPort: 'khorfakkan',
+      purchaseLocationId: '',
+      towFromLocation: '',
+      loadingPort: '10000000-0000-0000-0000-000000000003', // Houston Port
+      destinationPort: '20000000-0000-0000-0000-000000000001', // Khorfakkan
       shippingMethod: 'consolidated_container',
       buyingPrice: 5000,
-      includeInlandTowing: true,
-      towFromLocation: 'Houston, TX (Copart Houston)',
       customerName: '',
       customerPhone: '',
       customerEmail: '',
@@ -146,7 +193,7 @@ export const CalculatorPage: React.FC = () => {
 
   const formData = watch();
 
-  // Load Managed Reference Data from live database on mount
+  // 1. Initial Load of Master Reference Data
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -158,41 +205,30 @@ export const CalculatorPage: React.FC = () => {
           fetchedLoadingPorts,
           fetchedDestPorts,
           fetchedRoutes,
-          fetchedMethods,
           fetchedCategories,
           fetchedPowertrains,
+          fetchedConditions,
           fetchedSources,
-          fetchedLocations,
         ] = await Promise.all([
           referenceDataService.getCountries(),
           referenceDataService.getLoadingPorts(),
           referenceDataService.getDestinationPorts(),
           referenceDataService.getActiveRoutes(),
-          referenceDataService.getShippingMethods(),
           referenceDataService.getVehicleCategories(),
           referenceDataService.getPowertrains(),
+          referenceDataService.getVehicleConditions(),
           referenceDataService.getPurchaseSources(),
-          referenceDataService.getPurchaseLocations(),
         ]);
 
         if (isMounted) {
           setCountries(fetchedCountries);
-          setLoadingPorts(fetchedLoadingPorts);
-          setDestinationPorts(fetchedDestPorts);
+          setAllLoadingPorts(fetchedLoadingPorts);
+          setAllDestPorts(fetchedDestPorts);
           setRoutes(fetchedRoutes);
-          setShippingMethods(fetchedMethods);
           setVehicleCategories(fetchedCategories);
           setPowertrains(fetchedPowertrains);
+          setVehicleConditions(fetchedConditions);
           setPurchaseSources(fetchedSources);
-          setPurchaseLocations(fetchedLocations);
-
-          // If default ports exist, align form selection
-          if (fetchedLoadingPorts.length > 0 && !formData.loadingPort) {
-            setValue('loadingPort', fetchedLoadingPorts[0].id);
-          }
-          if (fetchedDestPorts.length > 0 && !formData.destinationPort) {
-            setValue('destinationPort', fetchedDestPorts[0].id);
-          }
         }
       } catch (err: unknown) {
         console.error('[Calculator] Failed to load reference data:', err);
@@ -212,37 +248,251 @@ export const CalculatorPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [formData.loadingPort, formData.destinationPort, setValue]);
+  }, []);
 
-  // Filter ports by selected country
-  const filteredLoadingPorts = useMemo(() => {
-    if (!selectedOriginCountry) return loadingPorts;
-    return loadingPorts.filter((p) => p.countryCode === selectedOriginCountry);
-  }, [loadingPorts, selectedOriginCountry]);
+  // Helper to normalize UUID or slug
+  const isUUID = (val?: string) =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
-  const filteredDestPorts = useMemo(() => {
-    if (!selectedDestCountry) return destinationPorts;
-    return destinationPorts.filter((p) => p.countryCode === selectedDestCountry);
-  }, [destinationPorts, selectedDestCountry]);
+  // 2. Query Dynamic Availability Whenever Dependencies Change
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAvailability() {
+      setIsLoadingAvailability(true);
+      try {
+        const originPortId = isUUID(formData.loadingPort)
+          ? formData.loadingPort
+          : PORT_SLUG_TO_UUID[formData.loadingPort];
+        const destPortId = isUUID(formData.destinationPort)
+          ? formData.destinationPort
+          : PORT_SLUG_TO_UUID[formData.destinationPort];
 
-  // Identify currently selected port objects
+        const normalizedCategory =
+          formData.vehicleType === 'bike' ? 'motorcycle' : formData.vehicleType;
+
+        const res = await quotationService.getCalculatorAvailability({
+          vehicleCategoryId: normalizedCategory,
+          conditionId: formData.conditionId || 'operable',
+          powertrainId: formData.powertrain || 'petrol',
+          purchaseSourceId: formData.purchaseSource || undefined,
+          purchaseLocationId:
+            formData.includeInlandTowing && formData.purchaseLocationId
+              ? formData.purchaseLocationId
+              : undefined,
+          originPortId: originPortId,
+          destinationPortId: destPortId,
+          includeInlandTowing: formData.includeInlandTowing,
+        });
+
+        if (!isMounted) return;
+
+        setAvailability(res);
+
+        // Check if vehicle specs changed and invalidated downstream selections
+        const prev = prevVehicleRef.current;
+        const vehicleChanged =
+          prev.category !== formData.vehicleType ||
+          prev.condition !== formData.conditionId ||
+          prev.powertrain !== formData.powertrain;
+
+        if (vehicleChanged) {
+          prevVehicleRef.current = {
+            category: formData.vehicleType,
+            condition: formData.conditionId || 'operable',
+            powertrain: formData.powertrain || 'petrol',
+          };
+
+          // Revalidate selected pickup location against new eligible locations
+          if (
+            formData.includeInlandTowing &&
+            formData.purchaseLocationId &&
+            !res.eligible_pickup_locations.some((l) => l.id === formData.purchaseLocationId)
+          ) {
+            setValue('purchaseLocationId', '', { shouldValidate: false });
+            setValue('towFromLocation', '', { shouldValidate: false });
+            setDependencyNotice(
+              isAr
+                ? 'تم تحديث مواصفات المركبة. يرجى اختيار موقع سحب يتطابق مع المواصفات الجديدة.'
+                : 'Vehicle specifications updated. Please select an eligible pickup location for the new vehicle type.'
+            );
+          }
+        }
+
+        // Automatic Origin Port Assignment & Validation
+        if (formData.includeInlandTowing && formData.purchaseLocationId) {
+          if (res.eligible_origin_ports.length === 1) {
+            // Exactly 1 eligible port -> AUTO-SELECT IT!
+            const singlePort = res.eligible_origin_ports[0];
+            setValue('loadingPort', singlePort.id, { shouldValidate: true });
+            setAutoSelectedPort(singlePort);
+          } else if (res.eligible_origin_ports.length > 1) {
+            setAutoSelectedPort(null);
+            const isCurrentlySelectedValid = res.eligible_origin_ports.some(
+              (p) =>
+                p.id === formData.loadingPort ||
+                p.code === formData.loadingPort ||
+                PORT_SLUG_TO_UUID[formData.loadingPort] === p.id
+            );
+            if (!isCurrentlySelectedValid) {
+              setValue('loadingPort', res.eligible_origin_ports[0].id, { shouldValidate: true });
+            }
+          } else {
+            // No origin ports have towing rates for this location!
+            setAutoSelectedPort(null);
+            setValue('loadingPort', '', { shouldValidate: false });
+          }
+        } else if (!formData.includeInlandTowing) {
+          setAutoSelectedPort(null);
+          // When towing is excluded, ensure loading port is one of the active route ports
+          if (res.eligible_origin_ports.length > 0) {
+            const isValid = res.eligible_origin_ports.some(
+              (p) =>
+                p.id === formData.loadingPort ||
+                p.code === formData.loadingPort ||
+                PORT_SLUG_TO_UUID[formData.loadingPort] === p.id
+            );
+            if (!isValid) {
+              setValue('loadingPort', res.eligible_origin_ports[0].id, { shouldValidate: true });
+            }
+          }
+        }
+
+        // Revalidate Destination Port
+        if (res.eligible_destination_ports.length > 0) {
+          const isDestValid = res.eligible_destination_ports.some(
+            (p) =>
+              p.id === formData.destinationPort ||
+              p.code === formData.destinationPort ||
+              PORT_SLUG_TO_UUID[formData.destinationPort] === p.id
+          );
+          if (!isDestValid) {
+            const preferred =
+              res.eligible_destination_ports.find(
+                (p) => p.code === 'AEKLF' || p.code === 'AEKHL'
+              ) || res.eligible_destination_ports[0];
+            setValue('destinationPort', preferred.id, { shouldValidate: true });
+          }
+        } else {
+          setValue('destinationPort', '', { shouldValidate: false });
+        }
+
+        // Revalidate Shipping Method
+        if (res.eligible_shipping_methods.length > 0) {
+          const isMethodValid = res.eligible_shipping_methods.some(
+            (m) => m.id === formData.shippingMethod
+          );
+          if (!isMethodValid) {
+            const hasConsolidated = res.eligible_shipping_methods.some(
+              (m) => m.id === 'consolidated_container'
+            );
+            setValue(
+              'shippingMethod',
+              hasConsolidated ? 'consolidated_container' : res.eligible_shipping_methods[0].id,
+              { shouldValidate: true }
+            );
+          }
+        } else {
+          setValue('shippingMethod', '', { shouldValidate: false });
+        }
+      } catch (err) {
+        console.error('[Calculator] Availability error:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingAvailability(false);
+        }
+      }
+    }
+
+    fetchAvailability();
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    formData.vehicleType,
+    formData.conditionId,
+    formData.powertrain,
+    formData.purchaseSource,
+    formData.purchaseLocationId,
+    formData.includeInlandTowing,
+    formData.loadingPort,
+    formData.destinationPort,
+    setValue,
+    isAr,
+  ]);
+
+  // Lookup currently selected port and method objects
   const selectedOriginPort = useMemo(() => {
-    return loadingPorts.find(
+    const fromEligible = availability.eligible_origin_ports.find(
       (p) =>
         p.id === formData.loadingPort ||
         p.code === formData.loadingPort ||
         p.id === PORT_SLUG_TO_UUID[formData.loadingPort]
     );
-  }, [loadingPorts, formData.loadingPort]);
+    if (fromEligible) return fromEligible;
+
+    const found = allLoadingPorts.find(
+      (p) =>
+        p.id === formData.loadingPort ||
+        p.code === formData.loadingPort ||
+        p.id === PORT_SLUG_TO_UUID[formData.loadingPort]
+    );
+    if (!found) return null;
+    return {
+      id: found.id,
+      name: found.name,
+      name_ar: found.nameAr,
+      code: found.code,
+      state_or_city: found.stateOrCity,
+      country_code: found.countryCode,
+      towing_rate_type: 'none' as const,
+      towing_fixed_amount: 0,
+      towing_min_amount: 0,
+      towing_max_amount: 0,
+    };
+  }, [availability.eligible_origin_ports, allLoadingPorts, formData.loadingPort]);
 
   const selectedDestPort = useMemo(() => {
-    return destinationPorts.find(
+    const fromEligible = availability.eligible_destination_ports.find(
       (p) =>
         p.id === formData.destinationPort ||
         p.code === formData.destinationPort ||
         p.id === PORT_SLUG_TO_UUID[formData.destinationPort]
     );
-  }, [destinationPorts, formData.destinationPort]);
+    if (fromEligible) return fromEligible;
+
+    const found = allDestPorts.find(
+      (p) =>
+        p.id === formData.destinationPort ||
+        p.code === formData.destinationPort ||
+        p.id === PORT_SLUG_TO_UUID[formData.destinationPort]
+    );
+    if (!found) return null;
+    return {
+      id: found.id,
+      name: found.name,
+      name_ar: found.nameAr,
+      code: found.code,
+      state_or_city: found.stateOrCity,
+      country_code: found.countryCode,
+      route_id: '',
+      transit_days_min: 28,
+      transit_days_max: 35,
+    };
+  }, [availability.eligible_destination_ports, allDestPorts, formData.destinationPort]);
+
+  const selectedShippingMethod = useMemo(() => {
+    return (
+      availability.eligible_shipping_methods.find((m) => m.id === formData.shippingMethod) || null
+    );
+  }, [availability.eligible_shipping_methods, formData.shippingMethod]);
+
+  const selectedPurchaseLocation = useMemo(() => {
+    if (!formData.purchaseLocationId) return null;
+    return (
+      availability.eligible_pickup_locations.find((l) => l.id === formData.purchaseLocationId) ||
+      null
+    );
+  }, [availability.eligible_pickup_locations, formData.purchaseLocationId]);
 
   // Check active route existence
   const activeRoute = useMemo(() => {
@@ -250,54 +500,72 @@ export const CalculatorPage: React.FC = () => {
     return (
       routes.find(
         (r) =>
-          r.originPortId === selectedOriginPort.id &&
-          r.destinationPortId === selectedDestPort.id &&
+          (r.originPortId === selectedOriginPort.id ||
+            r.originPortId === PORT_SLUG_TO_UUID[selectedOriginPort.code.toLowerCase()]) &&
+          (r.destinationPortId === selectedDestPort.id ||
+            r.destinationPortId === PORT_SLUG_TO_UUID[selectedDestPort.code.toLowerCase()]) &&
           r.isActive
       ) || null
     );
   }, [selectedOriginPort, selectedDestPort, routes]);
 
   const originPortDisplayName = selectedOriginPort
-    ? isAr && selectedOriginPort.nameAr
-      ? selectedOriginPort.nameAr
+    ? isAr && selectedOriginPort.name_ar
+      ? selectedOriginPort.name_ar
       : selectedOriginPort.name
     : formData.loadingPort;
 
   const destPortDisplayName = selectedDestPort
-    ? isAr && selectedDestPort.nameAr
-      ? selectedDestPort.nameAr
+    ? isAr && selectedDestPort.name_ar
+      ? selectedDestPort.name_ar
       : selectedDestPort.name
     : formData.destinationPort;
 
-  // Generate customized WhatsApp link for unavailable routes or inquiries
+  // Filtered pickup locations based on search query
+  const filteredPickupLocations = useMemo(() => {
+    let locs = availability.eligible_pickup_locations;
+    if (formData.purchaseSource) {
+      locs = locs.filter((l) => l.purchase_source_id === formData.purchaseSource);
+    }
+    if (locationSearchQuery.trim()) {
+      const q = locationSearchQuery.toLowerCase();
+      locs = locs.filter(
+        (l) => l.name.toLowerCase().includes(q) || l.state_code.toLowerCase().includes(q)
+      );
+    }
+    return locs;
+  }, [availability.eligible_pickup_locations, formData.purchaseSource, locationSearchQuery]);
+
+  // WhatsApp Inquiry Link
   const whatsappInquiryLink = getWhatsAppLink(
     isAr
-      ? `مرحباً ${branding.companyNameAr}، أود الاستفسار عن خط شحن بحري مخصص من ${originPortDisplayName} إلى ${destPortDisplayName}.`
-      : `Hello ${branding.companyName}, I would like an inquiry for a custom shipping route from ${originPortDisplayName} to ${destPortDisplayName}.`
+      ? `مرحباً ${branding.companyNameAr}، أود الاستفسار عن خط شحن بحري ونقل بري لسيارة من ${originPortDisplayName || 'أمريكا'} إلى ${destPortDisplayName || 'الإمارات'}.`
+      : `Hello ${branding.companyName}, I would like an inquiry for shipping and towing from ${originPortDisplayName || 'USA'} to ${destPortDisplayName || 'UAE'}.`
   );
 
+  // Navigation handlers
   const handleNext = async () => {
+    setDependencyNotice(null);
+    setSubmissionError(null);
     let isValid = false;
+
     if (currentStep === 1) {
-      isValid = await trigger(['vehicleType', 'powertrain']);
+      isValid = await trigger(['vehicleType', 'powertrain', 'conditionId']);
     } else if (currentStep === 2) {
-      isValid = await trigger(['purchaseSource']);
+      if (formData.includeInlandTowing) {
+        isValid = await trigger(['purchaseSource', 'purchaseLocationId']);
+        if (!formData.purchaseLocationId) {
+          setValue('purchaseLocationId', '', { shouldValidate: true });
+          isValid = false;
+        }
+      } else {
+        isValid = true;
+      }
     } else if (currentStep === 3) {
-      isValid = await trigger(['loadingPort', 'destinationPort']);
-      if (isValid && !activeRoute) {
-        // Prevent advancing on inactive route
+      isValid = await trigger(['loadingPort', 'destinationPort', 'shippingMethod']);
+      if (isValid && !activeRoute && availability.eligible_destination_ports.length > 0) {
         return;
       }
-    } else if (currentStep === 4) {
-      isValid = await trigger(['shippingMethod']);
-    } else if (currentStep === 5) {
-      const fieldsToValidate: ('buyingPrice' | 'towFromLocation')[] = ['buyingPrice'];
-      if (formData.includeInlandTowing) {
-        fieldsToValidate.push('towFromLocation');
-      }
-      isValid = await trigger(fieldsToValidate);
-    } else if (currentStep === 6) {
-      isValid = await trigger(['customerName', 'customerPhone', 'customerEmail']);
     } else {
       isValid = true;
     }
@@ -309,18 +577,29 @@ export const CalculatorPage: React.FC = () => {
   };
 
   const handleBack = () => {
+    setDependencyNotice(null);
+    setSubmissionError(null);
     setCurrentStep((prev) => Math.max(prev - 1, 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Form Submission (Step 4 -> Results)
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     setSubmissionError(null);
+    setDependencyNotice(null);
+
     try {
       const idempotencyKey = `quote-client-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const calcData: CalculatorFormData = {
         vehicleType: data.vehicleType,
         powertrain: data.powertrain,
+        conditionId: data.conditionId,
+        make: data.make,
+        model: data.model,
+        year: data.year,
+        vin: data.vin,
+        lotNumber: data.lotNumber,
         purchaseSource: data.purchaseSource,
         loadingPort: selectedOriginPort ? selectedOriginPort.id : data.loadingPort,
         destinationPort: selectedDestPort ? selectedDestPort.id : data.destinationPort,
@@ -341,10 +620,25 @@ export const CalculatorPage: React.FC = () => {
     } catch (err: unknown) {
       console.error('[CalculatorPage] Submission error:', err);
       const errMsg = err instanceof Error ? err.message : '';
-      if (
-        errMsg.includes('Please contact us for assistance') ||
-        errMsg.includes('Purchase location is required') ||
-        errMsg.includes('Selected pickup location does not exist') ||
+
+      // Controlled error handling: catch business errors and guide user back without DB codes
+      if (errMsg.includes('inland towing tariff') || errMsg.includes('pickup location')) {
+        setCurrentStep(2);
+        setValue('purchaseLocationId', undefined);
+        setValue('towFromLocation', '');
+        setSubmissionError(
+          isAr
+            ? 'لم يتم العثور على تعرفة سحب داخلي نشطة لموقع الاستلام المختار وميناء الشحن. يرجى اختيار موقع آخر أو التواصل معنا عبر واتساب للحصول على تسعير خاص.'
+            : 'No inland towing tariff is configured for the selected pickup location and loading port. Please select another location or contact us on WhatsApp.'
+        );
+      } else if (errMsg.includes('ocean freight tariff') || errMsg.includes('shipping route')) {
+        setCurrentStep(3);
+        setSubmissionError(
+          isAr
+            ? 'لا تتوفر تعرفة شحن بحري قياسية نشطة لهذا المسار ونوع الحاوية ومواصفات المركبة. يرجى تعديل خيارات الشحن أو التواصل معنا عبر واتساب.'
+            : 'No active ocean freight tariff is configured for this route, vehicle specifications and shipping method. Please adjust your selection or contact us on WhatsApp.'
+        );
+      } else if (
         errMsg.includes('Customer full name is required') ||
         errMsg.includes('Customer phone number is required')
       ) {
@@ -352,8 +646,8 @@ export const CalculatorPage: React.FC = () => {
       } else {
         setSubmissionError(
           isAr
-            ? 'تعذر إتمام احتساب عرض السعر في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب.'
-            : 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.'
+            ? 'تعذر إتمام احتساب عرض السعر في الوقت الحالي. يرجى التأكد من البيانات أو التواصل معنا عبر واتساب.'
+            : 'We could not complete your quotation right now. Please verify your selections or contact us on WhatsApp.'
         );
       }
     } finally {
@@ -366,11 +660,13 @@ export const CalculatorPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-6 sm:py-10 pb-44 sm:pb-16 w-full overflow-x-hidden">
       <Container className="max-w-3xl px-4 sm:px-6">
-        {/* Progress & Header */}
+        {/* Progress & Operational Phase Header */}
         <div className="mb-6 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600">
-              {isAr ? `الخطوة ${currentStep} من ${STEPS.length}` : `Step ${currentStep} of ${STEPS.length}`}
+              {isAr
+                ? `المرحلة ${currentStep} من ${STEPS.length}`
+                : `Phase ${currentStep} of ${STEPS.length}`}
             </span>
             <span className="text-xs font-semibold text-slate-500">
               {progressPercentage}% {isAr ? 'مكتمل' : 'Completed'}
@@ -385,22 +681,34 @@ export const CalculatorPage: React.FC = () => {
             />
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black text-brand-navy-950 pt-2">
-            {currentStep === 1 && t.calcStep1Title}
-            {currentStep === 2 && t.calcStep3Title}
-            {currentStep === 3 && `${t.calcStep4Title} & ${t.calcStep5Title}`}
-            {currentStep === 4 && (isAr ? 'طريقة الشحن بالحاويات' : 'SHIPPING METHOD')}
-            {currentStep === 5 && t.calcStep6Title}
-            {currentStep === 6 && t.calcStep7Title}
-            {currentStep === 7 && (isAr ? 'مراجعة وتأكيد عرض السعر' : 'REVIEW YOUR SHIPPING QUOTE')}
-          </h1>
+          <div className="flex items-center justify-between pt-1">
+            <h1 className="text-2xl sm:text-3xl font-black text-brand-navy-950">
+              {currentStep === 1 && t.calcPhase1Title}
+              {currentStep === 2 && t.calcPhase2Title}
+              {currentStep === 3 && t.calcPhase3Title}
+              {currentStep === 4 && t.calcPhase4Title}
+            </h1>
+
+            {isLoadingAvailability && (
+              <div className="flex items-center gap-1.5 text-xs text-brand-orange-600 bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-200">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span className="font-semibold">
+                  {isAr ? 'تحديث التعرفة...' : 'Syncing tariffs...'}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Reference Data Loading Notice */}
+        {/* Global Notifications & Alerts */}
         {isLoadingRefData && (
           <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-3 text-xs text-blue-800 animate-pulse">
             <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
-            <span>{isAr ? 'جاري تحميل أحدث التعرفة والموانئ النشطة...' : 'Loading verified maritime ports and route tariffs...'}</span>
+            <span>
+              {isAr
+                ? 'جاري تحميل أحدث التعرفة والموانئ النشطة...'
+                : 'Loading verified maritime ports and route tariffs...'}
+            </span>
           </div>
         )}
 
@@ -412,21 +720,48 @@ export const CalculatorPage: React.FC = () => {
           </div>
         )}
 
+        {dependencyNotice && (
+          <div className="mb-6">
+            <Alert variant="info" title={isAr ? 'تحديث خيارات الشحن' : 'Shipping Options Refreshed'}>
+              {dependencyNotice}
+            </Alert>
+          </div>
+        )}
+
         {submissionError && (
           <div className="mb-6">
-            <Alert variant="error" title={isAr ? 'خطأ في احتساب السعر' : 'Calculation Error'}>
-              {submissionError}
+            <Alert variant="error" title={isAr ? 'تعذر احتساب السعر' : 'Tariff Notice'}>
+              <div className="space-y-3">
+                <p>{submissionError}</p>
+                {whatsappInquiryLink && (
+                  <div>
+                    <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
+                      <Button
+                        type="button"
+                        variant="whatsapp"
+                        size="sm"
+                        startIcon={<MessageCircle className="w-4 h-4" />}
+                      >
+                        {isAr ? 'طلب تسعير خاص عبر واتساب' : 'Inquire on WhatsApp'}
+                      </Button>
+                    </a>
+                  </div>
+                )}
+              </div>
             </Alert>
           </div>
         )}
 
         <form onSubmit={handleSubmit(onSubmit)}>
-          {/* STEP 1: Vehicle & Powertrain */}
+          {/* ======================================================== */}
+          {/* PHASE 1: VEHICLE SPECIFICATIONS                          */}
+          {/* ======================================================== */}
           {currentStep === 1 && (
             <div className="space-y-6">
+              {/* Vehicle Category */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
-                  {isAr ? 'اختر فئة المركبة' : 'Select Vehicle Category'}
+                  {isAr ? '1. اختر فئة المركبة' : '1. Select Vehicle Category'}
                 </label>
                 <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
                   {(vehicleCategories.length > 0
@@ -435,7 +770,9 @@ export const CalculatorPage: React.FC = () => {
                   ).map((vt) => {
                     const isSelected = formData.vehicleType === vt.id;
                     const configMatch = VEHICLE_TYPES_CONFIG.find((c) => c.id === vt.id);
-                    const label = configMatch ? t[configMatch.labelKey as keyof typeof t] || vt.name : vt.name;
+                    const label = configMatch
+                      ? t[configMatch.labelKey as keyof typeof t] || vt.name
+                      : vt.name;
 
                     return (
                       <Card
@@ -444,7 +781,7 @@ export const CalculatorPage: React.FC = () => {
                         interactive
                         compact
                         onClick={() => setValue('vehicleType', vt.id, { shouldValidate: true })}
-                        className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
+                        className="p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[80px]"
                       >
                         <Car
                           className={`w-5 h-5 sm:w-6 sm:h-6 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
@@ -458,9 +795,10 @@ export const CalculatorPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Powertrain / Fuel Type */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  {isAr ? 'نوع المحرك والوقود' : 'Powertrain / Fuel Type'}
+                  {isAr ? '2. نوع المحرك والوقود' : '2. Powertrain / Fuel Type'}
                 </label>
                 <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {(powertrains.length > 0
@@ -470,7 +808,9 @@ export const CalculatorPage: React.FC = () => {
                     const isSelected = formData.powertrain === pt.id;
                     const Icon = pt.id === 'electric' ? Zap : pt.id === 'hybrid' ? Fuel : Flame;
                     const configMatch = POWERTRAINS_CONFIG.find((c) => c.id === pt.id);
-                    const label = configMatch ? t[configMatch.labelKey as keyof typeof t] || pt.name : pt.name;
+                    const label = configMatch
+                      ? t[configMatch.labelKey as keyof typeof t] || pt.name
+                      : pt.name;
 
                     return (
                       <Card
@@ -479,10 +819,10 @@ export const CalculatorPage: React.FC = () => {
                         interactive
                         compact
                         onClick={() => setValue('powertrain', pt.id, { shouldValidate: true })}
-                        className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
+                        className="p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px]"
                       >
                         <Icon
-                          className={`w-5 h-5 sm:w-6 sm:h-6 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
+                          className={`w-5 h-5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
                         />
                         <span className="text-[11px] sm:text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">
                           {label}
@@ -492,116 +832,533 @@ export const CalculatorPage: React.FC = () => {
                   })}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* STEP 2: Purchase Source */}
-          {currentStep === 2 && (
-            <div className="space-y-4">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                {isAr ? 'من أين قمت بشراء المركبة أو تخطط لشرائها؟' : 'Where did you purchase or plan to buy the vehicle?'}
-              </label>
-              <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
-                {(purchaseSources.length > 0
-                  ? purchaseSources
-                  : PURCHASE_SOURCES_CONFIG.map((s) => ({ id: s.id, name: s.id, isActive: true }))
-                ).map((src) => {
-                  const isSelected = formData.purchaseSource === src.id;
-                  const configMatch = PURCHASE_SOURCES_CONFIG.find((c) => c.id === src.id);
-                  const label = configMatch ? t[configMatch.labelKey as keyof typeof t] || src.name : src.name;
-
-                  return (
-                    <Card
-                      key={src.id}
-                      selected={isSelected}
-                      interactive
-                      compact
-                      onClick={() => setValue('purchaseSource', src.id, { shouldValidate: true })}
-                      className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
-                    >
-                      <ShoppingBag
-                        className={`w-5 h-5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-500'}`}
-                      />
-                      <span className="text-[11px] sm:text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">
-                        {label}
-                      </span>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: Route Selection (Origin Country & Port -> Destination Country & Port) */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              {/* Origin Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                    {isAr ? 'ميناء التحميل في بلد المنشأ' : 'Origin Loading Port'}
-                  </label>
-                  {countries.length > 1 && (
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                      <Globe2 className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'الدولة:' : 'Country:'}</span>
-                      <select
-                        aria-label={isAr ? 'دولة المنشأ' : 'Origin Country'}
-                        value={selectedOriginCountry}
-                        onChange={(e) => setSelectedOriginCountry(e.target.value)}
-                        className="text-xs font-bold text-brand-navy-900 border border-slate-200 rounded-lg px-2 py-0.5 bg-white"
-                      >
-                        {countries.map((c) => (
-                          <option key={c.code} value={c.code}>
-                            {isAr && c.nameAr ? c.nameAr : c.name} ({c.code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredLoadingPorts.map((port) => {
-                    const isSelected =
-                      formData.loadingPort === port.id ||
-                      formData.loadingPort === port.code ||
-                      PORT_SLUG_TO_UUID[formData.loadingPort] === port.id;
-                    const displayName = isAr && port.nameAr ? port.nameAr : port.name;
+              {/* Vehicle Operational Condition */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                  {isAr ? '3. حالة تشغيل المركبة' : '3. Vehicle Operational Condition'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: 'operable',
+                      title: t.conditionOperable,
+                      desc: t.conditionOperableDesc,
+                      icon: CheckCircle2,
+                    },
+                    {
+                      id: 'non_runner',
+                      title: t.conditionNonRunner,
+                      desc: t.conditionNonRunnerDesc,
+                      icon: Wrench,
+                    },
+                    {
+                      id: 'salvage_damaged',
+                      title: t.conditionSalvage,
+                      desc: t.conditionSalvageDesc,
+                      icon: ShieldAlert,
+                    },
+                  ].map((cond) => {
+                    const isSelected = formData.conditionId === cond.id;
+                    const Icon = cond.icon;
 
                     return (
                       <Card
-                        key={port.id}
+                        key={cond.id}
                         selected={isSelected}
                         interactive
-                        onClick={() => setValue('loadingPort', port.id, { shouldValidate: true })}
-                        className="p-4 flex items-center justify-between"
+                        onClick={() => setValue('conditionId', cond.id, { shouldValidate: true })}
+                        className="p-4 flex flex-col justify-between text-start gap-2"
                       >
-                        <div className="flex items-center gap-3">
-                          <Anchor
-                            className={`w-5 h-5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
+                        <div className="flex items-start gap-2.5">
+                          <Icon
+                            className={`w-5 h-5 shrink-0 mt-0.5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
                           />
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900">
-                              {displayName}
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                              {cond.title}
                             </h4>
-                            <p className="text-xs text-slate-500 font-medium">
-                              {port.stateOrCity ? `${port.stateOrCity} • ` : ''}
-                              <span className="font-mono">{port.code}</span>
+                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                              {cond.desc}
                             </p>
                           </div>
                         </div>
+                        {isSelected && (
+                          <div className="self-end">
+                            <Badge variant="orange" size="sm">
+                              {isAr ? 'محدد' : 'Selected'}
+                            </Badge>
+                          </div>
+                        )}
                       </Card>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Destination Section */}
+              {/* Optional Vehicle Details */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+                  {isAr
+                    ? 'بيانات إضافية للمركبة (اختياري)'
+                    : 'Additional Vehicle Details (Optional)'}
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <Controller
+                    control={control}
+                    name="year"
+                    render={({ field }) => (
+                      <Input
+                        label={isAr ? 'سنة الصنع' : 'Year'}
+                        placeholder="2022"
+                        type="number"
+                        min={1950}
+                        max={2030}
+                        value={field.value || ''}
+                        onChange={(e) =>
+                          field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
+                        }
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="make"
+                    render={({ field }) => (
+                      <Input
+                        label={isAr ? 'الشركة المصنعة' : 'Make'}
+                        placeholder="e.g. Toyota"
+                        {...field}
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="model"
+                    render={({ field }) => (
+                      <Input
+                        label={isAr ? 'الموديل' : 'Model'}
+                        placeholder="e.g. Camry"
+                        {...field}
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="lotNumber"
+                    render={({ field }) => (
+                      <Input
+                        label={isAr ? 'رقم اللوت / الشاصي' : 'Lot # / VIN'}
+                        placeholder="54321098"
+                        {...field}
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* PHASE 2: INLAND TOWING & PICKUP                          */}
+          {/* ======================================================== */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              {/* Towing Choice Cards */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  {isAr ? '1. طريقة استلام ونقل المركبة' : '1. Inland Transportation Mode'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Option A: Include Inland Towing */}
+                  <Card
+                    selected={formData.includeInlandTowing}
+                    interactive
+                    onClick={() => {
+                      setValue('includeInlandTowing', true, { shouldValidate: true });
+                    }}
+                    className="p-4 flex items-start gap-3"
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${formData.includeInlandTowing ? 'bg-orange-100 text-brand-orange-600' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                        {t.towingModeInlandTitle}
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {t.towingModeInlandSubtitle}
+                      </p>
+                    </div>
+                  </Card>
+
+                  {/* Option B: Direct Port Delivery */}
+                  <Card
+                    selected={!formData.includeInlandTowing}
+                    interactive
+                    onClick={() => {
+                      setValue('includeInlandTowing', false, { shouldValidate: true });
+                      setValue('purchaseLocationId', undefined, { shouldValidate: true });
+                      setValue('towFromLocation', '', { shouldValidate: true });
+                    }}
+                    className="p-4 flex items-start gap-3"
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${!formData.includeInlandTowing ? 'bg-orange-100 text-brand-orange-600' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                      <Anchor className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                          {t.towingModeDirectTitle}
+                        </h4>
+                        <Badge variant="success" size="sm">
+                          $0.00
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {t.towingModeDirectSubtitle}
+                      </p>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Towing Included: Purchase Source & Active Pickup Locations */}
+              {formData.includeInlandTowing ? (
+                <div className="space-y-5 pt-2">
+                  {/* Purchase Source Selection */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                      {isAr ? '2. مصدر شراء المركبة' : '2. Vehicle Purchase Source / Auction'}
+                    </label>
+                    <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 gap-2">
+                      {(purchaseSources.length > 0
+                        ? purchaseSources
+                        : PURCHASE_SOURCES_CONFIG.map((s) => ({ id: s.id, name: s.id, isActive: true }))
+                      ).map((src) => {
+                        const isSelected = formData.purchaseSource === src.id;
+                        const configMatch = PURCHASE_SOURCES_CONFIG.find((c) => c.id === src.id);
+                        const label = configMatch
+                          ? t[configMatch.labelKey as keyof typeof t] || src.name
+                          : src.name;
+
+                        return (
+                          <Card
+                            key={src.id}
+                            selected={isSelected}
+                            interactive
+                            compact
+                            onClick={() => {
+                              setValue('purchaseSource', src.id, { shouldValidate: true });
+                              if (
+                                selectedPurchaseLocation &&
+                                selectedPurchaseLocation.purchase_source_id !== src.id
+                              ) {
+                                setValue('purchaseLocationId', '', { shouldValidate: true });
+                                setValue('towFromLocation', '', { shouldValidate: true });
+                              }
+                            }}
+                            className="p-2.5 flex flex-col items-center justify-center text-center gap-1.5 min-h-[68px]"
+                          >
+                            <ShoppingBag
+                              className={`w-4 h-4 ${isSelected ? 'text-brand-orange-500' : 'text-slate-500'}`}
+                            />
+                            <span className="text-xs font-bold text-slate-800 line-clamp-1">
+                              {label}
+                            </span>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Pickup Location Selection (Database-driven active towing brackets) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                        {isAr ? '3. ساحة أو فرع الاستلام (الموقع المعتمد)' : '3. Pickup Location / Branch'}
+                      </label>
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        {filteredPickupLocations.length}{' '}
+                        {isAr ? 'موقع نشط بالتعرفة' : 'active locations'}
+                      </span>
+                    </div>
+
+                    {/* Search / Filter Input */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={locationSearchQuery}
+                        onChange={(e) => setLocationSearchQuery(e.target.value)}
+                        placeholder={
+                          isAr
+                            ? 'ابحث باسم المدينة أو الولاية (مثال: Dallas, Atlanta, TX)...'
+                            : 'Search by city, state, or branch name (e.g. Dallas, Atlanta, TX)...'
+                        }
+                        className="w-full bg-white border border-slate-200 rounded-xl px-9 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                      />
+                      {locationSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setLocationSearchQuery('')}
+                          className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Location Selection Grid */}
+                    {filteredPickupLocations.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                        {filteredPickupLocations.map((loc) => {
+                          const isSelected = formData.purchaseLocationId === loc.id;
+
+                          return (
+                            <Card
+                              key={loc.id}
+                              selected={isSelected}
+                              interactive
+                              onClick={() => {
+                                setValue('purchaseLocationId', loc.id, { shouldValidate: true });
+                                setValue('towFromLocation', `${loc.name}, ${loc.state_code}`, {
+                                  shouldValidate: true,
+                                });
+                              }}
+                              className="p-3 flex items-center justify-between text-start"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <MapPin
+                                  className={`w-4 h-4 shrink-0 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
+                                />
+                                <div>
+                                  <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                                    {loc.name}
+                                  </h4>
+                                  <span className="text-[11px] text-slate-500">
+                                    {loc.state_code} • {loc.available_ports_count}{' '}
+                                    {isAr ? 'ميناء متاح' : 'ports linked'}
+                                  </span>
+                                </div>
+                              </div>
+                              {isSelected && <Check className="w-4 h-4 text-brand-orange-500 shrink-0" />}
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2 text-xs">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="font-bold">
+                              {isAr
+                                ? 'لا تتوفر تعرفة نشطة لهذا المزاد وفئة المركبة'
+                                : 'No Active Towing Tariffs for Selected Criteria'}
+                            </h4>
+                            <p className="mt-1 text-amber-800 leading-relaxed">
+                              {isAr
+                                ? 'لم يتم العثور على ساحة مزاد تدعم هذه الفئة حالياً. يمكنك تغيير المصدر أو طلب تسعير مخصص.'
+                                : 'No locations with active towing rates were found for this category and source. You can choose another auction or request a custom quote.'}
+                            </p>
+                          </div>
+                        </div>
+                        {whatsappInquiryLink && (
+                          <div className="pt-1">
+                            <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
+                              <Button
+                                type="button"
+                                variant="whatsapp"
+                                size="sm"
+                                startIcon={<MessageCircle className="w-3.5 h-3.5" />}
+                              >
+                                {isAr ? 'طلب تسعير سحب خاص عبر واتساب' : 'Request Custom Towing Quote'}
+                              </Button>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {errors.purchaseLocationId && (
+                      <p className="text-xs font-semibold text-red-600 pt-1">
+                        {errors.purchaseLocationId.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold">
+                      {isAr
+                        ? 'تم اختيار التسليم المباشر للميناء'
+                        : 'Direct Port Delivery Confirmed'}
+                    </h4>
+                    <p className="text-emerald-700 mt-1 leading-relaxed">
+                      {isAr
+                        ? 'ستقوم أنت أو البائع بتسليم المركبة مباشرة إلى مستودع الميناء المعتمد. لن يتم احتساب أي رسوم سحب داخلي ($0.00).'
+                        : 'You or your dealer will deliver the vehicle directly to the loading port terminal. Inland towing fee is $0.00.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* PHASE 3: MARITIME SHIPPING & ROUTE                       */}
+          {/* ======================================================== */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              {/* Origin Loading Port Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                    {isAr ? 'ميناء الوصول في بلد الوجهة' : 'Destination Port'}
+                    {isAr ? '1. ميناء التحميل (أمريكا)' : '1. Origin Loading Port (USA)'}
+                  </label>
+                  {autoSelectedPort && (
+                    <Badge variant="orange" size="sm">
+                      {isAr ? 'ميناء محدد تلقائياً بناءً على موقع السحب' : 'Assigned from Towing Location'}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Single Designated Port Auto-Selection Notice */}
+                {autoSelectedPort && (
+                  <div className="p-3.5 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2.5 text-xs text-orange-950">
+                    <Info className="w-4 h-4 text-brand-orange-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h5 className="font-bold">
+                        {isAr
+                          ? `ميناء الشحن المعتمد: ${originPortDisplayName}`
+                          : `Designated Loading Port: ${originPortDisplayName}`}
+                      </h5>
+                      <p className="text-orange-800 mt-0.5">
+                        {isAr
+                          ? 'تم اختيار هذا الميناء تلقائياً لأنه الميناء المعتمد في تعرفة النقل البري لموقع السحب المختار.'
+                          : 'Automatically assigned based on the active towing bracket configured for your pickup location.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Available Ports Grid with Towing Fee Badges */}
+                {availability.eligible_origin_ports.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {availability.eligible_origin_ports.map((port) => {
+                      const isSelected =
+                        formData.loadingPort === port.id ||
+                        formData.loadingPort === port.code ||
+                        PORT_SLUG_TO_UUID[formData.loadingPort] === port.id;
+                      const displayName = isAr && port.name_ar ? port.name_ar : port.name;
+
+                      return (
+                        <Card
+                          key={port.id}
+                          selected={isSelected}
+                          interactive
+                          onClick={() => setValue('loadingPort', port.id, { shouldValidate: true })}
+                          className="p-4 flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Anchor
+                              className={`w-5 h-5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
+                            />
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-900">{displayName}</h4>
+                              <p className="text-xs text-slate-500 font-medium">
+                                {port.state_or_city ? `${port.state_or_city} • ` : ''}
+                                <span className="font-mono">{port.code}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Towing Rate Badge for this port */}
+                          {formData.includeInlandTowing ? (
+                            <div className="text-end">
+                              {port.towing_rate_type === 'fixed' ? (
+                                <Badge variant="navy" size="sm">
+                                  ${port.towing_fixed_amount?.toLocaleString()} USD
+                                </Badge>
+                              ) : (
+                                <Badge variant="navy" size="sm">
+                                  ${port.towing_min_amount} – ${port.towing_max_amount} USD
+                                </Badge>
+                              )}
+                              <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">
+                                {port.towing_rate_type === 'fixed'
+                                  ? isAr
+                                    ? 'سحب ثابت'
+                                    : 'Fixed Tow'
+                                  : isAr
+                                    ? 'سحب تقريبي'
+                                    : 'Tow Range'}
+                              </span>
+                            </div>
+                          ) : (
+                            <Badge variant="success" size="sm">
+                              {isAr ? 'تسليم مباشر ($0)' : 'Direct Delivery ($0)'}
+                            </Badge>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-3 text-xs">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-bold">
+                          {isAr
+                            ? 'لا توجد موانئ تحميل مرتبطة بهذا الموقع'
+                            : 'No Connected Loading Ports'}
+                        </h4>
+                        <p className="mt-1 text-amber-800 leading-relaxed">
+                          {isAr
+                            ? 'لا تتوفر تعرفة سحب ملاحية نشطة من هذا الموقع لموانئ الشحن. يرجى الرجوع واختيار موقع آخر أو التواصل مع خبرائنا.'
+                            : 'No active towing tariffs are linked from this pickup location to any US loading ports. Please select another location or contact our logistics team.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentStep(2)}
+                      >
+                        {isAr ? 'تغيير موقع السحب' : 'Change Pickup Location'}
+                      </Button>
+                      {whatsappInquiryLink && (
+                        <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
+                          <Button
+                            type="button"
+                            variant="whatsapp"
+                            size="sm"
+                            startIcon={<MessageCircle className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'استفسار عبر واتساب' : 'Inquire on WhatsApp'}
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Destination Port Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                    {isAr ? '2. ميناء الوصول (الإمارات)' : '2. Destination Port (UAE)'}
                   </label>
                   {countries.length > 1 && (
                     <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
@@ -624,19 +1381,21 @@ export const CalculatorPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredDestPorts.map((port) => {
+                  {availability.eligible_destination_ports.map((port) => {
                     const isSelected =
                       formData.destinationPort === port.id ||
                       formData.destinationPort === port.code ||
                       PORT_SLUG_TO_UUID[formData.destinationPort] === port.id;
-                    const displayName = isAr && port.nameAr ? port.nameAr : port.name;
+                    const displayName = isAr && port.name_ar ? port.name_ar : port.name;
 
                     return (
                       <Card
                         key={port.id}
                         selected={isSelected}
                         interactive
-                        onClick={() => setValue('destinationPort', port.id, { shouldValidate: true })}
+                        onClick={() =>
+                          setValue('destinationPort', port.id, { shouldValidate: true })
+                        }
                         className="p-4 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-3">
@@ -646,10 +1405,17 @@ export const CalculatorPage: React.FC = () => {
                           <div>
                             <h4 className="text-sm font-bold text-slate-900">{displayName}</h4>
                             <p className="text-xs text-emerald-600 font-semibold">
-                              {port.stateOrCity ? `${port.stateOrCity} • ` : ''}
+                              {port.state_or_city ? `${port.state_or_city} • ` : ''}
                               <span className="font-mono">{port.code}</span>
                             </p>
                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg text-xs">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          <span>
+                            {port.transit_days_min} – {port.transit_days_max} {isAr ? 'يوم' : 'Days'}
+                          </span>
                         </div>
                       </Card>
                     );
@@ -657,380 +1423,296 @@ export const CalculatorPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Active Route Status & Transit Time Display */}
-              {selectedOriginPort && selectedDestPort && (
-                <div>
-                  {activeRoute ? (
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <div>
-                          <strong className="block font-bold">
-                            {isAr ? 'خط ملاحي منتظم ومؤكد' : 'Active Direct Ocean Route Confirmed'}
-                          </strong>
-                          <span className="text-emerald-700">
-                            {originPortDisplayName} → {destPortDisplayName}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>
-                          {activeRoute.transitDaysMin} – {activeRoute.transitDaysMax} {isAr ? 'يوم' : 'Days'}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-3">
-                      <div className="flex items-start gap-2.5">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="text-sm font-bold">
-                            {isAr
-                              ? 'لا يوجد خط شحن بحري مباشر نشط بين هذين المينائين حالياً'
-                              : 'No Scheduled Active Direct Route Between Selected Ports'}
-                          </h4>
-                          <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                            {isAr
-                              ? `لا تتوفر رحلات بحرية قياسية مجدولة حالياً بين ${originPortDisplayName} و ${destPortDisplayName}. يرجى اختيار ميناء آخر أو التواصل المباشر مع خبرائنا للحصول على تسعير خاص وحجز حاوية مخصصة.`
-                              : `There is currently no standard ocean sailing between ${originPortDisplayName} and ${destPortDisplayName}. Please select another port or contact our logistics desk for custom vessel charters or dedicated bookings.`}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 pt-1">
-                        {whatsappInquiryLink && (
-                          <a
-                            href={whatsappInquiryLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Button
-                              type="button"
-                              variant="whatsapp"
-                              size="sm"
-                              startIcon={<MessageCircle className="w-4 h-4" />}
-                            >
-                              {isAr ? 'طلب تسعير مخصص عبر واتساب' : 'Inquire on WhatsApp'}
-                            </Button>
-                          </a>
-                        )}
-                        {branding.supportPhone && (
-                          <a href={`tel:${getPhoneTel()}`}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              startIcon={<Phone className="w-4 h-4" />}
-                            >
-                              {branding.supportPhone}
-                            </Button>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STEP 4: Shipping Method */}
-          {currentStep === 4 && (
-            <div className="space-y-4">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                {isAr ? 'اختر نظام الشحن ونوع الحاوية' : 'Choose Transport Container Mode'}
-              </label>
-              <div className="grid grid-cols-1 gap-4">
-                {(shippingMethods.length > 0
-                  ? shippingMethods
-                  : [
-                      { id: 'consolidated_container', name: 'Consolidated Shared Container (LCL)' },
-                      { id: 'dedicated_container', name: 'Dedicated Exclusive Container (FCL)' },
-                    ]
-                ).map((method) => {
-                  const isSelected = formData.shippingMethod === method.id;
-                  const isDedicated = method.id === 'dedicated_container';
-
-                  return (
-                    <Card
-                      key={method.id}
-                      selected={isSelected}
-                      interactive
-                      onClick={() =>
-                        setValue('shippingMethod', method.id, { shouldValidate: true })
-                      }
-                      className="p-5"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                            isDedicated
-                              ? 'bg-blue-100 text-blue-600'
-                              : 'bg-orange-100 text-brand-orange-600'
-                          }`}
-                        >
-                          {isDedicated ? <Anchor className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <h4 className="text-sm sm:text-base font-bold text-slate-900">
-                            {method.name}
-                            {!isDedicated && ` (${isAr ? 'الأكثر توفيراً وموصى به' : 'Recommended'})`}
-                          </h4>
-                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                            {isDedicated
-                              ? isAr
-                                ? 'حاوية خاصة مستقلة (20 أو 40 قدم) مخصصة لسياراتك فقط، ملائمة للسيارات الفارهة والكلاسيكية.'
-                                : 'Dedicated 20ft or 40ft private container for luxury, exotic, or high-value vehicles with direct loading.'
-                              : isAr
-                                ? 'تحميل سيارتك وتثبيتها بأمان داخل حاوية مشتركة (40/45 قدم عالية السقف) مع سيارات أخرى. الخيار الأكثر اقتصادية وأماناً.'
-                                : 'Your vehicle is securely lashed and loaded in a 40ft/45ft High Cube container with other vehicles. Most economical and safe.'}
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: Buying Price & Towing Details */}
-          {currentStep === 5 && (
-            <div className="space-y-5">
-              <Controller
-                control={control}
-                name="buyingPrice"
-                render={({ field }) => (
-                  <Input
-                    label={t.buyingPriceLabel}
-                    type="number"
-                    min={100}
-                    step={100}
-                    startIcon={<DollarSign className="w-4 h-4" />}
-                    error={errors.buyingPrice?.message}
-                    helperText={
-                      isAr
-                        ? 'تُستخدم لحساب القيمة المقدرة للرسوم الجمركية (5%) وضريبة القيمة المضافة بدولة الإمارات.'
-                        : 'Used to estimate destination Customs Duty (5%) and UAE Import VAT (5%).'
-                    }
-                    value={field.value || ''}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                  />
-                )}
-              />
-
-              {/* Inland Towing Checkbox Toggle */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-orange-300 transition-colors">
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="mt-1 w-4 h-4 rounded text-brand-orange-600 focus:ring-brand-orange-500 border-slate-300 transition-colors"
-                    checked={formData.includeInlandTowing}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setValue('includeInlandTowing', checked, { shouldValidate: true });
-                      if (!checked) {
-                        setValue('towFromLocation', '');
-                        setValue('purchaseLocationId', undefined);
-                      }
-                    }}
-                  />
-                  <div className="flex-1">
-                    <span className="text-sm font-bold text-slate-900 block">
-                      {isAr
-                        ? 'تضمين النقل البري الداخلي / سحب السيارة'
-                        : 'Include Inland Towing / Vehicle Pickup'}
-                    </span>
-                    <span className="text-xs text-slate-500 block mt-0.5">
-                      {isAr
-                        ? 'قم بإلغاء التحديد إذا كنت ستقوم بتسليم السيارة مباشرة إلى الميناء بنفسك، ولن يتم احتساب أي رسوم سحب.'
-                        : 'Uncheck this if you or your dealer will deliver the vehicle directly to the port warehouse. Towing charge will be $0.00.'}
-                    </span>
-                  </div>
+              {/* Shipping Method Section (with active freight rates) */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  {isAr ? '3. نظام الشحن ونوع الحاوية' : '3. Shipping Method & Container Mode'}
                 </label>
+                <div className="grid grid-cols-1 gap-3">
+                  {availability.eligible_shipping_methods.map((method) => {
+                    const isSelected = formData.shippingMethod === method.id;
+                    const isDedicated = method.id === 'dedicated_container';
+
+                    return (
+                      <Card
+                        key={method.id}
+                        selected={isSelected}
+                        interactive
+                        onClick={() =>
+                          setValue('shippingMethod', method.id, { shouldValidate: true })
+                        }
+                        className="p-4 sm:p-5"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                isDedicated
+                                  ? 'bg-blue-100 text-blue-600'
+                                  : 'bg-orange-100 text-brand-orange-600'
+                              }`}
+                            >
+                              {isDedicated ? <Anchor className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                                  {method.name}
+                                </h4>
+                                {!isDedicated && (
+                                  <Badge variant="orange" size="sm">
+                                    {isAr ? 'الأكثر توفيراً وموصى به' : 'Recommended'}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                {isDedicated
+                                  ? t.shippingMethodDedicatedDesc
+                                  : t.shippingMethodConsolidatedDesc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="text-end shrink-0">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                              {isAr ? 'الشحن البحري يبدأ من:' : 'Freight Tariff:'}
+                            </span>
+                            <strong className="text-sm sm:text-base font-black text-brand-navy-950">
+                              ${method.base_amount.toLocaleString()} {method.currency}
+                            </strong>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* PHASE 4: CALCULATION & COMPREHENSIVE REVIEW              */}
+          {/* ======================================================== */}
+          {currentStep === 4 && (
+            <div className="space-y-6">
+              {/* Financial Inputs (Declared Price) */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
+                <Controller
+                  control={control}
+                  name="buyingPrice"
+                  render={({ field }) => (
+                    <Input
+                      label={t.buyingPriceLabel}
+                      type="number"
+                      min={100}
+                      step={100}
+                      startIcon={<DollarSign className="w-4 h-4" />}
+                      error={errors.buyingPrice?.message}
+                      helperText={
+                        isAr
+                          ? 'تُستخدم لحساب القيمة المقدرة للرسوم الجمركية (5%) وضريبة القيمة المضافة بدولة الإمارات.'
+                          : 'Used to estimate destination Customs Duty (5%) and UAE Import VAT (5%).'
+                      }
+                      value={field.value || ''}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    />
+                  )}
+                />
               </div>
 
-              {/* Towing Pickup Location with Managed Locations quick suggestions */}
-              {formData.includeInlandTowing && (
-                <div className="space-y-2 pl-1">
+              {/* Customer Contact Details */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                  {isAr ? 'بيانات التواصل لإرسال عرض السعر' : 'Customer Contact Details'}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Controller
                     control={control}
-                    name="towFromLocation"
+                    name="customerName"
                     render={({ field }) => (
                       <Input
-                        label={t.towFromLabel}
-                        placeholder={t.towFromPlaceholder}
-                        startIcon={<Truck className="w-4 h-4" />}
-                        error={errors.towFromLocation?.message}
-                        helperText={t.towChargeNotice}
+                        label={t.customerNameLabel}
+                        placeholder={isAr ? 'مثال: محمد الهاشمي' : 'e.g. Mohammed Al Hashimi'}
+                        startIcon={<User className="w-4 h-4" />}
+                        error={errors.customerName?.message}
                         {...field}
                       />
                     )}
                   />
 
-                  {/* Managed purchase locations helper chips */}
-                  {purchaseLocations.length > 0 && (
-                    <div className="pt-1">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                        {isAr ? 'ساحات مزادات شهيرة مدعومة بالتعرفة:' : 'Supported auction branches:'}
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {purchaseLocations.slice(0, 6).map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setValue('towFromLocation', `${loc.name}, ${loc.stateCode}`, {
-                                shouldValidate: true,
-                              });
-                              setValue('purchaseLocationId', loc.id);
-                            }}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-brand-orange-600 border border-slate-200 transition-colors text-slate-700"
-                          >
-                            {loc.name} ({loc.stateCode})
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <Controller
+                    control={control}
+                    name="customerPhone"
+                    render={({ field }) => (
+                      <Input
+                        label={t.customerPhoneLabel}
+                        placeholder="+971 50 123 4567"
+                        startIcon={<Phone className="w-4 h-4" />}
+                        error={errors.customerPhone?.message}
+                        helperText={
+                          isAr
+                            ? 'سنقوم بإرسال نسخة عرض السعر فوراً عبر واتساب.'
+                            : 'We will send your quote breakdown directly to WhatsApp.'
+                        }
+                        {...field}
+                      />
+                    )}
+                  />
                 </div>
-              )}
 
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{t.allChargesInUsd}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <Controller
+                    control={control}
+                    name="customerEmail"
+                    render={({ field }) => (
+                      <Input
+                        label={t.customerEmailLabel}
+                        type="email"
+                        placeholder="name@example.com"
+                        startIcon={<Mail className="w-4 h-4" />}
+                        error={errors.customerEmail?.message}
+                        {...field}
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="notes"
+                    render={({ field }) => (
+                      <Input
+                        label={isAr ? 'ملاحظات إضافية (اختياري)' : 'Additional Notes (Optional)'}
+                        placeholder={isAr ? 'أي متطلبات خاصة...' : 'Any special instructions...'}
+                        {...field}
+                      />
+                    )}
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* STEP 6: Customer Contact Details */}
-          {currentStep === 6 && (
-            <div className="space-y-4">
-              <Controller
-                control={control}
-                name="customerName"
-                render={({ field }) => (
-                  <Input
-                    label={t.customerNameLabel}
-                    placeholder={isAr ? 'مثال: محمد الهاشمي' : 'e.g. Mohammed Al Hashimi'}
-                    startIcon={<User className="w-4 h-4" />}
-                    error={errors.customerName?.message}
-                    {...field}
-                  />
-                )}
-              />
-
-              <Controller
-                control={control}
-                name="customerPhone"
-                render={({ field }) => (
-                  <Input
-                    label={t.customerPhoneLabel}
-                    placeholder="+971 50 123 4567"
-                    startIcon={<Phone className="w-4 h-4" />}
-                    error={errors.customerPhone?.message}
-                    helperText={
-                      isAr
-                        ? 'سنقوم بإرسال نسخة عرض السعر مباشرة عبر واتساب.'
-                        : 'We will send your quote breakdown directly to WhatsApp.'
-                    }
-                    {...field}
-                  />
-                )}
-              />
-
-              <Controller
-                control={control}
-                name="customerEmail"
-                render={({ field }) => (
-                  <Input
-                    label={t.customerEmailLabel}
-                    type="email"
-                    placeholder="name@example.com"
-                    startIcon={<Mail className="w-4 h-4" />}
-                    error={errors.customerEmail?.message}
-                    {...field}
-                  />
-                )}
-              />
-            </div>
-          )}
-
-          {/* STEP 7: Review & Submit */}
-          {currentStep === 7 && (
-            <div className="space-y-6">
-              <Card className="p-5 sm:p-6 divide-y divide-slate-100">
+              {/* Authoritative 4-Section Review Card */}
+              <Card className="p-5 sm:p-6 divide-y divide-slate-100 bg-white border border-slate-200">
                 <div className="pb-4">
                   <h3 className="text-base font-bold text-slate-900 mb-1">
-                    {isAr ? 'ملخص خيارات الشحن قبل الاحتساب' : 'Quote Summary Review'}
+                    {isAr ? 'ملخص ومراجعة تفاصيل الشحن قبل الاحتساب' : 'Quotation Details Review'}
                   </h3>
                   <p className="text-xs text-slate-500">
                     {isAr
-                      ? 'يرجى مراجعة تفاصيل الشحن قبل توليد عرض السعر الشامل والموثق.'
-                      : 'Please review your shipping selections before generating your comprehensive quotation.'}
+                      ? 'مراجعة شاملة لكافة الخيارات التشغيلية والموانئ قبل توليد عرض السعر الموثق.'
+                      : 'Comprehensive review of your vehicle, towing, and maritime selections before calculation.'}
                   </p>
                 </div>
 
-                <div className="py-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="flex justify-between sm:block border-b sm:border-b-0 pb-1 sm:pb-0">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'فئة المركبة والمحرك:' : 'Vehicle Category:'}
-                    </span>
-                    <strong className="text-slate-800 uppercase">
-                      {formData.vehicleType} ({formData.powertrain})
-                    </strong>
-                  </div>
-                  <div className="flex justify-between sm:block border-b sm:border-b-0 pb-1 sm:pb-0">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'مصدر الشراء:' : 'Purchase Source:'}
-                    </span>
-                    <strong className="text-slate-800 uppercase">{formData.purchaseSource}</strong>
-                  </div>
-                  <div className="flex justify-between sm:block border-b sm:border-b-0 pb-1 sm:pb-0">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'ميناء التحميل (المنشأ):' : 'Loading Port:'}
-                    </span>
-                    <strong className="text-slate-800 uppercase">{originPortDisplayName}</strong>
-                  </div>
-                  <div className="flex justify-between sm:block border-b sm:border-b-0 pb-1 sm:pb-0">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'ميناء الوصول (الوجهة):' : 'Destination Port:'}
-                    </span>
-                    <strong className="text-slate-800 uppercase">{destPortDisplayName}</strong>
-                  </div>
-                  <div className="flex justify-between sm:block border-b sm:border-b-0 pb-1 sm:pb-0">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'القيمة المصرح بها للمركبة:' : 'Declared Value:'}
-                    </span>
-                    <strong className="text-slate-800">
-                      ${formData.buyingPrice?.toLocaleString()} USD
-                    </strong>
-                  </div>
-                  <div className="flex justify-between sm:block">
-                    <span className="text-slate-500 block">
-                      {isAr ? 'حالة وموقع النقل الداخلي:' : 'Inland Towing:'}
-                    </span>
-                    <strong className="text-slate-800 break-words">
-                      {formData.includeInlandTowing
-                        ? formData.towFromLocation || (isAr ? 'مطلوب (الموقع قيد التحديد)' : 'Requested')
-                        : (isAr ? 'غير مطلوب - تسليم مباشر للميناء ($0.00)' : 'Not requested - Direct port delivery ($0.00)')}
-                    </strong>
+                {/* Section 1: Vehicle Specifications */}
+                <div className="py-3.5 space-y-1 text-xs">
+                  <span className="text-[11px] font-bold text-brand-orange-600 uppercase tracking-wider block">
+                    {isAr ? '1. مواصفات وحالة المركبة' : '1. Vehicle Specifications'}
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-slate-800">
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'الفئة:' : 'Category:'}</span>
+                      <strong className="uppercase">{formData.vehicleType}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'المحرك:' : 'Powertrain:'}</span>
+                      <strong className="uppercase">{formData.powertrain}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'الحالة التشغيلية:' : 'Condition:'}</span>
+                      <strong className="capitalize">
+                        {formData.conditionId === 'operable'
+                          ? t.conditionOperable
+                          : formData.conditionId === 'non_runner'
+                            ? t.conditionNonRunner
+                            : t.conditionSalvage}
+                      </strong>
+                    </div>
+                    {(formData.make || formData.model || formData.year) && (
+                      <div className="col-span-2">
+                        <span className="text-slate-500 block">{isAr ? 'المركبة:' : 'Vehicle:'}</span>
+                        <strong>
+                          {[formData.year, formData.make, formData.model].filter(Boolean).join(' ')}
+                        </strong>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="pt-4 text-xs text-slate-600">
-                  <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>
-                      {isAr ? 'العميل:' : 'Customer:'} {formData.customerName || 'Inquirer'} (
-                      {formData.customerPhone || 'WhatsApp'})
-                    </span>
+                {/* Section 2: Inland Logistics & Towing */}
+                <div className="py-3.5 space-y-1 text-xs">
+                  <span className="text-[11px] font-bold text-brand-orange-600 uppercase tracking-wider block">
+                    {isAr ? '2. النقل البري والسحب الداخلي' : '2. Inland Logistics & Pickup'}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-slate-800">
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'طريقة الاستلام:' : 'Service:'}</span>
+                      <strong>
+                        {formData.includeInlandTowing
+                          ? isAr
+                            ? 'نقل بري داخلي معتمد'
+                            : 'Inland Towing Included'
+                          : isAr
+                            ? 'تسليم مباشر لمستودع الميناء ($0.00)'
+                            : 'Direct Port Delivery ($0.00)'}
+                      </strong>
+                    </div>
+                    {formData.includeInlandTowing && (
+                      <div>
+                        <span className="text-slate-500 block">{isAr ? 'المصدر والساحة:' : 'Source & Location:'}</span>
+                        <strong className="uppercase">
+                          {formData.purchaseSource} • {formData.towFromLocation || 'Selected Location'}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 3: Maritime Shipping Route */}
+                <div className="py-3.5 space-y-1 text-xs">
+                  <span className="text-[11px] font-bold text-brand-orange-600 uppercase tracking-wider block">
+                    {isAr ? '3. الشحن البحري والمسار' : '3. Ocean Freight & Maritime Route'}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-slate-800">
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'ميناء التحميل (المنشأ):' : 'Loading Port:'}</span>
+                      <strong>{originPortDisplayName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'ميناء الوصول (الوجهة):' : 'Destination Port:'}</span>
+                      <strong>{destPortDisplayName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'نظام الحاوية:' : 'Method:'}</span>
+                      <strong>
+                        {selectedShippingMethod?.name || formData.shippingMethod}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Valuation & Customer */}
+                <div className="pt-3.5 space-y-1 text-xs">
+                  <span className="text-[11px] font-bold text-brand-orange-600 uppercase tracking-wider block">
+                    {isAr ? '4. القيمة المصرحة والمستفسر' : '4. Valuation & Inquirer'}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-slate-800">
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'القيمة المصرح بها للمركبة:' : 'Declared Value:'}</span>
+                      <strong className="text-emerald-700 font-black">
+                        ${formData.buyingPrice?.toLocaleString()} USD
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">{isAr ? 'مقدم الطلب:' : 'Contact:'}</span>
+                      <strong>
+                        {formData.customerName || 'Inquirer'} ({formData.customerPhone || 'Phone'})
+                      </strong>
+                    </div>
                   </div>
                 </div>
               </Card>
 
-              <Alert variant="info" title={isAr ? 'تعرفة نظامية وشفافة' : 'Transparent Tariffs'}>
+              <Alert variant="info" title={isAr ? 'تعرفة نظامية وشفافة' : 'Transparent Authoritative Tariffs'}>
                 {t.demoDataDisclaimer}
               </Alert>
             </div>
@@ -1044,11 +1726,7 @@ export const CalculatorPage: React.FC = () => {
                 variant="outline"
                 onClick={handleBack}
                 startIcon={
-                  direction === 'rtl' ? (
-                    <ArrowRight className="w-4 h-4" />
-                  ) : (
-                    <ArrowLeft className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />
                 }
               >
                 {t.btnBack}
@@ -1062,13 +1740,12 @@ export const CalculatorPage: React.FC = () => {
                 type="button"
                 variant="primary"
                 onClick={handleNext}
-                disabled={currentStep === 3 && Boolean(selectedOriginPort && selectedDestPort && !activeRoute)}
+                disabled={
+                  (currentStep === 2 && formData.includeInlandTowing && !formData.purchaseLocationId) ||
+                  (currentStep === 3 && Boolean(selectedOriginPort && selectedDestPort && !activeRoute))
+                }
                 endIcon={
-                  direction === 'rtl' ? (
-                    <ArrowLeft className="w-4 h-4" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
                 {t.btnContinue}
@@ -1079,11 +1756,7 @@ export const CalculatorPage: React.FC = () => {
                 variant="primary"
                 isLoading={isSubmitting}
                 endIcon={
-                  direction === 'rtl' ? (
-                    <ArrowLeft className="w-4 h-4" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
                 {t.btnCalculateShipping}
@@ -1101,11 +1774,7 @@ export const CalculatorPage: React.FC = () => {
                 onClick={handleBack}
                 className="shrink-0 whitespace-nowrap font-bold"
                 startIcon={
-                  direction === 'rtl' ? (
-                    <ArrowRight className="w-4 h-4" />
-                  ) : (
-                    <ArrowLeft className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />
                 }
               >
                 {t.btnBack}
@@ -1118,14 +1787,13 @@ export const CalculatorPage: React.FC = () => {
                 variant="primary"
                 size="md"
                 onClick={handleNext}
-                disabled={currentStep === 3 && Boolean(selectedOriginPort && selectedDestPort && !activeRoute)}
+                disabled={
+                  (currentStep === 2 && formData.includeInlandTowing && !formData.purchaseLocationId) ||
+                  (currentStep === 3 && Boolean(selectedOriginPort && selectedDestPort && !activeRoute))
+                }
                 className="flex-1 font-extrabold whitespace-nowrap"
                 endIcon={
-                  direction === 'rtl' ? (
-                    <ArrowLeft className="w-4 h-4" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
                 {t.btnContinue}
@@ -1138,11 +1806,7 @@ export const CalculatorPage: React.FC = () => {
                 isLoading={isSubmitting}
                 className="flex-1 font-extrabold whitespace-nowrap"
                 endIcon={
-                  direction === 'rtl' ? (
-                    <ArrowLeft className="w-4 h-4" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )
+                  direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
                 {t.btnCalculateShipping}

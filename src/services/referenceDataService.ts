@@ -42,6 +42,13 @@ export interface PowertrainOption {
   isActive: boolean;
 }
 
+export interface VehicleConditionOption {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+}
+
 export interface PurchaseSourceOption {
   id: string;
   name: string;
@@ -237,6 +244,26 @@ export const referenceDataService = {
       id: p.id,
       name: p.name,
       isActive: p.is_active,
+    }));
+  },
+
+  async getVehicleConditions(): Promise<VehicleConditionOption[]> {
+    const { data, error } = await supabase
+      .from('vehicle_conditions')
+      .select('id, name, description, is_active')
+      .eq('is_active', true)
+      .order('id');
+
+    if (error) {
+      console.error('[ReferenceDataService] Failed to load vehicle conditions:', error);
+      throw new Error(error.message || 'Unable to load vehicle conditions.');
+    }
+
+    return (data || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description || undefined,
+      isActive: c.is_active,
     }));
   },
 
