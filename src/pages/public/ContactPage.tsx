@@ -165,9 +165,11 @@ export const ContactPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      const phonePayload = phone.trim().startsWith('+') ? phone.trim() : `+${cleanedPhone}`;
+
       const result = await enquiryService.submitContactEnquiry({
         full_name: fullName.trim(),
-        phone: cleanedPhone,
+        phone: phonePayload,
         email: emailClean || undefined,
         subject,
         message: message.trim(),
@@ -185,41 +187,37 @@ export const ContactPage: React.FC = () => {
       setMessage('');
       setSubject('shipping_quote_assistance');
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : String(err || '');
+      const raw = (err instanceof Error ? err.message : String(err || '')).toLowerCase();
       let mappedMsg: string;
 
-      if (raw.includes('Consent is required')) {
+      if (raw.includes('consent')) {
         mappedMsg = isAr
           ? 'يرجى الموافقة على التواصل معك لمتابعة الاستفسار.'
           : 'Consent is required to submit an inquiry.';
-      } else if (raw.includes('Full name must be between')) {
+      } else if (raw.includes('full name')) {
         mappedMsg = isAr
           ? 'يجب أن يكون الاسم الكامل بين 2 و 120 حرفاً.'
           : 'Full name must be between 2 and 120 characters.';
-      } else if (raw.includes('Valid international phone')) {
+      } else if (raw.includes('phone')) {
         mappedMsg = isAr
           ? 'يرجى إدخال رقم هاتف دولي صحيح متضمناً رمز الدولة.'
           : 'Please provide a valid international phone number with country code.';
-      } else if (raw.includes('valid email address is required') || raw.includes('Invalid email address format')) {
+      } else if (raw.includes('email')) {
         mappedMsg = isAr
           ? 'يرجى إدخال عنوان بريد إلكتروني صحيح.'
           : 'Please enter a valid email address.';
-      } else if (raw.includes('valid inquiry subject is required')) {
+      } else if (raw.includes('subject')) {
         mappedMsg = isAr
           ? 'يرجى اختيار موضوع استفسار صحيح.'
           : 'Please select a valid inquiry subject.';
-      } else if (raw.includes('Message must be between')) {
+      } else if (raw.includes('message')) {
         mappedMsg = isAr
           ? 'يجب أن تكون الرسالة بين 10 و 5,000 حرف.'
           : 'Message must be between 10 and 5,000 characters.';
-      } else if (raw.includes('Too many inquiries received')) {
+      } else if (raw.includes('too many') || raw.includes('duplicate')) {
         mappedMsg = isAr
           ? 'تم استلام عدد كبير من الاستفسارات من هذا الرقم. يرجى الانتظار بضع دقائق أو التواصل عبر واتساب.'
           : 'Too many inquiries received. Please wait a few minutes before trying again or reach out on WhatsApp.';
-      } else if (raw.includes('duplicate inquiry has already been received')) {
-        mappedMsg = isAr
-          ? 'تم استلام هذا الاستفسار مسبقاً. يرجى الانتظار قبل إرسال استفسار جديد.'
-          : 'A duplicate inquiry has already been received. Please wait before submitting again.';
       } else {
         mappedMsg = isAr
           ? 'تعذر إرسال الاستفسار في الوقت الحالي. يرجى المحاولة لاحقاً أو التواصل عبر واتساب.'
