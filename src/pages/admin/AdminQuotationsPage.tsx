@@ -290,6 +290,40 @@ export const AdminQuotationsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {/* Vehicle Declared Value & CIF */}
+                  {(selectedQuote.declaredValueUsd !== undefined && selectedQuote.declaredValueUsd > 0) && (
+                    <tr className="bg-slate-50/50">
+                      <td className="py-2 px-3 flex items-center gap-1.5 text-slate-600">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Declared Buying Value</span>
+                      </td>
+                      <td className="py-2 px-3 text-end font-medium text-slate-600">
+                        {formatCurrency(selectedQuote.declaredValueUsd)}
+                      </td>
+                      <td className="py-2 px-3 text-end text-slate-400">
+                        {formatAED(selectedQuote.declaredValueUsd * (selectedQuote.exchangeRate || 3.6725))}
+                      </td>
+                    </tr>
+                  )}
+
+                  {Boolean(selectedQuote.cifMax && selectedQuote.cifMax > 0) && (
+                    <tr className="bg-slate-50/50">
+                      <td className="py-2 px-3 flex items-center gap-1.5 text-slate-600">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                        <span>CIF Valuation Base</span>
+                      </td>
+                      <td className="py-2 px-3 text-end font-medium text-slate-600">
+                        {selectedQuote.isTowingRange && selectedQuote.cifMin !== selectedQuote.cifMax
+                          ? `${formatCurrency(selectedQuote.cifMin || 0)} – ${formatCurrency(selectedQuote.cifMax || 0)}`
+                          : formatCurrency(selectedQuote.cifMax || 0)}
+                      </td>
+                      <td className="py-2 px-3 text-end text-slate-400">
+                        {formatAED((selectedQuote.cifMax || 0) * (selectedQuote.exchangeRate || 3.6725))}
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Ocean Freight */}
                   <tr>
                     <td className="py-2 px-3 flex items-center gap-1.5">
                       <Ship className="w-3.5 h-3.5 text-blue-500" />
@@ -299,10 +333,11 @@ export const AdminQuotationsPage: React.FC = () => {
                       {formatCurrency(selectedQuote.oceanFreightUsd)}
                     </td>
                     <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED(selectedQuote.oceanFreightUsd * 3.6725)}
+                      {formatAED(selectedQuote.oceanFreightUsd * (selectedQuote.exchangeRate || 3.6725))}
                     </td>
                   </tr>
 
+                  {/* Inland Towing */}
                   <tr>
                     <td className="py-2 px-3 flex items-center gap-1.5">
                       <Truck className="w-3.5 h-3.5 text-brand-orange-500" />
@@ -315,27 +350,87 @@ export const AdminQuotationsPage: React.FC = () => {
                     </td>
                     <td className="py-2 px-3 text-end text-slate-500">
                       {selectedQuote.isTowingRange
-                        ? `${formatAED(selectedQuote.towingFeeMin * 3.6725)} – ${formatAED(selectedQuote.towingFeeMax * 3.6725)}`
+                        ? `${formatAED(selectedQuote.towingFeeMin * (selectedQuote.exchangeRate || 3.6725))} – ${formatAED(selectedQuote.towingFeeMax * (selectedQuote.exchangeRate || 3.6725))}`
                         : formatAED(
-                            (selectedQuote.towingFeeMin || selectedQuote.towingFeeMax) * 3.6725
+                            (selectedQuote.towingFeeMin || selectedQuote.towingFeeMax) * (selectedQuote.exchangeRate || 3.6725)
                           )}
                     </td>
                   </tr>
 
+                  {/* Surcharges if any */}
+                  {(selectedQuote.surchargesUsd !== undefined && selectedQuote.surchargesUsd > 0) && (
+                    <tr>
+                      <td className="py-2 px-3 flex items-center gap-1.5 text-amber-800">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Condition / Fuel Surcharges</span>
+                      </td>
+                      <td className="py-2 px-3 text-end font-semibold text-amber-800">
+                        {formatCurrency(selectedQuote.surchargesUsd)}
+                      </td>
+                      <td className="py-2 px-3 text-end text-slate-500">
+                        {formatAED(selectedQuote.surchargesUsd * (selectedQuote.exchangeRate || 3.6725))}
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Customs Clearance */}
                   <tr>
                     <td className="py-2 px-3 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Customs Duty & Port Handling</span>
+                      <FileText className="w-3.5 h-3.5 text-slate-500" />
+                      <span>UAE Customs Clearance Fee</span>
+                    </td>
+                    <td className="py-2 px-3 text-end font-semibold">
+                      {formatCurrency(selectedQuote.customsClearanceUsd || 150)}
+                    </td>
+                    <td className="py-2 px-3 text-end text-slate-500">
+                      {formatAED((selectedQuote.customsClearanceUsd || 150) * (selectedQuote.exchangeRate || 3.6725))}
+                    </td>
+                  </tr>
+
+                  {/* Port Handling */}
+                  <tr>
+                    <td className="py-2 px-3 flex items-center gap-1.5">
+                      <Ship className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Port Handling & Terminal Charges</span>
+                    </td>
+                    <td className="py-2 px-3 text-end font-semibold">
+                      {formatCurrency(selectedQuote.portHandlingUsd || 200)}
+                    </td>
+                    <td className="py-2 px-3 text-end text-slate-500">
+                      {formatAED((selectedQuote.portHandlingUsd || 200) * (selectedQuote.exchangeRate || 3.6725))}
+                    </td>
+                  </tr>
+
+                  {/* Customs Duty */}
+                  <tr>
+                    <td className="py-2 px-3 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>UAE Customs Duty (5% of CIF)</span>
                     </td>
                     <td className="py-2 px-3 text-end font-semibold">
                       {formatCurrency(selectedQuote.customsDutyUsd)}
                     </td>
                     <td className="py-2 px-3 text-end text-slate-500">
-                      {formatAED(selectedQuote.customsDutyUsd * 3.6725)}
+                      {formatAED(selectedQuote.customsDutyUsd * (selectedQuote.exchangeRate || 3.6725))}
                     </td>
                   </tr>
 
-                  <tr className="bg-slate-50/80 font-black text-brand-navy-950">
+                  {/* Import VAT */}
+                  <tr>
+                    <td className="py-2 px-3 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>UAE Import VAT (5% of VAT Base)</span>
+                    </td>
+                    <td className="py-2 px-3 text-end font-semibold">
+                      {formatCurrency(selectedQuote.importVatUsd)}
+                    </td>
+                    <td className="py-2 px-3 text-end text-slate-500">
+                      {formatAED(selectedQuote.importVatUsd * (selectedQuote.exchangeRate || 3.6725))}
+                    </td>
+                  </tr>
+
+                  {/* Grand Total */}
+                  <tr className="bg-slate-50/90 font-black text-brand-navy-950 border-t-2 border-slate-300">
                     <td className="py-2.5 px-3">Total Estimated Shipping</td>
                     <td className="py-2.5 px-3 text-end text-sm">
                       {selectedQuote.isTowingRange

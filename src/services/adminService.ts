@@ -29,6 +29,14 @@ export interface AdminQuotation {
   totalUsdMax: number;
   totalAedMin: number;
   totalAedMax: number;
+  exchangeRate?: number;
+  declaredValueUsd?: number;
+  cifMin?: number;
+  cifMax?: number;
+  customsClearanceUsd?: number;
+  portHandlingUsd?: number;
+  surchargesUsd?: number;
+  pricingSnapshot?: Record<string, unknown>;
   disclaimer?: string;
   createdAt: string;
   lineItems?: Array<{
@@ -51,6 +59,34 @@ export interface AdminCustomer {
   createdAt: string;
   vehicleCount?: number;
   enquiryCount?: number;
+}
+
+export interface AdminCustomerProfile {
+  customer: AdminCustomer;
+  enquiries: Array<{
+    id: string;
+    referenceNumber: string;
+    status: string;
+    source: string;
+    notes?: string;
+    createdAt: string;
+  }>;
+  quotations: Array<{
+    id: string;
+    referenceNumber: string;
+    enquiryReference?: string;
+    totalUsd: number;
+    totalAed: number;
+    route: string;
+    vehicle: string;
+    createdAt: string;
+  }>;
+  stats: {
+    totalEnquiries: number;
+    totalQuotations: number;
+    firstEnquiryDate: string | null;
+    lastActivityDate: string | null;
+  };
 }
 
 export interface AdminRoute {
@@ -276,10 +312,14 @@ export const adminService = {
         enquiry_id,
         version,
         pricing_snapshot,
+        exchange_rate,
         subtotal_ocean_freight,
         towing_fee_min,
         towing_fee_max,
         is_towing_range,
+        customs_clearance_fee,
+        port_additional_charges,
+        cif_value,
         customs_duty,
         import_vat,
         total_charges_usd_min,
@@ -313,7 +353,16 @@ export const adminService = {
       pricing_snapshot: {
         customer?: { full_name?: string; phone?: string; email?: string };
         route?: { origin_port_name?: string; destination_port_name?: string };
-        vehicle?: { category_name?: string; make?: string; model?: string; year?: number };
+        vehicle?: { category_name?: string; make?: string; model?: string; year?: number; declared_value_usd?: number };
+        financials?: {
+          declared_value_usd?: number;
+          cif_value_min?: number;
+          cif_value_max?: number;
+          surcharges_total?: number;
+          customs_clearance_fee?: number;
+          port_additional_charges?: number;
+          exchange_rate?: number;
+        };
         line_items?: Array<{
           category: string;
           description: string;
@@ -321,10 +370,14 @@ export const adminService = {
           amount_aed?: number;
         }>;
       } | null;
+      exchange_rate?: number;
       subtotal_ocean_freight: number;
       towing_fee_min: number;
       towing_fee_max: number;
       is_towing_range: boolean;
+      customs_clearance_fee?: number;
+      port_additional_charges?: number;
+      cif_value?: number;
       customs_duty: number;
       import_vat: number;
       total_charges_usd_min: number;
@@ -355,6 +408,14 @@ export const adminService = {
         ? `${snap.vehicle.year ? snap.vehicle.year + ' ' : ''}${snap.vehicle.make || ''} ${snap.vehicle.model || ''} (${snap.vehicle.category_name || 'Vehicle'})`
         : 'Standard Vehicle';
 
+      const declaredValueUsd = Number(snap?.financials?.declared_value_usd || snap?.vehicle?.declared_value_usd || 0);
+      const cifMin = Number(q.cif_value || snap?.financials?.cif_value_min || 0);
+      const cifMax = Number(q.cif_value || snap?.financials?.cif_value_max || 0);
+      const customsClearanceUsd = Number(q.customs_clearance_fee || snap?.financials?.customs_clearance_fee || 150);
+      const portHandlingUsd = Number(q.port_additional_charges || snap?.financials?.port_additional_charges || 200);
+      const surchargesUsd = Number(snap?.financials?.surcharges_total || 0);
+      const exchangeRate = Number(q.exchange_rate || snap?.financials?.exchange_rate || 3.6725);
+
       return {
         id: q.id,
         referenceNumber: q.reference_number,
@@ -375,6 +436,14 @@ export const adminService = {
         totalUsdMax: Number(q.total_charges_usd_max),
         totalAedMin: Number(q.total_charges_aed_min),
         totalAedMax: Number(q.total_charges_aed_max),
+        exchangeRate,
+        declaredValueUsd,
+        cifMin,
+        cifMax,
+        customsClearanceUsd,
+        portHandlingUsd,
+        surchargesUsd,
+        pricingSnapshot: snap as Record<string, unknown>,
         disclaimer: q.disclaimer,
         createdAt: q.created_at,
         lineItems: snap?.line_items?.map((li) => ({
@@ -390,9 +459,10 @@ export const adminService = {
 
   // Customers
   async getCustomers(): Promise<AdminCustomer[]> {
-    const [custRes, vehRes] = await Promise.all([
+    const [custRes, vehRes, enqRes] = await Promise.all([
       supabase.from('customers').select('*').order('created_at', { ascending: false }),
       supabase.from('customer_vehicles').select('customer_id'),
+      supabase.from('enquiries').select('customer_id'),
     ]);
 
     if (custRes.error) {
@@ -406,6 +476,13 @@ export const adminService = {
       }
     }
 
+    const enqCounts = new Map<string, number>();
+    if (enqRes.data) {
+      for (const e of enqRes.data) {
+        enqCounts.set(e.customer_id, (enqCounts.get(e.customer_id) || 0) + 1);
+      }
+    }
+
     return (custRes.data || []).map((c) => ({
       id: c.id,
       fullName: c.full_name || 'Valued Customer',
@@ -416,7 +493,126 @@ export const adminService = {
       notes: c.notes || undefined,
       createdAt: c.created_at,
       vehicleCount: vehCounts.get(c.id) || 0,
+      enquiryCount: enqCounts.get(c.id) || 0,
     }));
+  },
+
+  async getCustomerProfile(customerId: string): Promise<AdminCustomerProfile> {
+    const { data: customer, error: custError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', customerId)
+      .single();
+
+    if (custError || !customer) {
+      throw new Error(custError?.message || 'Customer not found.');
+    }
+
+    const [enqRes, quoteRes] = await Promise.all([
+      supabase
+        .from('enquiries')
+        .select('id, reference_number, status, source, notes, created_at')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('quotations')
+        .select(`
+          id,
+          reference_number,
+          total_charges_usd_max,
+          total_charges_aed_max,
+          pricing_snapshot,
+          created_at,
+          enquiries!inner (
+            id,
+            reference_number,
+            customer_id
+          )
+        `)
+        .eq('enquiries.customer_id', customerId)
+        .order('created_at', { ascending: false }),
+    ]);
+
+    if (enqRes.error) {
+      throw new Error(enqRes.error.message || 'Unable to load customer enquiries.');
+    }
+
+    const rawQuotes = (quoteRes.data || []) as unknown as Array<{
+      id: string;
+      reference_number: string;
+      total_charges_usd_max: number;
+      total_charges_aed_max: number;
+      pricing_snapshot: {
+        route?: { origin_port_name?: string; destination_port_name?: string };
+        vehicle?: { category_name?: string; make?: string; model?: string; year?: number };
+      } | null;
+      created_at: string;
+      enquiries: {
+        id: string;
+        reference_number: string;
+        customer_id: string;
+      } | null;
+    }>;
+
+    const mappedQuotes = rawQuotes.map((q) => {
+      const snap = q.pricing_snapshot;
+      const originPort = snap?.route?.origin_port_name || 'USA';
+      const destPort = snap?.route?.destination_port_name || 'UAE';
+      const route = `${originPort} -> ${destPort}`;
+      const veh = snap?.vehicle
+        ? `${snap.vehicle.year ? snap.vehicle.year + ' ' : ''}${snap.vehicle.make || ''} ${snap.vehicle.model || ''} (${snap.vehicle.category_name || 'Vehicle'})`
+        : 'Vehicle';
+
+      return {
+        id: q.id,
+        referenceNumber: q.reference_number,
+        enquiryReference: q.enquiries?.reference_number,
+        totalUsd: Number(q.total_charges_usd_max),
+        totalAed: Number(q.total_charges_aed_max),
+        route,
+        vehicle: veh.trim(),
+        createdAt: q.created_at,
+      };
+    });
+
+    const enquiries = (enqRes.data || []).map((e) => ({
+      id: e.id,
+      referenceNumber: e.reference_number,
+      status: e.status,
+      source: e.source,
+      notes: e.notes || undefined,
+      createdAt: e.created_at,
+    }));
+
+    const dates = [
+      ...enquiries.map((e) => e.createdAt),
+      ...mappedQuotes.map((q) => q.createdAt),
+      customer.created_at,
+    ].sort();
+
+    const firstEnquiryDate = enquiries.length > 0 ? enquiries[enquiries.length - 1].createdAt : customer.created_at;
+    const lastActivityDate = dates.length > 0 ? dates[dates.length - 1] : customer.created_at;
+
+    return {
+      customer: {
+        id: customer.id,
+        fullName: customer.full_name,
+        phone: customer.phone,
+        email: customer.email || undefined,
+        country: customer.country || undefined,
+        city: customer.city || undefined,
+        notes: customer.notes || undefined,
+        createdAt: customer.created_at,
+      },
+      enquiries,
+      quotations: mappedQuotes,
+      stats: {
+        totalEnquiries: enquiries.length,
+        totalQuotations: mappedQuotes.length,
+        firstEnquiryDate,
+        lastActivityDate,
+      },
+    };
   },
 
   async createCustomer(customer: {

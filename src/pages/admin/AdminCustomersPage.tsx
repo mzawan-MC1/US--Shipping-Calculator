@@ -6,9 +6,22 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
-import { adminService, AdminCustomer } from '../../services/adminService';
+import { adminService, AdminCustomer, AdminCustomerProfile } from '../../services/adminService';
+import { formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../features/auth/AuthContext';
-import { Users, UserPlus, Search, RefreshCw, PhoneCall, MapPin, Car, Mail } from 'lucide-react';
+import {
+  Users,
+  UserPlus,
+  Search,
+  RefreshCw,
+  PhoneCall,
+  MapPin,
+  Car,
+  Mail,
+  Eye,
+  FileText,
+  FileSpreadsheet,
+} from 'lucide-react';
 
 export const AdminCustomersPage: React.FC = () => {
   const { hasPermission } = useAuth();
@@ -18,6 +31,12 @@ export const AdminCustomersPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+
+  // Customer Profile inspection modal
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<AdminCustomerProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Add customer modal
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -53,6 +72,27 @@ export const AdminCustomersPage: React.FC = () => {
     setActionSuccess(null);
     setActionError(null);
     fetchCustomers();
+  };
+
+  const handleViewProfile = async (customerId: string) => {
+    setSelectedProfileId(customerId);
+    setIsLoadingProfile(true);
+    setProfileError(null);
+    try {
+      const data = await adminService.getCustomerProfile(customerId);
+      setProfileData(data);
+    } catch (err: unknown) {
+      console.error('Failed to load customer profile', err);
+      setProfileError(err instanceof Error ? err.message : 'Unable to load customer profile.');
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  const handleCloseProfile = () => {
+    setSelectedProfileId(null);
+    setProfileData(null);
+    setProfileError(null);
   };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
@@ -265,6 +305,16 @@ export const AdminCustomersPage: React.FC = () => {
 
                       <td className="py-3.5 text-end whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewProfile(c.id)}
+                            className="px-2.5 py-1 h-auto text-xs font-bold text-brand-navy-950 flex items-center gap-1 shadow-none"
+                            title="View Customer Profile"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-brand-orange-500" />
+                            <span>Profile</span>
+                          </Button>
                           {cleanPhone && (
                             <a
                               href={`https://wa.me/${cleanPhone}`}
@@ -383,6 +433,234 @@ export const AdminCustomersPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Customer Profile Inspection Modal */}
+      {selectedProfileId && (
+        <Modal
+          isOpen={Boolean(selectedProfileId)}
+          onClose={handleCloseProfile}
+          title={
+            profileData
+              ? `Customer Profile: ${profileData.customer.fullName}`
+              : 'Customer Profile'
+          }
+        >
+          <div className="space-y-4 text-xs pt-1">
+            {isLoadingProfile ? (
+              <div className="p-10 flex flex-col items-center justify-center gap-2">
+                <Spinner size="md" />
+                <span className="text-slate-400 font-medium">Loading customer profile...</span>
+              </div>
+            ) : profileError ? (
+              <Alert variant="error" title="Profile Error">
+                {profileError}
+              </Alert>
+            ) : profileData ? (
+              <>
+                {/* Contact Card */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                    <div>
+                      <h3 className="text-sm font-bold text-brand-navy-950">
+                        {profileData.customer.fullName}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-3 text-slate-500 mt-1">
+                        <span className="font-mono font-bold text-slate-700">
+                          {profileData.customer.phone}
+                        </span>
+                        {profileData.customer.email && (
+                          <span>{profileData.customer.email}</span>
+                        )}
+                        <span>
+                          {profileData.customer.city || 'Sharjah'}, {profileData.customer.country || 'UAE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <a
+                        href={`https://wa.me/${profileData.customer.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] hover:bg-emerald-700 transition-colors shadow-sm"
+                      >
+                        <PhoneCall className="w-3 h-3" />
+                        <span>WhatsApp</span>
+                      </a>
+                      {profileData.customer.email && (
+                        <a
+                          href={`mailto:${profileData.customer.email}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 text-white font-bold text-[11px] hover:bg-slate-900 transition-colors shadow-sm"
+                        >
+                          <Mail className="w-3 h-3" />
+                          <span>Email</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {profileData.customer.notes && (
+                    <p className="mt-2 text-[11px] text-slate-500 italic">
+                      Notes: {profileData.customer.notes}
+                    </p>
+                  )}
+                </div>
+
+                {/* KPI Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      Quotations
+                    </span>
+                    <strong className="text-base font-black text-brand-orange-600 block mt-0.5">
+                      {profileData.stats.totalQuotations}
+                    </strong>
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      Enquiries
+                    </span>
+                    <strong className="text-base font-black text-blue-600 block mt-0.5">
+                      {profileData.stats.totalEnquiries}
+                    </strong>
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      First Inquiry
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 block mt-1">
+                      {profileData.stats.firstEnquiryDate
+                        ? new Date(profileData.stats.firstEnquiryDate).toLocaleDateString()
+                        : 'N/A'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      Recent Activity
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 block mt-1">
+                      {profileData.stats.lastActivityDate
+                        ? new Date(profileData.stats.lastActivityDate).toLocaleDateString()
+                        : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Linked Quotations Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-brand-orange-500" />
+                      <span>Linked Quotations ({profileData.quotations.length})</span>
+                    </h4>
+                  </div>
+
+                  {profileData.quotations.length === 0 ? (
+                    <p className="p-3 text-slate-400 bg-slate-50 rounded-lg text-center">
+                      No quotations generated for this customer yet.
+                    </p>
+                  ) : (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0">
+                          <tr>
+                            <th className="py-2 px-3 text-start">Quote Ref</th>
+                            <th className="py-2 px-3 text-start">Route & Vehicle</th>
+                            <th className="py-2 px-3 text-end">Total (USD)</th>
+                            <th className="py-2 px-3 text-end">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {profileData.quotations.map((q) => (
+                            <tr key={q.id} className="hover:bg-slate-50/80">
+                              <td className="py-2 px-3 font-mono font-bold text-brand-orange-600">
+                                {q.referenceNumber}
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-semibold text-slate-800 block">{q.route}</span>
+                                <span className="text-[10px] text-slate-500 block">{q.vehicle}</span>
+                              </td>
+                              <td className="py-2 px-3 text-end font-bold text-slate-900">
+                                {formatCurrency(q.totalUsd)}
+                              </td>
+                              <td className="py-2 px-3 text-end text-slate-500 text-[11px]">
+                                {new Date(q.createdAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Linked Enquiries Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Linked Enquiries ({profileData.enquiries.length})</span>
+                    </h4>
+                  </div>
+
+                  {profileData.enquiries.length === 0 ? (
+                    <p className="p-3 text-slate-400 bg-slate-50 rounded-lg text-center">
+                      No inbound inquiries recorded for this customer.
+                    </p>
+                  ) : (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0">
+                          <tr>
+                            <th className="py-2 px-3 text-start">Enquiry Ref</th>
+                            <th className="py-2 px-3 text-start">Source</th>
+                            <th className="py-2 px-3 text-start">Status</th>
+                            <th className="py-2 px-3 text-end">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {profileData.enquiries.map((e) => (
+                            <tr key={e.id} className="hover:bg-slate-50/80">
+                              <td className="py-2 px-3 font-mono font-bold text-brand-navy-900">
+                                {e.referenceNumber}
+                              </td>
+                              <td className="py-2 px-3 text-slate-600 capitalize">
+                                {e.source?.replace('_', ' ') || 'Web'}
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+                                  {e.status}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-end text-slate-500 text-[11px]">
+                                {new Date(e.createdAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCloseProfile}
+                className="text-xs font-bold"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

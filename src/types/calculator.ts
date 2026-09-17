@@ -61,6 +61,30 @@ export interface QuotationLineItem {
   is_range?: boolean;
 }
 
+export interface QuotationRouteInfo {
+  route_id?: string;
+  origin_port_id?: string;
+  origin_port_name?: string;
+  origin_port_name_ar?: string;
+  origin_port_state?: string;
+  origin_port_code?: string;
+  origin_country_code?: string;
+  origin_country_name?: string;
+  origin_country_name_ar?: string;
+  destination_port_id?: string;
+  destination_port_name?: string;
+  destination_port_name_ar?: string;
+  destination_port_state?: string;
+  destination_port_code?: string;
+  destination_country_code?: string;
+  destination_country_name?: string;
+  destination_country_name_ar?: string;
+  shipping_method_id?: string;
+  shipping_method_name?: string;
+  transit_days_min?: number;
+  transit_days_max?: number;
+}
+
 export interface QuotationBreakdown {
   id: string;
   referenceNumber: string;
@@ -97,6 +121,8 @@ export interface QuotationBreakdown {
   isEstimate: boolean;
   disclaimer?: string;
   lineItems?: QuotationLineItem[];
+  routeInfo?: QuotationRouteInfo;
   snapshot?: Record<string, unknown>;
   isIdempotentReplay?: boolean;
 }
+

@@ -5,10 +5,11 @@ import { Check } from 'lucide-react';
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   selected?: boolean;
   interactive?: boolean;
+  compact?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, selected = false, interactive = false, children, ...props }, ref) => {
+  ({ className, selected = false, interactive = false, compact = false, children, ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -23,8 +24,15 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
         {...props}
       >
         {selected && (
-          <div className="absolute top-2.5 end-2.5 w-5 h-5 rounded-full bg-brand-orange-500 text-white flex items-center justify-center shadow-sm">
-            <Check className="w-3.5 h-3.5 stroke-[3]" />
+          <div
+            className={cn(
+              'absolute rounded-full bg-brand-orange-500 text-white flex items-center justify-center shadow-sm z-10',
+              compact
+                ? 'top-1.5 end-1.5 w-4 h-4'
+                : 'top-2.5 end-2.5 w-5 h-5'
+            )}
+          >
+            <Check className={compact ? 'w-2.5 h-2.5 stroke-[3]' : 'w-3.5 h-3.5 stroke-[3]'} />
           </div>
         )}
         {children}

@@ -76,6 +76,155 @@ export const PORT_SLUG_TO_UUID: Record<string, string> = {
   jebel_ali: '20000000-0000-0000-0000-000000000002',
 };
 
+export interface PortDetails {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  stateOrCity: string;
+  countryCode: string;
+  countryName: string;
+  countryNameAr: string;
+}
+
+export const PORT_DETAILS_MAP: Record<string, PortDetails> = {
+  '10000000-0000-0000-0000-000000000001': {
+    id: '10000000-0000-0000-0000-000000000001',
+    code: 'USNWK',
+    name: 'Port of New York / Newark',
+    nameAr: 'ميناء نيوارك',
+    stateOrCity: 'New Jersey',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  '10000000-0000-0000-0000-000000000002': {
+    id: '10000000-0000-0000-0000-000000000002',
+    code: 'USSAV',
+    name: 'Port of Savannah',
+    nameAr: 'ميناء سافانا',
+    stateOrCity: 'Georgia',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  '10000000-0000-0000-0000-000000000003': {
+    id: '10000000-0000-0000-0000-000000000003',
+    code: 'USHOU',
+    name: 'Port of Houston',
+    nameAr: 'ميناء هيوستن',
+    stateOrCity: 'Texas',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  '10000000-0000-0000-0000-000000000004': {
+    id: '10000000-0000-0000-0000-000000000004',
+    code: 'USLAX',
+    name: 'Port of Los Angeles / Long Beach',
+    nameAr: 'ميناء لوس أنجلوس',
+    stateOrCity: 'California',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  '20000000-0000-0000-0000-000000000001': {
+    id: '20000000-0000-0000-0000-000000000001',
+    code: 'AEKLF',
+    name: 'Port of Khor Fakkan',
+    nameAr: 'ميناء خورفكان',
+    stateOrCity: 'Sharjah',
+    countryCode: 'ARE',
+    countryName: 'United Arab Emirates',
+    countryNameAr: 'الإمارات العربية المتحدة',
+  },
+  '20000000-0000-0000-0000-000000000002': {
+    id: '20000000-0000-0000-0000-000000000002',
+    code: 'AEJEA',
+    name: 'Port of Jebel Ali',
+    nameAr: 'ميناء جبل علي',
+    stateOrCity: 'Dubai',
+    countryCode: 'ARE',
+    countryName: 'United Arab Emirates',
+    countryNameAr: 'الإمارات العربية المتحدة',
+  },
+  // Slugs
+  newark: {
+    id: '10000000-0000-0000-0000-000000000001',
+    code: 'USNWK',
+    name: 'Port of New York / Newark',
+    nameAr: 'ميناء نيوارك',
+    stateOrCity: 'New Jersey',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  savannah: {
+    id: '10000000-0000-0000-0000-000000000002',
+    code: 'USSAV',
+    name: 'Port of Savannah',
+    nameAr: 'ميناء سافانا',
+    stateOrCity: 'Georgia',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  houston: {
+    id: '10000000-0000-0000-0000-000000000003',
+    code: 'USHOU',
+    name: 'Port of Houston',
+    nameAr: 'ميناء هيوستن',
+    stateOrCity: 'Texas',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  los_angeles: {
+    id: '10000000-0000-0000-0000-000000000004',
+    code: 'USLAX',
+    name: 'Port of Los Angeles / Long Beach',
+    nameAr: 'ميناء لوس أنجلوس',
+    stateOrCity: 'California',
+    countryCode: 'USA',
+    countryName: 'United States',
+    countryNameAr: 'الولايات المتحدة الأمريكية',
+  },
+  khorfakkan: {
+    id: '20000000-0000-0000-0000-000000000001',
+    code: 'AEKLF',
+    name: 'Port of Khor Fakkan',
+    nameAr: 'ميناء خورفكان',
+    stateOrCity: 'Sharjah',
+    countryCode: 'ARE',
+    countryName: 'United Arab Emirates',
+    countryNameAr: 'الإمارات العربية المتحدة',
+  },
+  jebel_ali: {
+    id: '20000000-0000-0000-0000-000000000002',
+    code: 'AEJEA',
+    name: 'Port of Jebel Ali',
+    nameAr: 'ميناء جبل علي',
+    stateOrCity: 'Dubai',
+    countryCode: 'ARE',
+    countryName: 'United Arab Emirates',
+    countryNameAr: 'الإمارات العربية المتحدة',
+  },
+};
+
+export function resolvePortDisplay(portIdentifier?: string, isAr?: boolean): { name: string; subtitle: string; countryCode: string } {
+  if (!portIdentifier) {
+    return { name: 'Port of Savannah', subtitle: 'Georgia, USA', countryCode: 'USA' };
+  }
+  const match = PORT_DETAILS_MAP[portIdentifier.toLowerCase()] || PORT_DETAILS_MAP[portIdentifier];
+  if (match) {
+    const name = isAr && match.nameAr ? match.nameAr : match.name;
+    const country = isAr && match.countryNameAr ? match.countryNameAr : match.countryName;
+    const subtitle = match.stateOrCity ? `${match.stateOrCity}, ${country}` : country;
+    return { name, subtitle, countryCode: match.countryCode };
+  }
+  return { name: portIdentifier, subtitle: '', countryCode: 'USA' };
+}
+
 export const referenceDataService = {
   async getCountries(): Promise<CountryOption[]> {
     const { data, error } = await supabase

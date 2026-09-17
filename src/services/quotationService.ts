@@ -86,7 +86,7 @@ export const quotationService = {
 
       if (error) {
         console.error('[QuotationService] Live RPC calculation error:', error);
-        throw new Error(`Failed to calculate quote from secure server: ${error.message}`);
+        throw new Error('We could not complete your quotation right now. Please try again or contact us on WhatsApp.');
       }
 
       // Parse the returned response
@@ -122,8 +122,27 @@ export const quotationService = {
             total_charges_aed_max: number;
           };
           route: {
-            transit_days_min: number;
-            transit_days_max: number;
+            route_id?: string;
+            origin_port_id?: string;
+            origin_port_name?: string;
+            origin_port_name_ar?: string;
+            origin_port_state?: string;
+            origin_port_code?: string;
+            origin_country_code?: string;
+            origin_country_name?: string;
+            origin_country_name_ar?: string;
+            destination_port_id?: string;
+            destination_port_name?: string;
+            destination_port_name_ar?: string;
+            destination_port_state?: string;
+            destination_port_code?: string;
+            destination_country_code?: string;
+            destination_country_name?: string;
+            destination_country_name_ar?: string;
+            shipping_method_id?: string;
+            shipping_method_name?: string;
+            transit_days_min?: number;
+            transit_days_max?: number;
           };
           disclaimer: string;
           line_items: QuotationLineItem[];
@@ -173,6 +192,7 @@ export const quotationService = {
         isEstimate: true,
         disclaimer: res.snapshot.disclaimer,
         lineItems: res.snapshot.line_items,
+        routeInfo: res.snapshot.route,
         snapshot: res.snapshot as unknown as Record<string, unknown>,
         isIdempotentReplay: res.is_idempotent_replay || false,
       };
@@ -181,8 +201,8 @@ export const quotationService = {
       return liveQuote;
     } catch (err: unknown) {
       console.error('[QuotationService] Calculation error:', err);
-      const message =
-        err instanceof Error ? err.message : 'Unable to calculate quotation from tariff schedule.';
+      // Safe, non-technical customer message
+      const message = 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.';
       throw new Error(message);
     }
   },

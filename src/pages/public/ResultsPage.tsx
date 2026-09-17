@@ -10,6 +10,7 @@ import { quotationService } from '../../services/quotationService';
 import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
+import { resolvePortDisplay } from '../../services/referenceDataService';
 import {
   Clock,
   Car,
@@ -23,15 +24,18 @@ import {
   ShieldCheck,
   Receipt,
   CheckCircle2,
+  Share2,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
-  const { t, direction } = useI18n();
+  const { t, language, direction } = useI18n();
+  const isAr = language === 'ar';
   const [currency, setCurrency] = useState<'USD' | 'AED'>('USD');
   const [quote, setQuote] = useState<QuotationBreakdown | null>(() =>
     quotationService.getActiveQuote()
   );
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     const active = quotationService.getActiveQuote();
@@ -93,26 +97,122 @@ export const ResultsPage: React.FC = () => {
 
   const { branding, getWhatsAppLink } = useWebsiteSettings();
   const brandNameHeader = (branding.shortName || branding.companyName).toUpperCase();
-  const whatsappMessage = `*${brandNameHeader} - SHIPPING QUOTATION*
-Quote Ref: ${quote.referenceNumber}
-Customer: ${quote.input.customerName || 'Customer'}
-Route: ${quote.input.loadingPort.toUpperCase()} -> ${quote.input.destinationPort.toUpperCase()}
-Total Estimated: ${totalFormatted} (${totalAedFormatted})
-View Quote: ${window.location.origin}/results`;
+
+  // Authoritative Human-Readable Route Resolution
+  const originDisplay = quote.routeInfo?.origin_port_name
+    ? {
+        name: isAr && quote.routeInfo.origin_port_name_ar ? quote.routeInfo.origin_port_name_ar : quote.routeInfo.origin_port_name,
+        subtitle: `${quote.routeInfo.origin_port_state ? quote.routeInfo.origin_port_state + ', ' : ''}${isAr && quote.routeInfo.origin_country_name_ar ? quote.routeInfo.origin_country_name_ar : (quote.routeInfo.origin_country_name || 'United States')}`,
+        countryCode: quote.routeInfo.origin_country_code || 'USA',
+      }
+    : resolvePortDisplay(quote.input.loadingPort, isAr);
+
+  const destDisplay = quote.routeInfo?.destination_port_name
+    ? {
+        name: isAr && quote.routeInfo.destination_port_name_ar ? quote.routeInfo.destination_port_name_ar : quote.routeInfo.destination_port_name,
+        subtitle: `${quote.routeInfo.destination_port_state ? quote.routeInfo.destination_port_state + ', ' : ''}${isAr && quote.routeInfo.destination_country_name_ar ? quote.routeInfo.destination_country_name_ar : (quote.routeInfo.destination_country_name || 'United Arab Emirates')}`,
+        countryCode: quote.routeInfo.destination_country_code || 'ARE',
+      }
+    : resolvePortDisplay(quote.input.destinationPort, isAr);
+
+  const vehicleDesc = [
+    quote.input.year,
+    quote.input.make,
+    quote.input.model,
+  ].filter(Boolean).join(' ') || `${quote.input.vehicleType} (${quote.input.powertrain})`;
+
+  const towingSummary = quote.isTowingRange
+    ? `$${quote.towingFeeMin} - $${quote.towingFeeMax} (Estimated Range)`
+    : quote.towingFeeMin && quote.towingFeeMin > 0
+      ? `$${quote.towingFeeMin} (Fixed Tariff)`
+      : 'Port Delivery (Direct)';
+
+  const whatsappMessage = `*${brandNameHeader} - OFFICIAL SHIPPING QUOTATION*
+📄 *Quote Ref:* ${quote.referenceNumber}
+👤 *Customer:* ${quote.input.customerName || 'Customer'}
+🚗 *Vehicle:* ${vehicleDesc}
+🚢 *Route:* ${originDisplay.name} (${originDisplay.subtitle}) ➔ ${destDisplay.name} (${destDisplay.subtitle})
+⏱️ *Transit Time:* ${quote.estimatedTransitDaysMin && quote.estimatedTransitDaysMax ? `${quote.estimatedTransitDaysMin}-${quote.estimatedTransitDaysMax} Days` : `${quote.estimatedTransitDays} Days`}
+
+💵 *Cost Summary:*
+• Ocean Freight: $${quote.oceanFreight?.toLocaleString()}
+• Inland Towing: ${towingSummary}
+• Customs Clearance: $${quote.customsClearance?.toLocaleString()}
+• Port Handling: $${quote.destinationCharges?.toLocaleString()}
+• Customs Duty (5%): $${(quote.dutyMax ?? quote.customsDuty)?.toLocaleString()}
+• UAE Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
+
+💰 *Total Estimated:* ${totalFormatted} (${totalAedFormatted})
+
+ℹ️ *Note:* ${quote.disclaimer || 'Statutory UAE Customs Duty (5%) and Import VAT (5%) are calculated on CIF valuation. Quotation valid for 14 days.'}
+
+🔗 *View Online:* ${window.location.origin}/results`;
 
   const whatsappHref = getWhatsAppLink(whatsappMessage);
 
   const handleDownloadQuotation = () => {
+    const originalTitle = document.title;
+    document.title = `quotation-${quote.referenceNumber}`;
     window.print();
     setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 5000);
+    setTimeout(() => {
+      document.title = originalTitle;
+      setDownloadSuccess(false);
+    }, 5000);
+  };
+
+  const handleShare = async () => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `${brandNameHeader} - Quotation ${quote.referenceNumber}`,
+          text: `Shipping quotation ${quote.referenceNumber} from ${originDisplay.name} to ${destDisplay.name}. Total: ${totalFormatted}`,
+          url: window.location.href,
+        });
+        return;
+      } catch (err: unknown) {
+        if ((err as Error).name !== 'AbortError') {
+          console.warn('Share error:', err);
+        }
+      }
+    }
+    // Fallback: Copy link
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch {
+      if (whatsappHref) {
+        window.open(whatsappHref, '_blank');
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-6 sm:py-10 pb-28 sm:pb-12 w-full overflow-x-hidden">
-      <Container className="max-w-2xl px-4 sm:px-6">
+    <div className="min-h-screen bg-slate-50 py-6 sm:py-10 pb-28 sm:pb-12 w-full overflow-x-hidden print:bg-white print:py-2 print:pb-0">
+      <Container className="max-w-2xl px-4 sm:px-6 print:max-w-none print:px-0">
+        {/* Printable Official Letterhead Header */}
+        <div className="hidden print:flex items-center justify-between border-b border-slate-300 pb-4 mb-6">
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-brand-navy-950">
+              {branding.companyName || 'FAKHER ALAM USED CARS SHIPPING LLC'}
+            </h1>
+            <p className="text-xs text-slate-600">
+              Premier Auto Logistics from US Auctions to UAE Ports • TRN: 100492817200003
+            </p>
+          </div>
+          <div className="text-end">
+            <span className="text-sm font-bold font-mono text-brand-orange-600 block">
+              {quote.referenceNumber}
+            </span>
+            <span className="text-xs text-slate-500">
+              Date: {new Date(quote.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+
         {/* Top Title & Reference Header */}
-        <div className="text-center space-y-2 mb-6">
+        <div className="text-center space-y-2 mb-6 print:hidden">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold max-w-full text-center">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span className="truncate">Official Shipping Quotation</span>
@@ -140,7 +240,7 @@ View Quote: ${window.location.origin}/results`;
         </div>
 
         {/* Currency Switch Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 print:hidden">
           <div className="flex items-center gap-2">
             <Receipt className="w-4 h-4 text-brand-orange-500" />
             <span className="text-xs sm:text-sm font-bold text-slate-700">{t.currencySwitch}</span>
@@ -172,19 +272,22 @@ View Quote: ${window.location.origin}/results`;
         {/* Main Quote Result Card */}
         <div className="space-y-5">
           {/* Route & Transit Card */}
-          <Card className="p-5 sm:p-6 overflow-hidden">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <Card className="p-5 sm:p-6 overflow-hidden print:border-slate-300 print:shadow-none">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 print:border-slate-200">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-black px-2 py-1 rounded bg-blue-900 text-blue-200 shrink-0">
-                  USA
+                  {originDisplay.countryCode || 'USA'}
                 </span>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">
                     {t.routeSummaryFrom}
                   </span>
-                  <h3 className="text-sm sm:text-base font-black text-slate-900 capitalize">
-                    {quote.input.loadingPort} Port, USA
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    {originDisplay.name}
                   </h3>
+                  {originDisplay.subtitle && (
+                    <span className="text-xs text-slate-500 block">{originDisplay.subtitle}</span>
+                  )}
                 </div>
               </div>
 
@@ -194,23 +297,24 @@ View Quote: ${window.location.origin}/results`;
 
               <div className="flex items-center gap-3">
                 <span className="text-xs font-black px-2 py-1 rounded bg-emerald-900 text-emerald-200 shrink-0">
-                  UAE
+                  {destDisplay.countryCode || 'ARE'}
                 </span>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">
                     {t.routeSummaryTo}
                   </span>
-                  <h3 className="text-sm sm:text-base font-black text-slate-900 capitalize">
-                    {quote.input.destinationPort === 'khorfakkan'
-                      ? 'Port of Khor Fakkan (Sharjah)'
-                      : 'Port of Jebel Ali (Dubai)'}
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    {destDisplay.name}
                   </h3>
+                  {destDisplay.subtitle && (
+                    <span className="text-xs text-slate-500 block">{destDisplay.subtitle}</span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Transit Time Callout */}
-            <div className="mt-4 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-center justify-between">
+            <div className="mt-4 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-center justify-between print:border-slate-200 print:bg-slate-50">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-blue-600 shrink-0" />
                 <span className="text-xs font-bold text-blue-950 uppercase tracking-wider">
@@ -434,12 +538,12 @@ View Quote: ${window.location.origin}/results`;
           </Card>
 
           {/* Authoritative Disclaimer from Database Engine */}
-          <Alert variant="info" title="Authoritative Quotation Disclaimer">
+          <Alert variant="info" title="Authoritative Quotation Disclaimer" className="print:border-slate-300 print:text-slate-700">
             {quote.disclaimer || t.demoDataDisclaimer}
           </Alert>
 
           {downloadSuccess && (
-            <Alert variant="success" title="Quotation Generated">
+            <Alert variant="success" title="Quotation Generated" className="print:hidden">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
@@ -450,8 +554,19 @@ View Quote: ${window.location.origin}/results`;
             </Alert>
           )}
 
-          {/* Action Buttons */}
-          <div className="space-y-3 pt-2">
+          {copiedLink && (
+            <Alert variant="success" title={isAr ? 'تم نسخ الرابط' : 'Link Copied'} className="print:hidden">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {isAr ? 'تم نسخ رابط عرض السعر بنجاح للمشاركة.' : 'Quotation link copied to clipboard for easy sharing.'}
+                </span>
+              </div>
+            </Alert>
+          )}
+
+          {/* Action Buttons (Hidden on Print) */}
+          <div className="space-y-3 pt-2 print:hidden">
             <a
               href={whatsappHref || '#'}
               target="_blank"
@@ -468,7 +583,27 @@ View Quote: ${window.location.origin}/results`;
               </Button>
             </a>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button
+                variant="secondary"
+                size="md"
+                className="w-full font-bold"
+                onClick={handleShare}
+                startIcon={<Share2 className="w-4 h-4" />}
+              >
+                {isAr ? 'مشاركة العرض' : 'Share Quote'}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="md"
+                className="w-full font-bold"
+                onClick={handleDownloadQuotation}
+                startIcon={<Download className="w-4 h-4" />}
+              >
+                {t.btnDownloadQuote}
+              </Button>
+
               <Link to="/calculator" className="w-full">
                 <Button
                   variant="outline"
@@ -479,15 +614,6 @@ View Quote: ${window.location.origin}/results`;
                   {t.btnRecalculate}
                 </Button>
               </Link>
-              <Button
-                variant="secondary"
-                size="md"
-                className="w-full font-bold"
-                onClick={handleDownloadQuotation}
-                startIcon={<Download className="w-4 h-4" />}
-              >
-                {t.btnDownloadQuote}
-              </Button>
             </div>
           </div>
         </div>

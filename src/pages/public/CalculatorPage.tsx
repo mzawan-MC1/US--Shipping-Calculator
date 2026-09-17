@@ -324,9 +324,9 @@ export const CalculatorPage: React.FC = () => {
     } catch (err: unknown) {
       console.error('[CalculatorPage] Submission error:', err);
       setSubmissionError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to calculate quote at this time. Please check your details or contact us directly.'
+        isAr
+          ? 'تعذر إتمام احتساب عرض السعر في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب.'
+          : 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.'
       );
     } finally {
       setIsSubmitting(false);
@@ -400,7 +400,7 @@ export const CalculatorPage: React.FC = () => {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
                   {isAr ? 'اختر فئة المركبة' : 'Select Vehicle Category'}
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
                   {(vehicleCategories.length > 0
                     ? vehicleCategories
                     : VEHICLE_TYPES_CONFIG.map((v) => ({ id: v.id, name: v.id, isActive: true }))
@@ -414,13 +414,14 @@ export const CalculatorPage: React.FC = () => {
                         key={vt.id}
                         selected={isSelected}
                         interactive
+                        compact
                         onClick={() => setValue('vehicleType', vt.id, { shouldValidate: true })}
-                        className="p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[96px]"
+                        className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
                       >
                         <Car
-                          className={`w-7 h-7 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
+                          className={`w-5 h-5 sm:w-6 sm:h-6 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
                         />
-                        <span className="text-xs sm:text-sm font-bold text-slate-800">
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">
                           {label}
                         </span>
                       </Card>
@@ -430,10 +431,10 @@ export const CalculatorPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   {isAr ? 'نوع المحرك والوقود' : 'Powertrain / Fuel Type'}
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {(powertrains.length > 0
                     ? powertrains
                     : POWERTRAINS_CONFIG.map((p) => ({ id: p.id, name: p.id, isActive: true }))
@@ -448,13 +449,14 @@ export const CalculatorPage: React.FC = () => {
                         key={pt.id}
                         selected={isSelected}
                         interactive
+                        compact
                         onClick={() => setValue('powertrain', pt.id, { shouldValidate: true })}
-                        className="p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[96px]"
+                        className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
                       >
                         <Icon
-                          className={`w-6 h-6 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
+                          className={`w-5 h-5 sm:w-6 sm:h-6 ${isSelected ? 'text-brand-orange-500' : 'text-slate-600'}`}
                         />
-                        <span className="text-xs sm:text-sm font-bold text-slate-800">
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">
                           {label}
                         </span>
                       </Card>
@@ -471,7 +473,7 @@ export const CalculatorPage: React.FC = () => {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                 {isAr ? 'من أين قمت بشراء المركبة أو تخطط لشرائها؟' : 'Where did you purchase or plan to buy the vehicle?'}
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                 {(purchaseSources.length > 0
                   ? purchaseSources
                   : PURCHASE_SOURCES_CONFIG.map((s) => ({ id: s.id, name: s.id, isActive: true }))
@@ -485,13 +487,14 @@ export const CalculatorPage: React.FC = () => {
                       key={src.id}
                       selected={isSelected}
                       interactive
+                      compact
                       onClick={() => setValue('purchaseSource', src.id, { shouldValidate: true })}
-                      className="p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[90px]"
+                      className="p-2.5 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px] sm:min-h-[86px]"
                     >
                       <ShoppingBag
                         className={`w-5 h-5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-500'}`}
                       />
-                      <span className="text-xs sm:text-sm font-bold text-slate-800">
+                      <span className="text-[11px] sm:text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">
                         {label}
                       </span>
                     </Card>
@@ -1033,7 +1036,14 @@ export const CalculatorPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleBack}
-                className="shrink-0"
+                className="shrink-0 whitespace-nowrap font-bold"
+                startIcon={
+                  direction === 'rtl' ? (
+                    <ArrowRight className="w-4 h-4" />
+                  ) : (
+                    <ArrowLeft className="w-4 h-4" />
+                  )
+                }
               >
                 {t.btnBack}
               </Button>
@@ -1046,7 +1056,7 @@ export const CalculatorPage: React.FC = () => {
                 size="md"
                 onClick={handleNext}
                 disabled={currentStep === 3 && Boolean(selectedOriginPort && selectedDestPort && !activeRoute)}
-                className="flex-1 font-extrabold"
+                className="flex-1 font-extrabold whitespace-nowrap"
                 endIcon={
                   direction === 'rtl' ? (
                     <ArrowLeft className="w-4 h-4" />
@@ -1063,7 +1073,14 @@ export const CalculatorPage: React.FC = () => {
                 variant="primary"
                 size="md"
                 isLoading={isSubmitting}
-                className="flex-1 font-extrabold"
+                className="flex-1 font-extrabold whitespace-nowrap"
+                endIcon={
+                  direction === 'rtl' ? (
+                    <ArrowLeft className="w-4 h-4" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4" />
+                  )
+                }
               >
                 {t.btnCalculateShipping}
               </Button>

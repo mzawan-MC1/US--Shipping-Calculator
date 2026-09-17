@@ -85,7 +85,7 @@ describe('QuotationService (Phase 2A)', () => {
     };
 
     await expect(quotationService.calculateQuote(input)).rejects.toThrow(
-      /Failed to calculate quote from secure server/i
+      /We could not complete your quotation right now\. Please try again or contact us on WhatsApp\./i
     );
 
     // Verify no fallback quote was cached in session
