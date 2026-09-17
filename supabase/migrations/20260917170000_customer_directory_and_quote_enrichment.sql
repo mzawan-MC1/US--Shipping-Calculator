@@ -8,38 +8,62 @@
 -- - Indexes for normalized phone and email
 -- ==============================================================================
 
--- 1. Helper function for consistent international phone normalization
-CREATE OR REPLACE FUNCTION public.normalize_phone(raw_phone TEXT)
+-- 1. Helper function for consistent international phone normalization (canonical digits format)
+CREATE OR REPLACE FUNCTION public.normalize_phone(raw_phone TEXT, country_code TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
 IMMUTABLE
 AS $$
 DECLARE
-    cleaned TEXT;
+    v_digits TEXT;
+    v_country TEXT;
 BEGIN
-    IF raw_phone IS NULL THEN
+    IF raw_phone IS NULL OR TRIM(raw_phone) = '' THEN
         RETURN NULL;
     END IF;
+
+    -- Strip all non-digits
+    v_digits := regexp_replace(raw_phone, '\D', '', 'g');
     
-    cleaned := TRIM(raw_phone);
-    
-    -- Replace leading '00' with '+'
-    IF cleaned LIKE '00%' THEN
-        cleaned := '+' || SUBSTRING(cleaned FROM 3);
+    -- Strip international prefix 00
+    IF v_digits LIKE '00%' THEN
+        v_digits := SUBSTRING(v_digits FROM 3);
     END IF;
-    
-    -- Strip any characters except '+' and digits
-    cleaned := regexp_replace(cleaned, '[^\+0-9]', '', 'g');
-    
-    -- If '+' occurs anywhere other than position 1, remove subsequent '+'
-    IF cleaned LIKE '+%' THEN
-        cleaned := '+' || regexp_replace(SUBSTRING(cleaned FROM 2), '\+', '', 'g');
-    ELSE
-        cleaned := regexp_replace(cleaned, '\+', '', 'g');
+
+    v_country := UPPER(TRIM(COALESCE(country_code, 'ARE')));
+
+    -- UAE Normalization: covers 05XXXXXXXX, 5XXXXXXXX, 009715..., +9715..., 97105...
+    IF v_country IN ('ARE', 'AE', 'UAE') OR v_digits ~ '^05[0-9]{8}$' OR v_digits ~ '^97105[0-9]{8}$' OR v_digits ~ '^5[0-9]{8}$' THEN
+        IF v_digits ~ '^97105[0-9]{8}$' THEN
+            -- Fix 971 + 05XXXXXXXX -> 9715XXXXXXXX
+            v_digits := '971' || SUBSTRING(v_digits FROM 5);
+        ELSIF v_digits ~ '^05[0-9]{8}$' THEN
+            -- 05XXXXXXXX (10 digits) -> 9715XXXXXXXX (12 digits)
+            v_digits := '971' || SUBSTRING(v_digits FROM 2);
+        ELSIF v_digits ~ '^5[0-9]{8}$' THEN
+            -- 5XXXXXXXX (9 digits) -> 9715XXXXXXXX (12 digits)
+            v_digits := '971' || v_digits;
+        ELSIF v_digits ~ '^0[234679][0-9]{7}$' THEN
+            -- UAE landlines (02, 04, 06...) -> 971XXXXXXXX
+            v_digits := '971' || SUBSTRING(v_digits FROM 2);
+        END IF;
+    ELSIF v_country IN ('USA', 'US', 'CAN', 'CA') THEN
+        IF LENGTH(v_digits) = 10 THEN
+            v_digits := '1' || v_digits;
+        END IF;
     END IF;
-    
-    RETURN NULLIF(cleaned, '');
+
+    RETURN v_digits;
 END;
+$$;
+
+-- 1b. Overloaded 1-argument normalize_phone preserving backwards compatibility & functional index
+CREATE OR REPLACE FUNCTION public.normalize_phone(raw_phone TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    SELECT public.normalize_phone(raw_phone, 'ARE');
 $$;
 
 -- 2. Indexes for customer phone and email matching
@@ -135,24 +159,24 @@ DECLARE
 BEGIN
     -- 1. Validate and normalize customer inputs
     v_customer_name := TRIM(COALESCE(input_json->>'customer_name', ''));
-    v_phone := TRIM(COALESCE(input_json->>'phone', ''));
-    v_phone_clean := public.normalize_phone(v_phone);
-    v_email := NULLIF(LOWER(TRIM(COALESCE(input_json->>'email', ''))), '');
-    v_country := NULLIF(UPPER(TRIM(COALESCE(input_json->>'country', input_json->>'country_code', ''))), '');
+    v_country := NULLIF(UPPER(TRIM(COALESCE(input_json->>'country', input_json->>'country_code', 'ARE'))), '');
     v_city := NULLIF(TRIM(COALESCE(input_json->>'city', '')), '');
+    v_phone := TRIM(COALESCE(input_json->>'phone', ''));
+    v_phone_clean := public.normalize_phone(v_phone, v_country);
+    v_email := NULLIF(LOWER(TRIM(COALESCE(input_json->>'email', ''))), '');
 
     IF LENGTH(v_customer_name) < 2 THEN
         RAISE EXCEPTION 'Customer full name is required (minimum 2 characters).';
     END IF;
 
-    IF v_phone_clean IS NULL OR LENGTH(regexp_replace(v_phone_clean, '[^\d]', '', 'g')) < 7 THEN
+    IF v_phone_clean IS NULL OR LENGTH(v_phone_clean) < 7 THEN
         RAISE EXCEPTION 'Customer phone number is required and must contain at least 7 digits.';
     END IF;
 
     -- 2. Idempotency check with caller-ownership validation
     v_idempotency_key := NULLIF(TRIM(input_json->>'idempotency_key'), '');
     IF v_idempotency_key IS NOT NULL THEN
-        SELECT q.*, e.reference_number AS enquiry_reference, c.phone AS customer_phone
+        SELECT q.*, e.reference_number AS enquiry_reference, c.phone AS customer_phone, c.country AS customer_country
         INTO v_existing_quote
         FROM public.quotations q
         JOIN public.enquiries e ON q.enquiry_id = e.id
@@ -161,7 +185,7 @@ BEGIN
 
         IF FOUND THEN
             -- Only replay if normalized phone matches
-            IF public.normalize_phone(v_existing_quote.customer_phone) = v_phone_clean THEN
+            IF public.normalize_phone(v_existing_quote.customer_phone, v_existing_quote.customer_country) = v_phone_clean THEN
                 RETURN jsonb_build_object(
                     'success', true,
                     'is_idempotent_replay', true,
@@ -336,16 +360,21 @@ BEGIN
         v_exchange_rate := 3.6725;
     END IF;
 
-    -- 9. Calculations
+    -- 9. Authoritative Calculations (Statutory UAE Customs Duty & VAT):
+    -- CIF = vehicle purchase price + eligible shipping/freight + insurance
     v_cif_min := ROUND(v_declared_value_usd + v_ocean_freight + v_surcharges_total + v_towing_min, 2);
     v_cif_max := ROUND(v_declared_value_usd + v_ocean_freight + v_surcharges_total + v_towing_max, 2);
 
+    -- Customs duty = 5% x CIF
     v_duty_min := ROUND(v_cif_min * 0.05, 2);
     v_duty_max := ROUND(v_cif_max * 0.05, 2);
 
-    v_vat_base_min := ROUND(v_cif_min + v_duty_min + v_vatable_port_charges, 2);
-    v_vat_base_max := ROUND(v_cif_max + v_duty_max + v_vatable_port_charges, 2);
+    -- VAT taxable value = CIF + customs duty
+    -- (Clearance, terminal handling, service fees remain separate and are not included in VAT base)
+    v_vat_base_min := ROUND(v_cif_min + v_duty_min, 2);
+    v_vat_base_max := ROUND(v_cif_max + v_duty_max, 2);
 
+    -- UAE import VAT = 5% x VAT taxable value
     v_vat_min := ROUND(v_vat_base_min * 0.05, 2);
     v_vat_max := ROUND(v_vat_base_max * 0.05, 2);
 
@@ -465,11 +494,11 @@ BEGIN
     );
 
     -- 12. Robust Internal Customer Profile Resolution:
-    -- Match normalized phone first; if not found, match normalized email (when email is provided).
-    -- Reuse existing customer_id to consolidate multiple inquiries under one profile.
+    -- Match normalized phone first; if not found, match normalized email
     SELECT id, full_name, email, phone INTO v_existing_customer
     FROM public.customers
-    WHERE public.normalize_phone(phone) = v_phone_clean
+    WHERE public.normalize_phone(phone, country) = v_phone_clean
+       OR public.normalize_phone(phone) = v_phone_clean
     ORDER BY updated_at DESC, created_at DESC
     LIMIT 1
     FOR UPDATE;

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { normalizePhone } from '../lib/utils';
 import type { Database, Json } from '../types/database';
 
 type RouteUpdate = Database['public']['Tables']['shipping_routes']['Update'];
@@ -627,10 +628,10 @@ export const adminService = {
       .from('customers')
       .insert({
         full_name: customer.fullName.trim(),
-        phone: customer.phone.trim(),
+        phone: normalizePhone(customer.phone, customer.country || 'ARE'),
         email: customer.email?.trim() || null,
-        city: customer.city?.trim() || null,
         country: customer.country?.trim() || 'UAE',
+        city: customer.city?.trim() || null,
         notes: customer.notes?.trim() || null,
       })
       .select('id')

@@ -10,7 +10,6 @@ import { quotationService } from '../../services/quotationService';
 import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
-import { resolvePortDisplay } from '../../services/referenceDataService';
 import {
   Clock,
   Car,
@@ -105,7 +104,11 @@ export const ResultsPage: React.FC = () => {
         subtitle: `${quote.routeInfo.origin_port_state ? quote.routeInfo.origin_port_state + ', ' : ''}${isAr && quote.routeInfo.origin_country_name_ar ? quote.routeInfo.origin_country_name_ar : (quote.routeInfo.origin_country_name || 'United States')}`,
         countryCode: quote.routeInfo.origin_country_code || 'USA',
       }
-    : resolvePortDisplay(quote.input.loadingPort, isAr);
+    : {
+        name: quote.input.loadingPort || (isAr ? 'ميناء التحميل' : 'Loading Port'),
+        subtitle: isAr ? 'الولايات المتحدة الأمريكية' : 'United States',
+        countryCode: 'USA',
+      };
 
   const destDisplay = quote.routeInfo?.destination_port_name
     ? {
@@ -113,7 +116,11 @@ export const ResultsPage: React.FC = () => {
         subtitle: `${quote.routeInfo.destination_port_state ? quote.routeInfo.destination_port_state + ', ' : ''}${isAr && quote.routeInfo.destination_country_name_ar ? quote.routeInfo.destination_country_name_ar : (quote.routeInfo.destination_country_name || 'United Arab Emirates')}`,
         countryCode: quote.routeInfo.destination_country_code || 'ARE',
       }
-    : resolvePortDisplay(quote.input.destinationPort, isAr);
+    : {
+        name: quote.input.destinationPort || (isAr ? 'ميناء الوصول' : 'Destination Port'),
+        subtitle: isAr ? 'الإمارات العربية المتحدة' : 'United Arab Emirates',
+        countryCode: 'ARE',
+      };
 
   const vehicleDesc = [
     quote.input.year,
