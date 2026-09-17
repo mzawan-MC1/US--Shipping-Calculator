@@ -22,13 +22,17 @@ import {
   Mail,
   MessageCircle,
   Clock,
+  Tv,
+  MapPin,
+  Sparkles,
+  Sliders,
 } from 'lucide-react';
 
 export const AdminCmsPage: React.FC = () => {
   const { hasPermission } = useAuth();
   const canManageCms = hasPermission('cms.manage');
 
-  const [activeTab, setActiveTab] = useState<'branding' | 'notices'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'hero' | 'location' | 'notices'>('branding');
   const [notices, setNotices] = useState<AdminCmsNotice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -74,6 +78,32 @@ export const AdminCmsPage: React.FC = () => {
   const [socialInstagram, setSocialInstagram] = useState('');
   const [socialTwitter, setSocialTwitter] = useState('');
   const [socialLinkedin, setSocialLinkedin] = useState('');
+
+  // Hero Section State
+  const [heroEyebrowEn, setHeroEyebrowEn] = useState(DEFAULT_BRANDING.heroEyebrowEn || '');
+  const [heroEyebrowAr, setHeroEyebrowAr] = useState(DEFAULT_BRANDING.heroEyebrowAr || '');
+  const [heroHeadlineEn, setHeroHeadlineEn] = useState(DEFAULT_BRANDING.heroHeadlineEn || '');
+  const [heroHeadlineAr, setHeroHeadlineAr] = useState(DEFAULT_BRANDING.heroHeadlineAr || '');
+  const [heroDescriptionEn, setHeroDescriptionEn] = useState(DEFAULT_BRANDING.heroDescriptionEn || '');
+  const [heroDescriptionAr, setHeroDescriptionAr] = useState(DEFAULT_BRANDING.heroDescriptionAr || '');
+  const [heroImageUrl, setHeroImageUrl] = useState(DEFAULT_BRANDING.heroImageUrl || '');
+  const [heroVideoUrl, setHeroVideoUrl] = useState(DEFAULT_BRANDING.heroVideoUrl || '');
+  const [heroVideoPosterUrl, setHeroVideoPosterUrl] = useState(DEFAULT_BRANDING.heroVideoPosterUrl || '');
+  const [heroMediaType, setHeroMediaType] = useState<'image' | 'video'>(DEFAULT_BRANDING.heroMediaType || 'image');
+  const [heroMotionEnabled, setHeroMotionEnabled] = useState<boolean>(DEFAULT_BRANDING.heroMotionEnabled !== false);
+  const [heroPrimaryCtaLabel, setHeroPrimaryCtaLabel] = useState(DEFAULT_BRANDING.heroPrimaryCtaLabel || '');
+  const [heroPrimaryCtaLabelAr, setHeroPrimaryCtaLabelAr] = useState(DEFAULT_BRANDING.heroPrimaryCtaLabelAr || '');
+  const [heroPrimaryCtaDestination, setHeroPrimaryCtaDestination] = useState(DEFAULT_BRANDING.heroPrimaryCtaDestination || '/calculator');
+  const [heroSecondaryCtaLabel, setHeroSecondaryCtaLabel] = useState(DEFAULT_BRANDING.heroSecondaryCtaLabel || '');
+  const [heroSecondaryCtaLabelAr, setHeroSecondaryCtaLabelAr] = useState(DEFAULT_BRANDING.heroSecondaryCtaLabelAr || '');
+  const [heroSecondaryCtaDestination, setHeroSecondaryCtaDestination] = useState(DEFAULT_BRANDING.heroSecondaryCtaDestination || 'whatsapp');
+
+  // Location Section State
+  const [locationSectionEnabled, setLocationSectionEnabled] = useState<boolean>(DEFAULT_BRANDING.locationSectionEnabled !== false);
+  const [locationHeadingEn, setLocationHeadingEn] = useState(DEFAULT_BRANDING.locationHeadingEn || '');
+  const [locationHeadingAr, setLocationHeadingAr] = useState(DEFAULT_BRANDING.locationHeadingAr || '');
+  const [googleMapsLocationUrl, setGoogleMapsLocationUrl] = useState(DEFAULT_BRANDING.googleMapsLocationUrl || '');
+  const [googleMapsEmbedUrl, setGoogleMapsEmbedUrl] = useState(DEFAULT_BRANDING.googleMapsEmbedUrl || '');
 
   // Upload progress states
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -122,6 +152,30 @@ export const AdminCmsPage: React.FC = () => {
       setSocialInstagram(b.socialLinks.instagram || '');
       setSocialTwitter(b.socialLinks.twitter || '');
       setSocialLinkedin(b.socialLinks.linkedin || '');
+
+      setHeroEyebrowEn(b.heroEyebrowEn || DEFAULT_BRANDING.heroEyebrowEn || '');
+      setHeroEyebrowAr(b.heroEyebrowAr || DEFAULT_BRANDING.heroEyebrowAr || '');
+      setHeroHeadlineEn(b.heroHeadlineEn || DEFAULT_BRANDING.heroHeadlineEn || '');
+      setHeroHeadlineAr(b.heroHeadlineAr || DEFAULT_BRANDING.heroHeadlineAr || '');
+      setHeroDescriptionEn(b.heroDescriptionEn || DEFAULT_BRANDING.heroDescriptionEn || '');
+      setHeroDescriptionAr(b.heroDescriptionAr || DEFAULT_BRANDING.heroDescriptionAr || '');
+      setHeroImageUrl(b.heroImageUrl || '');
+      setHeroVideoUrl(b.heroVideoUrl || '');
+      setHeroVideoPosterUrl(b.heroVideoPosterUrl || '');
+      setHeroMediaType(b.heroMediaType || 'image');
+      setHeroMotionEnabled(b.heroMotionEnabled !== false);
+      setHeroPrimaryCtaLabel(b.heroPrimaryCtaLabel || DEFAULT_BRANDING.heroPrimaryCtaLabel || '');
+      setHeroPrimaryCtaLabelAr(b.heroPrimaryCtaLabelAr || DEFAULT_BRANDING.heroPrimaryCtaLabelAr || '');
+      setHeroPrimaryCtaDestination(b.heroPrimaryCtaDestination || '/calculator');
+      setHeroSecondaryCtaLabel(b.heroSecondaryCtaLabel || DEFAULT_BRANDING.heroSecondaryCtaLabel || '');
+      setHeroSecondaryCtaLabelAr(b.heroSecondaryCtaLabelAr || DEFAULT_BRANDING.heroSecondaryCtaLabelAr || '');
+      setHeroSecondaryCtaDestination(b.heroSecondaryCtaDestination || 'whatsapp');
+
+      setLocationSectionEnabled(b.locationSectionEnabled !== false);
+      setLocationHeadingEn(b.locationHeadingEn || DEFAULT_BRANDING.locationHeadingEn || '');
+      setLocationHeadingAr(b.locationHeadingAr || DEFAULT_BRANDING.locationHeadingAr || '');
+      setGoogleMapsLocationUrl(b.googleMapsLocationUrl || DEFAULT_BRANDING.googleMapsLocationUrl || '');
+      setGoogleMapsEmbedUrl(b.googleMapsEmbedUrl || DEFAULT_BRANDING.googleMapsEmbedUrl || '');
     } catch (err) {
       console.warn('Failed to load CMS content', err);
       setActionError('Unable to load CMS content.');
@@ -207,10 +261,32 @@ export const AdminCmsPage: React.FC = () => {
           twitter: socialTwitter.trim() || undefined,
           linkedin: socialLinkedin.trim() || undefined,
         },
+        heroEyebrowEn,
+        heroEyebrowAr,
+        heroHeadlineEn,
+        heroHeadlineAr,
+        heroDescriptionEn,
+        heroDescriptionAr,
+        heroImageUrl,
+        heroVideoUrl,
+        heroVideoPosterUrl,
+        heroMediaType,
+        heroMotionEnabled,
+        heroPrimaryCtaLabel,
+        heroPrimaryCtaLabelAr,
+        heroPrimaryCtaDestination,
+        heroSecondaryCtaLabel,
+        heroSecondaryCtaLabelAr,
+        heroSecondaryCtaDestination,
+        locationSectionEnabled,
+        locationHeadingEn,
+        locationHeadingAr,
+        googleMapsLocationUrl,
+        googleMapsEmbedUrl,
       };
 
       await adminService.updateBrandingSettings(updated);
-      setActionSuccess('Branding & website identity saved successfully.');
+      setActionSuccess('Website CMS & identity configuration saved successfully.');
       await loadData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save branding';
@@ -350,29 +426,53 @@ export const AdminCmsPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
+      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('branding')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'branding'
               ? 'border-brand-orange-500 text-brand-navy-950'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Building2 className="w-4 h-4" />
-          <span>Branding & Website Identity</span>
+          <span>Branding & Identity</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('hero')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'hero'
+              ? 'border-brand-orange-500 text-brand-navy-950'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Tv className="w-4 h-4" />
+          <span>Home Hero Section</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('location')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'location'
+              ? 'border-brand-orange-500 text-brand-navy-950'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4" />
+          <span>Location & Maps</span>
         </button>
 
         <button
           onClick={() => setActiveTab('notices')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'notices'
               ? 'border-brand-orange-500 text-brand-navy-950'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Megaphone className="w-4 h-4" />
-          <span>Announcements & Advisories ({notices.length})</span>
+          <span>Announcements ({notices.length})</span>
         </button>
       </div>
 
@@ -842,7 +942,338 @@ export const AdminCmsPage: React.FC = () => {
             </form>
           )}
 
-          {/* TAB 2: NOTICES */}
+          {/* TAB 2: HERO PRESENTATION */}
+          {activeTab === 'hero' && (
+            <form onSubmit={handleSaveBranding} className="space-y-6">
+              <Card className="p-5 sm:p-6 bg-white border border-slate-200 space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-bold text-brand-navy-950 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-brand-orange-500" />
+                    Hero Text & Messaging
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Configure the authoritative headline, eyebrow badge, and supporting copy displayed above the fold.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Eyebrow Badge (English)</label>
+                    <Input
+                      type="text"
+                      value={heroEyebrowEn}
+                      onChange={(e) => setHeroEyebrowEn(e.target.value)}
+                      placeholder="e.g. Licensed Vehicle Shipping • USA to UAE"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">شارة العنوان (عربي)</label>
+                    <Input
+                      type="text"
+                      dir="rtl"
+                      value={heroEyebrowAr}
+                      onChange={(e) => setHeroEyebrowAr(e.target.value)}
+                      placeholder="مثال: شحن مركبات مرخص • من أمريكا إلى الإمارات"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Main Headline (English)</label>
+                    <Input
+                      type="text"
+                      value={heroHeadlineEn}
+                      onChange={(e) => setHeroHeadlineEn(e.target.value)}
+                      placeholder="e.g. Ship Your Vehicle from the USA to the UAE"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">العنوان الرئيسي (عربي)</label>
+                    <Input
+                      type="text"
+                      dir="rtl"
+                      value={heroHeadlineAr}
+                      onChange={(e) => setHeroHeadlineAr(e.target.value)}
+                      placeholder="مثال: اشحن مركبتك من الولايات المتحدة إلى الإمارات"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Supporting Text (English)</label>
+                    <textarea
+                      rows={3}
+                      value={heroDescriptionEn}
+                      onChange={(e) => setHeroDescriptionEn(e.target.value)}
+                      className="w-full text-xs font-medium bg-white border border-slate-300 rounded-xl p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">النص التعريفي الداعم (عربي)</label>
+                    <textarea
+                      rows={3}
+                      dir="rtl"
+                      value={heroDescriptionAr}
+                      onChange={(e) => setHeroDescriptionAr(e.target.value)}
+                      className="w-full text-xs font-medium bg-white border border-slate-300 rounded-xl p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              {/* Media & Motion Card */}
+              <Card className="p-5 sm:p-6 bg-white border border-slate-200 space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-bold text-brand-navy-950 flex items-center gap-2">
+                    <Tv className="w-4 h-4 text-brand-orange-500" />
+                    Media & Animation Controls
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Switch between the default authoritative vector illustration, a custom WebP image, or an ambient background video.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Media Type</label>
+                    <select
+                      value={heroMediaType}
+                      onChange={(e) => setHeroMediaType(e.target.value as 'image' | 'video')}
+                      className="w-full text-xs font-medium bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                    >
+                      <option value="image">Vector Illustration / Custom Image</option>
+                      <option value="video">Ambient Video</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 flex items-center pt-5">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={heroMotionEnabled}
+                        onChange={(e) => setHeroMotionEnabled(e.target.checked)}
+                        className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+                      />
+                      <span className="font-bold text-slate-700">
+                        Enable Hero Ambient Animations (respects user reduced-motion preferences)
+                      </span>
+                    </label>
+                  </div>
+
+                  {heroMediaType === 'image' ? (
+                    <div className="sm:col-span-3">
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Hero Image URL (Leave blank to use default authoritative route vector illustration)
+                      </label>
+                      <Input
+                        type="url"
+                        value={heroImageUrl}
+                        onChange={(e) => setHeroImageUrl(e.target.value)}
+                        placeholder="https://..."
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-700 mb-1">Hero Video Stream / MP4 URL</label>
+                        <Input
+                          type="url"
+                          value={heroVideoUrl}
+                          onChange={(e) => setHeroVideoUrl(e.target.value)}
+                          placeholder="https://.../hero.mp4"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Video Poster Frame URL</label>
+                        <Input
+                          type="url"
+                          value={heroVideoPosterUrl}
+                          onChange={(e) => setHeroVideoPosterUrl(e.target.value)}
+                          placeholder="https://.../poster.webp"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </Card>
+
+              {/* Hero CTAs */}
+              <Card className="p-5 sm:p-6 bg-white border border-slate-200 space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-bold text-brand-navy-950 flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-brand-orange-500" />
+                    Call-to-Action Buttons
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Configure labels and destinations for the hero conversion buttons.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Primary CTA Label (EN)</label>
+                    <Input
+                      type="text"
+                      value={heroPrimaryCtaLabel}
+                      onChange={(e) => setHeroPrimaryCtaLabel(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Primary CTA Label (AR)</label>
+                    <Input
+                      type="text"
+                      dir="rtl"
+                      value={heroPrimaryCtaLabelAr}
+                      onChange={(e) => setHeroPrimaryCtaLabelAr(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Primary Destination</label>
+                    <Input
+                      type="text"
+                      value={heroPrimaryCtaDestination}
+                      onChange={(e) => setHeroPrimaryCtaDestination(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Secondary CTA Label (EN)</label>
+                    <Input
+                      type="text"
+                      value={heroSecondaryCtaLabel}
+                      onChange={(e) => setHeroSecondaryCtaLabel(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Secondary CTA Label (AR)</label>
+                    <Input
+                      type="text"
+                      dir="rtl"
+                      value={heroSecondaryCtaLabelAr}
+                      onChange={(e) => setHeroSecondaryCtaLabelAr(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Secondary Destination</label>
+                    <Input
+                      type="text"
+                      value={heroSecondaryCtaDestination}
+                      onChange={(e) => setHeroSecondaryCtaDestination(e.target.value)}
+                      placeholder="whatsapp or custom URL"
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              {canManageCms && (
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    disabled={isSavingBranding}
+                    className="font-bold px-8 shadow-sm"
+                  >
+                    {isSavingBranding ? 'Saving Configuration...' : 'Save Hero Settings'}
+                  </Button>
+                </div>
+              )}
+            </form>
+          )}
+
+          {/* TAB 3: LOCATION & MAPS */}
+          {activeTab === 'location' && (
+            <form onSubmit={handleSaveBranding} className="space-y-6">
+              <Card className="p-5 sm:p-6 bg-white border border-slate-200 space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-bold text-brand-navy-950 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-brand-orange-500" />
+                    Office Location & Google Maps Integration
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Control the interactive Google Maps embed and external location links on the Contact Us page.
+                  </p>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={locationSectionEnabled}
+                        onChange={(e) => setLocationSectionEnabled(e.target.checked)}
+                        className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+                      />
+                      <span className="font-bold text-slate-800">
+                        Enable Location & Google Maps Section on the Contact Page
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Section Heading (English)</label>
+                      <Input
+                        type="text"
+                        value={locationHeadingEn}
+                        onChange={(e) => setLocationHeadingEn(e.target.value)}
+                        placeholder="Visit Our Office & Operations Yard"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">عنوان قسم الموقع (عربي)</label>
+                      <Input
+                        type="text"
+                        dir="rtl"
+                        value={locationHeadingAr}
+                        onChange={(e) => setLocationHeadingAr(e.target.value)}
+                        placeholder="تفضل بزيارة مكتبنا والساحة التشغيلية"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Direct Google Maps URL ("View on Google Maps" Button)
+                      </label>
+                      <Input
+                        type="url"
+                        value={googleMapsLocationUrl}
+                        onChange={(e) => setGoogleMapsLocationUrl(e.target.value)}
+                        placeholder="https://maps.google.com/?q=..."
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Google Maps Embed URL (HTTPS google.com/maps embed iframe src)
+                      </label>
+                      <Input
+                        type="url"
+                        value={googleMapsEmbedUrl}
+                        onChange={(e) => setGoogleMapsEmbedUrl(e.target.value)}
+                        placeholder="https://maps.google.com/maps?q=...&output=embed"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        Must be a secure HTTPS Google Maps embed link. Only trusted google.com/maps URLs are allowed.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {canManageCms && (
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    disabled={isSavingBranding}
+                    className="font-bold px-8 shadow-sm"
+                  >
+                    {isSavingBranding ? 'Saving Configuration...' : 'Save Location Settings'}
+                  </Button>
+                </div>
+              )}
+            </form>
+          )}
           {activeTab === 'notices' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {notices.length === 0 ? (

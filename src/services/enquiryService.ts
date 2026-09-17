@@ -30,8 +30,22 @@ interface EnquiryQueryResult {
   status: string;
   source: string;
   created_at: string;
+  subject?: string | null;
+  message?: string | null;
+  preferred_contact_method?: string | null;
+  consent_given_at?: string | null;
   customers: EnquiryRowCustomer | null;
   quotations: EnquiryRowQuotation[] | null;
+}
+
+export interface ContactEnquiryInput {
+  full_name: string;
+  phone: string;
+  email?: string;
+  subject?: string;
+  message: string;
+  preferred_contact_method?: 'phone' | 'whatsapp' | 'email';
+  consent: boolean;
 }
 
 export const enquiryService = {
@@ -45,6 +59,10 @@ export const enquiryService = {
         status,
         source,
         created_at,
+        subject,
+        message,
+        preferred_contact_method,
+        consent_given_at,
         customers (
           full_name,
           phone,
@@ -75,14 +93,17 @@ export const enquiryService = {
       const cust = item.customers;
       const quote = item.quotations?.[0];
       const snapshot = quote?.pricing_snapshot;
+      const isContact = item.source === 'contact_form';
 
-      const vehicleDesc = snapshot?.vehicle
+      const vehicleDesc = isContact
+        ? item.subject || 'Direct Contact Inquiry'
+        : snapshot?.vehicle
         ? `${snapshot.vehicle.year || ''} ${snapshot.vehicle.make || ''} ${snapshot.vehicle.model || ''} (${snapshot.vehicle.category_id || 'sedan'})`.trim()
         : 'Vehicle Shipping';
 
       const originPort = snapshot?.route?.origin_port_name || 'USA Origin';
       const destPort = snapshot?.route?.destination_port_name || 'UAE Destination';
-      const routeDesc = `${originPort} -> ${destPort}`;
+      const routeDesc = isContact ? 'Contact Us Form' : `${originPort} -> ${destPort}`;
 
       return {
         id: item.id,
@@ -95,9 +116,36 @@ export const enquiryService = {
         estimatedTotalUsd: quote?.total_charges_usd_max || 0,
         status: (item.status as EnquiryStatus) || 'new',
         createdAt: item.created_at,
-        source: (item.source as 'web_calculator' | 'whatsapp' | 'manual') || 'web_calculator',
+        source: (item.source as 'web_calculator' | 'whatsapp' | 'manual' | 'contact_form') || 'web_calculator',
+        subject: item.subject || undefined,
+        message: item.message || undefined,
+        preferredContactMethod: item.preferred_contact_method || undefined,
+        consentGivenAt: item.consent_given_at || undefined,
       };
     });
+  },
+
+  async submitContactEnquiry(
+    input: ContactEnquiryInput
+  ): Promise<{ success: boolean; reference_number: string; enquiry_id: string }> {
+    const rpcFn = supabase.rpc as unknown as (
+      fn: string,
+      args?: Record<string, unknown>
+    ) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+    const { data, error } = await rpcFn('submit_contact_enquiry', {
+      input_json: input,
+    });
+
+    if (error) {
+      console.error('[EnquiryService] Contact enquiry submission failed:', error);
+      throw new Error(
+        error.message ||
+          'Unable to submit inquiry at this time. Please try again or reach out via WhatsApp.'
+      );
+    }
+
+    return data as { success: boolean; reference_number: string; enquiry_id: string };
   },
 
   async updateEnquiryStatus(

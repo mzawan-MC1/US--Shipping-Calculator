@@ -32,7 +32,11 @@ export interface CustomerEnquiry {
   estimatedTotalUsd: number;
   status: EnquiryStatus;
   createdAt: string;
-  source: 'web_calculator' | 'whatsapp' | 'manual';
+  source: 'web_calculator' | 'whatsapp' | 'manual' | 'contact_form';
+  subject?: string;
+  message?: string;
+  preferredContactMethod?: string;
+  consentGivenAt?: string;
 }
 
 export interface AdminKpiMetrics {

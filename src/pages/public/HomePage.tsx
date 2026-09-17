@@ -5,10 +5,8 @@ import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { Button } from '../../components/ui/Button';
 import { Container } from '../../components/ui/Container';
 import { Card } from '../../components/ui/Card';
-import { ShippingHeroGraphic } from '../../components/ui/ShippingHeroGraphic';
+import { HomeHero } from '../../components/home/HomeHero';
 import {
-  Calculator,
-  MessageCircle,
   ShieldCheck,
   Clock,
   Award,
@@ -19,20 +17,16 @@ import {
   Box,
   ClipboardList,
   CheckCircle2,
-  ArrowRight,
   MapPin,
 } from 'lucide-react';
 import { US_LOADING_PORTS, UAE_DESTINATION_PORTS } from '../../config/calculatorConfig';
 
 export const HomePage: React.FC = () => {
-  const { t, language, direction } = useI18n();
+  const { t, language } = useI18n();
   const { branding, getWhatsAppLink } = useWebsiteSettings();
 
   const isAr = language === 'ar';
   const brandTitle = isAr ? branding.companyNameAr : branding.companyName;
-  const brandTagline = isAr
-    ? branding.taglineAr || t.brandTagline
-    : branding.tagline || t.brandTagline;
 
   const whatsappHref = getWhatsAppLink(
     isAr
@@ -117,91 +111,8 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="space-y-12 sm:space-y-16 pb-16 w-full overflow-x-hidden">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-brand-navy-950 via-brand-navy-900 to-brand-navy-950 text-white pt-10 pb-16 sm:pt-16 sm:pb-24 overflow-hidden">
-        {/* Subtle background decoration */}
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#f97316_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-
-        <Container className="relative z-10">
-          <div className="max-w-3xl mx-auto text-center space-y-6">
-            {/* Trust Pills */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-navy-800/80 border border-brand-navy-700 text-xs font-semibold text-brand-orange-400 shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-brand-orange-500 animate-ping" />
-              <span>{brandTagline}</span>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight sm:leading-none">
-              {t.heroTitlePart1}{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange-400 to-amber-300">
-                {t.heroTitleHighlightUs}
-              </span>{' '}
-              {t.heroTitleTo}{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-                {t.heroTitleHighlightUae}
-              </span>
-            </h1>
-
-            {/* Subheading */}
-            <p className="text-slate-300 text-sm sm:text-lg max-w-2xl mx-auto font-normal leading-relaxed">
-              {t.heroSubtitle}
-            </p>
-
-            {/* Hero Graphic Container */}
-            <div className="py-4">
-              <ShippingHeroGraphic />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <Link to="/calculator" className="w-full sm:w-auto">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full sm:w-auto text-sm sm:text-base font-extrabold"
-                  startIcon={<Calculator className="w-5 h-5" />}
-                  endIcon={
-                    direction === 'rtl' ? (
-                      <ArrowRight className="w-5 h-5 rotate-180" />
-                    ) : (
-                      <ArrowRight className="w-5 h-5" />
-                    )
-                  }
-                >
-                  {t.calculateShipping}
-                </Button>
-              </Link>
-              {whatsappHref && (
-                <a
-                  href={whatsappHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto"
-                >
-                  <Button
-                    variant="whatsapp"
-                    size="lg"
-                    className="w-full sm:w-auto text-sm sm:text-base font-extrabold"
-                    startIcon={<MessageCircle className="w-5 h-5" />}
-                  >
-                    {t.whatsappQuote}
-                  </Button>
-                </a>
-              )}
-            </div>
-
-            {/* Verified UAE Compliance highlight */}
-            <div className="pt-1 flex items-center justify-center gap-2 text-xs text-slate-300 font-semibold">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>
-                {isAr
-                  ? 'خدمات لوجستية وشحن بحري مرخص ومعتمد في دولة الإمارات العربية المتحدة'
-                  : 'Licensed UAE Maritime Freight Forwarder & Customs Clearance Specialist'}
-              </span>
-            </div>
-          </div>
-        </Container>
-      </section>
+      {/* Modern High-End Hero Presentation */}
+      <HomeHero />
 
       {/* Trust Badges Bar */}
       <section className="bg-brand-navy-900 border-b border-brand-navy-800 py-6 text-white">

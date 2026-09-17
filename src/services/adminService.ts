@@ -241,6 +241,32 @@ export interface BrandingSettings {
     twitter?: string;
     linkedin?: string;
   };
+
+  // Hero CMS Settings
+  heroEyebrowEn?: string;
+  heroEyebrowAr?: string;
+  heroHeadlineEn?: string;
+  heroHeadlineAr?: string;
+  heroDescriptionEn?: string;
+  heroDescriptionAr?: string;
+  heroImageUrl?: string;
+  heroVideoUrl?: string;
+  heroVideoPosterUrl?: string;
+  heroMediaType?: 'image' | 'video';
+  heroMotionEnabled?: boolean;
+  heroPrimaryCtaLabel?: string;
+  heroPrimaryCtaLabelAr?: string;
+  heroPrimaryCtaDestination?: string;
+  heroSecondaryCtaLabel?: string;
+  heroSecondaryCtaLabelAr?: string;
+  heroSecondaryCtaDestination?: string;
+
+  // Location / Google Maps Settings
+  locationSectionEnabled?: boolean;
+  locationHeadingEn?: string;
+  locationHeadingAr?: string;
+  googleMapsLocationUrl?: string;
+  googleMapsEmbedUrl?: string;
 }
 
 export const DEFAULT_BRANDING: BrandingSettings = {
@@ -274,6 +300,33 @@ export const DEFAULT_BRANDING: BrandingSettings = {
     twitter: '',
     linkedin: '',
   },
+
+  heroEyebrowEn: 'Licensed Vehicle Shipping • USA to UAE',
+  heroEyebrowAr: 'شحن مركبات مرخص • من أمريكا إلى الإمارات',
+  heroHeadlineEn: 'Ship Your Vehicle from the USA to the UAE',
+  heroHeadlineAr: 'اشحن مركبتك من الولايات المتحدة إلى الإمارات',
+  heroDescriptionEn:
+    'Reliable vehicle shipping from major US auctions and ports to the UAE—with transparent estimates, inland towing coordination and dedicated customer support.',
+  heroDescriptionAr:
+    'شحن موثوق للمركبات من كبرى مزادات وموانئ أمريكا إلى الإمارات—مع تقديرات شفافة، وتنسيق القطر الداخلي، ودعم عملاء مخصص.',
+  heroImageUrl: '',
+  heroVideoUrl: '',
+  heroVideoPosterUrl: '',
+  heroMediaType: 'image',
+  heroMotionEnabled: true,
+  heroPrimaryCtaLabel: 'Calculate Shipping',
+  heroPrimaryCtaLabelAr: 'احسب تكلفة الشحن',
+  heroPrimaryCtaDestination: '/calculator',
+  heroSecondaryCtaLabel: 'Get a WhatsApp Quote',
+  heroSecondaryCtaLabelAr: 'طلب عرض عبر واتساب',
+  heroSecondaryCtaDestination: 'whatsapp',
+
+  locationSectionEnabled: true,
+  locationHeadingEn: 'Visit Our Office & Operations Yard',
+  locationHeadingAr: 'تفضل بزيارة مكتبنا والساحة التشغيلية',
+  googleMapsLocationUrl: 'https://maps.google.com/?q=Industrial+Area+2,+Sharjah,+UAE',
+  googleMapsEmbedUrl:
+    'https://maps.google.com/maps?q=Industrial+Area+2,+Sharjah,+UAE&t=&z=14&ie=UTF8&iwloc=&output=embed',
 };
 
 export interface AdminCmsNotice {
@@ -1591,6 +1644,32 @@ export const adminService = {
       copyrightText: String(bs.copyright_text || DEFAULT_BRANDING.copyrightText),
       copyrightTextAr: String(bs.copyright_text_ar || DEFAULT_BRANDING.copyrightTextAr),
       socialLinks: (bs.social_links as BrandingSettings['socialLinks']) || DEFAULT_BRANDING.socialLinks,
+
+      // Hero Settings
+      heroEyebrowEn: String(bs.hero_eyebrow_en || DEFAULT_BRANDING.heroEyebrowEn),
+      heroEyebrowAr: String(bs.hero_eyebrow_ar || DEFAULT_BRANDING.heroEyebrowAr),
+      heroHeadlineEn: String(bs.hero_headline_en || DEFAULT_BRANDING.heroHeadlineEn),
+      heroHeadlineAr: String(bs.hero_headline_ar || DEFAULT_BRANDING.heroHeadlineAr),
+      heroDescriptionEn: String(bs.hero_description_en || DEFAULT_BRANDING.heroDescriptionEn),
+      heroDescriptionAr: String(bs.hero_description_ar || DEFAULT_BRANDING.heroDescriptionAr),
+      heroImageUrl: String(bs.hero_image_url || DEFAULT_BRANDING.heroImageUrl),
+      heroVideoUrl: String(bs.hero_video_url || DEFAULT_BRANDING.heroVideoUrl),
+      heroVideoPosterUrl: String(bs.hero_video_poster_url || DEFAULT_BRANDING.heroVideoPosterUrl),
+      heroMediaType: (bs.hero_media_type as 'image' | 'video') || DEFAULT_BRANDING.heroMediaType,
+      heroMotionEnabled: bs.hero_motion_enabled !== undefined ? Boolean(bs.hero_motion_enabled) : DEFAULT_BRANDING.heroMotionEnabled,
+      heroPrimaryCtaLabel: String(bs.hero_primary_cta_label || DEFAULT_BRANDING.heroPrimaryCtaLabel),
+      heroPrimaryCtaLabelAr: String(bs.hero_primary_cta_label_ar || DEFAULT_BRANDING.heroPrimaryCtaLabelAr),
+      heroPrimaryCtaDestination: String(bs.hero_primary_cta_destination || DEFAULT_BRANDING.heroPrimaryCtaDestination),
+      heroSecondaryCtaLabel: String(bs.hero_secondary_cta_label || DEFAULT_BRANDING.heroSecondaryCtaLabel),
+      heroSecondaryCtaLabelAr: String(bs.hero_secondary_cta_label_ar || DEFAULT_BRANDING.heroSecondaryCtaLabelAr),
+      heroSecondaryCtaDestination: String(bs.hero_secondary_cta_destination || DEFAULT_BRANDING.heroSecondaryCtaDestination),
+
+      // Location / Google Maps Settings
+      locationSectionEnabled: bs.location_section_enabled !== undefined ? Boolean(bs.location_section_enabled) : DEFAULT_BRANDING.locationSectionEnabled,
+      locationHeadingEn: String(bs.location_heading_en || DEFAULT_BRANDING.locationHeadingEn),
+      locationHeadingAr: String(bs.location_heading_ar || DEFAULT_BRANDING.locationHeadingAr),
+      googleMapsLocationUrl: String(bs.google_maps_location_url || DEFAULT_BRANDING.googleMapsLocationUrl),
+      googleMapsEmbedUrl: String(bs.google_maps_embed_url || DEFAULT_BRANDING.googleMapsEmbedUrl),
     };
   },
 
@@ -1634,6 +1713,32 @@ export const adminService = {
       whatsapp_number: updated.whatsappNumber,
       headquarters_address: updated.headquartersAddress,
       headquarters_address_ar: updated.headquartersAddressAr,
+
+      // Hero settings
+      hero_eyebrow_en: updated.heroEyebrowEn,
+      hero_eyebrow_ar: updated.heroEyebrowAr,
+      hero_headline_en: updated.heroHeadlineEn,
+      hero_headline_ar: updated.heroHeadlineAr,
+      hero_description_en: updated.heroDescriptionEn,
+      hero_description_ar: updated.heroDescriptionAr,
+      hero_image_url: updated.heroImageUrl,
+      hero_video_url: updated.heroVideoUrl,
+      hero_video_poster_url: updated.heroVideoPosterUrl,
+      hero_media_type: updated.heroMediaType,
+      hero_motion_enabled: updated.heroMotionEnabled,
+      hero_primary_cta_label: updated.heroPrimaryCtaLabel,
+      hero_primary_cta_label_ar: updated.heroPrimaryCtaLabelAr,
+      hero_primary_cta_destination: updated.heroPrimaryCtaDestination,
+      hero_secondary_cta_label: updated.heroSecondaryCtaLabel,
+      hero_secondary_cta_label_ar: updated.heroSecondaryCtaLabelAr,
+      hero_secondary_cta_destination: updated.heroSecondaryCtaDestination,
+
+      // Location settings
+      location_section_enabled: updated.locationSectionEnabled,
+      location_heading_en: updated.locationHeadingEn,
+      location_heading_ar: updated.locationHeadingAr,
+      google_maps_location_url: updated.googleMapsLocationUrl,
+      google_maps_embed_url: updated.googleMapsEmbedUrl,
     };
 
     await Promise.all([

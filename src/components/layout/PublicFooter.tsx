@@ -2,12 +2,15 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import { Ship, MapPin, Phone, Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 
 export const PublicFooter: React.FC = () => {
   const { t, language } = useI18n();
   const { branding, getWhatsAppLink, getPhoneTel } = useWebsiteSettings();
+  const { isAuthenticated, staffProfile } = useAuth();
 
+  const isStaff = Boolean(isAuthenticated && staffProfile?.is_active);
   const isAr = language === 'ar';
   const brandTitle = isAr ? branding.companyNameAr : branding.companyName;
   const addressDisplay = isAr ? branding.headquartersAddressAr : branding.headquartersAddress;
@@ -69,20 +72,17 @@ export const PublicFooter: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/results" className="hover:text-white transition-colors">
-                  {t.resultsTitle}
-                </Link>
-              </li>
-              <li>
                 <Link to="/contact" className="hover:text-white transition-colors">
                   {t.navContact}
                 </Link>
               </li>
-              <li>
-                <Link to="/admin" className="hover:text-white transition-colors">
-                  {t.navAdmin}
-                </Link>
-              </li>
+              {isStaff && (
+                <li>
+                  <Link to="/admin" className="hover:text-white transition-colors">
+                    {t.navAdmin}
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 
@@ -131,7 +131,17 @@ export const PublicFooter: React.FC = () => {
 
         {/* Bottom bar */}
         <div className="mt-12 pt-6 border-t border-brand-navy-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
-          <p>© {new Date().getFullYear()} {copyrightDisplay}</p>
+          <p className="leading-relaxed">
+            © {new Date().getFullYear()} {copyrightDisplay} • Powered by{' '}
+            <a
+              href="https://mc1services.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-red-500 hover:text-red-400 transition-colors"
+            >
+              MCS Consultancy
+            </a>
+          </p>
           <div className="flex items-center gap-4">
             <span className="text-[11px] px-2 py-0.5 rounded bg-brand-navy-900 border border-brand-navy-800 text-slate-300">
               UAE Logistics Platform

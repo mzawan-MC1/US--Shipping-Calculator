@@ -251,14 +251,22 @@ export const AdminEnquiriesPage: React.FC = () => {
                           {item.vehicleDetails}
                         </span>
                         <span className="text-[10px] text-slate-400 uppercase tracking-wide">
-                          Source: {item.source.replace('_', ' ')}
+                          {item.source === 'contact_form' ? (
+                            <span className="inline-block px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold text-[9px]">
+                              Contact Form
+                            </span>
+                          ) : (
+                            `Source: ${item.source.replace('_', ' ')}`
+                          )}
                         </span>
                       </td>
 
                       <td className="py-3.5 text-slate-600 whitespace-nowrap">{item.route}</td>
 
                       <td className="py-3.5 font-bold text-brand-navy-950 whitespace-nowrap">
-                        {formatCurrency(item.estimatedTotalUsd)}
+                        {item.source === 'contact_form' && item.estimatedTotalUsd === 0
+                          ? '—'
+                          : formatCurrency(item.estimatedTotalUsd)}
                       </td>
 
                       <td className="py-3.5 whitespace-nowrap">
@@ -333,37 +341,71 @@ export const AdminEnquiriesPage: React.FC = () => {
                 {selectedEnquiry.email && (
                   <span className="text-slate-500 block">{selectedEnquiry.email}</span>
                 )}
+                {selectedEnquiry.preferredContactMethod && (
+                  <span className="text-[11px] text-blue-700 font-semibold block mt-1">
+                    Prefers: {selectedEnquiry.preferredContactMethod}
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                  Status & Date
+                  Status & Source
                 </span>
                 <div className="mt-1">{getStatusBadge(selectedEnquiry.status)}</div>
                 <span className="text-slate-400 text-[11px] block mt-1">
                   Received {new Date(selectedEnquiry.createdAt).toLocaleString()}
                 </span>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-brand-orange-500" />
-                <span className="font-bold text-slate-800">{selectedEnquiry.vehicleDetails}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-blue-500" />
-                <span className="font-semibold text-slate-700">{selectedEnquiry.route}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600">
-                  Estimated Total:{' '}
-                  <strong className="text-brand-navy-950 text-sm">
-                    {formatCurrency(selectedEnquiry.estimatedTotalUsd)}
-                  </strong>
+                <span className="text-[10px] font-semibold text-slate-500 block uppercase">
+                  Source: {selectedEnquiry.source.replace('_', ' ')}
                 </span>
               </div>
             </div>
+
+            {selectedEnquiry.source === 'contact_form' || selectedEnquiry.message ? (
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-blue-900 uppercase">
+                    Subject / Topic
+                  </span>
+                  {selectedEnquiry.consentGivenAt && (
+                    <span className="text-[10px] text-emerald-700 font-medium">
+                      ✓ Customer Consent Given
+                    </span>
+                  )}
+                </div>
+                <p className="font-bold text-slate-900 text-sm">
+                  {selectedEnquiry.subject || 'Direct Contact Inquiry'}
+                </p>
+                <div className="pt-2 border-t border-blue-100">
+                  <span className="text-[10px] font-bold text-blue-900 uppercase block mb-1">
+                    Inquiry Message
+                  </span>
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-wrap bg-white p-2.5 rounded-lg border border-blue-100 font-sans text-xs">
+                    {selectedEnquiry.message || 'No written message provided.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-brand-orange-500" />
+                  <span className="font-bold text-slate-800">{selectedEnquiry.vehicleDetails}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-blue-500" />
+                  <span className="font-semibold text-slate-700">{selectedEnquiry.route}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-emerald-500" />
+                  <span className="text-slate-600">
+                    Estimated Total:{' '}
+                    <strong className="text-brand-navy-950 text-sm">
+                      {formatCurrency(selectedEnquiry.estimatedTotalUsd)}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               <a

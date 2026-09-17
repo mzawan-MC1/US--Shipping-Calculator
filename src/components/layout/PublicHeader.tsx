@@ -2,21 +2,25 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import { Button } from '../ui/Button';
 import { Ship, Menu, X, MessageCircle, Globe, Phone } from 'lucide-react';
 
 export const PublicHeader: React.FC = () => {
   const { t, language, toggleLanguage } = useI18n();
   const { branding, getWhatsAppLink, getPhoneTel } = useWebsiteSettings();
+  const { isAuthenticated, staffProfile } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
 
+  const isStaff = Boolean(isAuthenticated && staffProfile?.is_active);
   const isAr = language === 'ar';
+
   const navLinks = [
     { label: t.navHome, path: '/' },
     { label: t.navCalculator, path: '/calculator' },
     { label: t.navContact, path: '/contact' },
-    { label: t.navAdmin, path: '/admin' },
+    ...(isStaff ? [{ label: t.navAdmin, path: '/admin' }] : []),
   ];
 
   const whatsappHref = getWhatsAppLink();
