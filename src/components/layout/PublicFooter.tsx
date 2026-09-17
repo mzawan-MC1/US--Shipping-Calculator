@@ -21,20 +21,22 @@ export const PublicFooter: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Col */}
           <div className="md:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
+            <Link to="/" className="inline-block focus:outline-none" aria-label={brandTitle}>
               {branding.darkLogoUrl || branding.logoUrl ? (
                 <img
                   src={branding.darkLogoUrl || branding.logoUrl}
                   alt={brandTitle}
-                  className="h-9 max-w-[150px] object-contain"
+                  className="h-16 sm:h-20 w-auto max-w-[260px] sm:max-w-[320px] object-contain"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-xl bg-brand-orange-500 flex items-center justify-center text-white shrink-0">
-                  <Ship className="w-5 h-5" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-orange-500 flex items-center justify-center text-white shrink-0">
+                    <Ship className="w-5 h-5" />
+                  </div>
+                  <span className="text-lg font-black text-white">{brandTitle}</span>
                 </div>
               )}
-              <span className="text-lg font-black text-white">{brandTitle}</span>
-            </div>
+            </Link>
             <p className="text-slate-300 text-xs sm:text-sm max-w-md leading-relaxed">
               {isAr
                 ? 'متخصصون في شحن السيارات وتقديم الخدمات اللوجستية البحرية الموثوقة من موانئ ومزادات الولايات المتحدة الأمريكية مباشرة إلى موانئ دولة الإمارات العربية المتحدة.'

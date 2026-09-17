@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useI18n } from '../../i18n/I18nContext';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { Button } from '../ui/Button';
-import { Ship, Menu, X, MessageCircle, Globe, ShieldCheck, Phone } from 'lucide-react';
+import { Ship, Menu, X, MessageCircle, Globe, Phone } from 'lucide-react';
 
 export const PublicHeader: React.FC = () => {
   const { t, language, toggleLanguage } = useI18n();
@@ -23,9 +23,6 @@ export const PublicHeader: React.FC = () => {
   const phoneHref = `tel:${getPhoneTel()}`;
   const addressDisplay = isAr ? branding.headquartersAddressAr : branding.headquartersAddress;
   const brandTitle = isAr ? branding.companyNameAr : branding.companyName;
-  const brandTagline = isAr
-    ? branding.taglineAr || t.brandTagline
-    : branding.tagline || t.brandTagline;
 
   return (
     <header className="sticky top-0 z-40 bg-brand-navy-950 text-white border-b border-brand-navy-800 shadow-md">
@@ -59,32 +56,28 @@ export const PublicHeader: React.FC = () => {
 
       {/* Main Header Bar */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        {/* Brand Logo & Name */}
-        <Link to="/" className="flex items-center gap-3 group focus:outline-none">
+        {/* Brand Logo */}
+        <Link
+          to="/"
+          className="flex items-center group focus:outline-none shrink-0"
+          aria-label={brandTitle}
+        >
           {branding.darkLogoUrl || branding.logoUrl ? (
             <img
               src={branding.darkLogoUrl || branding.logoUrl}
               alt={brandTitle}
-              className="h-10 max-w-[160px] object-contain"
+              className="h-10 sm:h-12 w-auto max-w-[180px] sm:max-w-[240px] object-contain"
             />
           ) : (
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-orange-600 to-brand-orange-400 flex items-center justify-center text-white shadow-orange-glow group-hover:scale-105 transition-transform shrink-0">
-              <Ship className="w-6 h-6" />
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-orange-600 to-brand-orange-400 flex items-center justify-center text-white shadow-orange-glow group-hover:scale-105 transition-transform shrink-0">
+                <Ship className="w-6 h-6" />
+              </div>
               <span className="text-base sm:text-lg font-black tracking-wider text-white">
                 {brandTitle}
               </span>
-              <span className="hidden xs:inline-flex items-center gap-0.5 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                <ShieldCheck className="w-3 h-3" /> UAE
-              </span>
             </div>
-            <p className="text-[11px] font-bold tracking-widest text-brand-orange-400 uppercase">
-              {brandTagline}
-            </p>
-          </div>
+          )}
         </Link>
 
         {/* Desktop Nav */}
