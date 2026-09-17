@@ -130,9 +130,9 @@ export const AdminReportsPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 text-xs font-bold"
+            startIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            className="text-xs font-bold whitespace-nowrap"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
@@ -141,9 +141,9 @@ export const AdminReportsPage: React.FC = () => {
             size="sm"
             disabled={quotations.length === 0}
             onClick={exportCSV}
-            className="flex items-center gap-1.5 text-xs font-bold"
+            startIcon={<Download className="w-3.5 h-3.5 text-brand-orange-500" />}
+            className="text-xs font-bold whitespace-nowrap"
           >
-            <Download className="w-3.5 h-3.5 text-brand-orange-500" />
             Export CSV
           </Button>
         </div>

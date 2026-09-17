@@ -86,9 +86,9 @@ export const AdminQuotationsPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 text-xs font-bold"
+            startIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            className="text-xs font-bold whitespace-nowrap"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
@@ -222,9 +222,9 @@ export const AdminQuotationsPage: React.FC = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => setSelectedQuote(item)}
-                          className="text-xs py-1 px-2.5 font-bold"
+                          startIcon={<Eye className="w-3.5 h-3.5 text-brand-orange-500" />}
+                          className="text-xs py-1 px-2.5 font-bold whitespace-nowrap"
                         >
-                          <Eye className="w-3.5 h-3.5 me-1 text-brand-orange-500" />
                           View Details
                         </Button>
                       </td>

@@ -49,15 +49,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
     : 'Super Admin';
 
   return (
-    <aside className="w-64 bg-brand-navy-950 text-slate-300 flex flex-col min-h-screen border-e border-brand-navy-800">
+    <aside className="w-64 bg-brand-navy-950 text-slate-300 flex flex-col h-full border-e border-brand-navy-800 select-none">
       {/* Brand & Portal Header */}
-      <div className="p-5 border-b border-brand-navy-800/80">
+      <div className="p-5 border-b border-brand-navy-800/80 shrink-0">
         <Link to="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand-orange-500 text-white flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-brand-orange-500 text-white flex items-center justify-center shrink-0 shadow-orange-glow">
             <Ship className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-sm font-black text-white leading-tight">{t.brandName}</h2>
+          <div className="min-w-0">
+            <h2 className="text-sm font-black text-white leading-tight truncate">{t.brandName}</h2>
             <p className="text-[10px] text-brand-orange-400 font-bold uppercase tracking-wider">
               Staff Portal
             </p>
@@ -66,7 +66,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
       </div>
 
       {/* RBAC notice badge */}
-      <div className="px-4 py-2 bg-brand-navy-900/60 border-b border-brand-navy-800/40 text-[11px] text-slate-400 flex items-center justify-between">
+      <div className="px-4 py-2 bg-brand-navy-900/60 border-b border-brand-navy-800/40 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
         <span>
           Role: <strong className="text-slate-200">{formattedRole}</strong>
         </span>
@@ -75,8 +75,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
         </span>
       </div>
 
-      {/* Navigation List */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {/* Navigation List with dedicated vertical scrolling */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overscroll-contain">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -99,7 +99,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onClose }) => {
       </nav>
 
       {/* Footer link to public website */}
-      <div className="p-4 border-t border-brand-navy-800/80">
+      <div className="p-4 border-t border-brand-navy-800/80 shrink-0">
         <Link
           to="/"
           className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white py-2 rounded-lg bg-brand-navy-900 hover:bg-brand-navy-800 transition-colors"

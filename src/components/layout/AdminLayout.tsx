@@ -17,29 +17,30 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row w-full overflow-x-hidden">
-      {/* Desktop Sidebar (Only visible on lg: 1024px and wider) */}
-      <div className="hidden lg:block shrink-0">
+    <div className="min-h-screen bg-slate-100 flex flex-col w-full overflow-x-hidden relative">
+      {/* Desktop Fixed Full-Height Sidebar (100vh) */}
+      <div className="hidden lg:block fixed top-0 bottom-0 start-0 z-40 w-64 h-screen bg-brand-navy-950 border-e border-brand-navy-800">
         <AdminSidebar />
       </div>
 
-      {/* Mobile & Tablet Drawer */}
+      {/* Mobile & Tablet Off-Canvas Drawer */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
           />
-          <div className="relative z-10 max-w-xs w-full">
+          <div className="relative z-10 w-64 max-w-xs h-full bg-brand-navy-950 shadow-2xl flex flex-col">
             <AdminSidebar onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 w-full">
+      {/* Main Content Area - Offsets by exact sidebar width on desktop */}
+      <div className="flex-1 flex flex-col min-w-0 w-full lg:ps-64 min-h-screen">
         {/* Top Navbar */}
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm w-full">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -87,7 +88,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
         </header>
 
         {/* Security Status Banner */}
-        <div className="bg-brand-navy-900 border-b border-brand-navy-800 px-4 py-2 text-xs text-slate-300 flex items-center justify-between">
+        <div className="bg-brand-navy-900 border-b border-brand-navy-800 px-4 py-2 text-xs text-slate-300 flex items-center justify-between w-full">
           <span className="truncate">
             🔒 <strong>Staff Portal:</strong> Authenticated staff session active.
           </span>
@@ -97,7 +98,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto w-full max-w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full">
           {children}
         </main>
       </div>

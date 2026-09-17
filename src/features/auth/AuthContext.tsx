@@ -210,7 +210,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     if (!isSupabaseConfigured || !supabase) {
-      localStorage.removeItem('fa_demo_auth');
       setUser(null);
       setStaffProfile(null);
       setPermissions([]);

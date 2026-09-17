@@ -57,3 +57,8 @@
   min-height: 48px;
   min-width: 48px;
 }
+
+/* Button icon preservation */
+button svg {
+  flex-shrink: 0;
+}

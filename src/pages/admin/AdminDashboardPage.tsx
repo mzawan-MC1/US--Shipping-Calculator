@@ -123,10 +123,10 @@ export const AdminDashboardPage: React.FC = () => {
           <button
             onClick={fetchEnquiries}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-navy-950 text-white text-xs font-bold hover:bg-brand-navy-900 transition-colors"
+            className="inline-flex flex-row items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-navy-950 text-white text-xs font-bold hover:bg-brand-navy-900 transition-colors whitespace-nowrap leading-none"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="whitespace-nowrap leading-none">Sync</span>
           </button>
         </div>
       </div>

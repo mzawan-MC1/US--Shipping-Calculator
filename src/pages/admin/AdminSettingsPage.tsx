@@ -122,9 +122,9 @@ export const AdminSettingsPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 text-xs font-bold"
+            startIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            className="text-xs font-bold whitespace-nowrap"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>

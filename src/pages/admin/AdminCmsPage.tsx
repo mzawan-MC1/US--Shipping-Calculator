@@ -318,9 +318,9 @@ export const AdminCmsPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 text-xs font-bold"
+            startIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            className="text-xs font-bold whitespace-nowrap"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
@@ -430,9 +430,9 @@ export const AdminCmsPage: React.FC = () => {
                           size="sm"
                           disabled={isUploadingLogo}
                           onClick={() => logoInputRef.current?.click()}
-                          className="w-full text-[11px] font-bold flex items-center justify-center gap-1"
+                          startIcon={<Upload className="w-3 h-3" />}
+                          className="w-full text-[11px] font-bold whitespace-nowrap"
                         >
-                          <Upload className="w-3 h-3" />
                           {isUploadingLogo ? 'Uploading...' : 'Upload Logo'}
                         </Button>
                         {logoUrl && (
@@ -480,9 +480,9 @@ export const AdminCmsPage: React.FC = () => {
                           size="sm"
                           disabled={isUploadingDarkLogo}
                           onClick={() => darkLogoInputRef.current?.click()}
-                          className="w-full text-[11px] font-bold flex items-center justify-center gap-1"
+                          startIcon={<Upload className="w-3 h-3" />}
+                          className="w-full text-[11px] font-bold whitespace-nowrap"
                         >
-                          <Upload className="w-3 h-3" />
                           {isUploadingDarkLogo ? 'Uploading...' : 'Upload Dark Logo'}
                         </Button>
                         {darkLogoUrl && (
@@ -529,9 +529,9 @@ export const AdminCmsPage: React.FC = () => {
                           size="sm"
                           disabled={isUploadingFavicon}
                           onClick={() => faviconInputRef.current?.click()}
-                          className="w-full text-[11px] font-bold flex items-center justify-center gap-1"
+                          startIcon={<Upload className="w-3 h-3" />}
+                          className="w-full text-[11px] font-bold whitespace-nowrap"
                         >
-                          <Upload className="w-3 h-3" />
                           {isUploadingFavicon ? 'Uploading...' : 'Upload Favicon'}
                         </Button>
                         {faviconUrl && (

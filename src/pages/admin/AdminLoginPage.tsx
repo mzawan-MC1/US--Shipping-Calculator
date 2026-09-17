@@ -4,7 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
-import { Ship, Lock, Mail, ArrowLeft, Loader2, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Ship, Lock, Mail, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -13,7 +13,7 @@ export const AdminLoginPage: React.FC = () => {
   const location = useLocation();
   const { signIn, isAuthenticated } = useAuth();
 
-  const [email, setEmail] = useState('admin@fakheralamshipping.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -107,21 +107,6 @@ export const AdminLoginPage: React.FC = () => {
     }
   };
 
-  const handleDemoBypass = async () => {
-    setErrorMsg(null);
-    setIsSubmitting(true);
-    try {
-      const result = await signIn('admin@fakheralamshipping.com', 'demo-bypass-phase2a');
-      if (!result.error) {
-        navigate('/admin');
-      }
-    } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Authentication bypass failed.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-brand-navy-950 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -132,7 +117,7 @@ export const AdminLoginPage: React.FC = () => {
           </div>
           <h1 className="text-2xl font-black text-white">Fakher Alam Shipping</h1>
           <p className="text-xs text-brand-orange-400 font-bold tracking-wider uppercase">
-            Internal Staff Portal • Phase 2B
+            Internal Staff Portal
           </p>
         </div>
 
@@ -243,18 +228,6 @@ export const AdminLoginPage: React.FC = () => {
           )}
 
           <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-            {!isInviteMode && (
-              <button
-                type="button"
-                onClick={handleDemoBypass}
-                disabled={isSubmitting}
-                className="w-full py-2 px-3 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-brand-orange-600" />
-                <span>Sign In with Demo Super Admin</span>
-              </button>
-            )}
-
             <div className="text-center pt-1">
               <Link
                 to="/"
