@@ -254,36 +254,53 @@ export async function generateQuotationPdf(
   // 4. Financial Breakdown Table
   const clearanceFee = data.clearanceFeeUsd ?? 150.0;
   const portHandlingFee = data.portHandlingFeeUsd ?? 200.0;
+  const clearanceSubtotal = clearanceFee + portHandlingFee;
   const surcharges = data.surchargesUsd ?? 0.0;
+  const hasTowing = data.towingFeeMin > 0 || data.towingFeeMax > 0;
+
+  const oceanAndTowingSubtotalMin = data.oceanFreightUsd + (hasTowing ? data.towingFeeMin : 0);
+  const oceanAndTowingSubtotalMax = data.oceanFreightUsd + (hasTowing ? data.towingFeeMax : 0);
+  const uaeGovSubtotal = data.customsDutyUsd + data.importVatUsd;
 
   if (isAr) {
-    const towingCellAr = data.isTowingRange
-      ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)} (${ar('تقديري')})`
-      : data.towingFeeMin > 0
-      ? `$${data.towingFeeMin.toFixed(2)} (${ar('ثابت')})`
-      : ar('تسليم الميناء مباشرة');
+    const towingCellAr = hasTowing
+      ? data.isTowingRange
+        ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)} (${ar('تقديري')})`
+        : `$${data.towingFeeMin.toFixed(2)}`
+      : ar('غير مطلوب ($0.00)');
+
+    const oceanAndTowingSubtotalAr = hasTowing && data.isTowingRange
+      ? `$${oceanAndTowingSubtotalMin.toFixed(2)} - $${oceanAndTowingSubtotalMax.toFixed(2)}`
+      : `$${oceanAndTowingSubtotalMax.toFixed(2)}`;
 
     const tableBodyAr: string[][] = [
-      ['$ ' + data.oceanFreightUsd.toFixed(2), ar('الشحن البحري الدولي (من ميناء التصدير إلى ميناء الوصول)'), '1'],
-      [towingCellAr, ar('النقل الداخلي في الولايات المتحدة الأمريكية (سطحة إلى الميناء)'), '2'],
-      ['$ ' + clearanceFee.toFixed(2), ar('التخليص الجمركي والمعاملات في موانئ دولة الإمارات'), '3'],
-      ['$ ' + portHandlingFee.toFixed(2), ar('رسوم مناولة الرصيف ومحطة الحاويات وإذن التسليم'), '4'],
+      ['$ ' + data.oceanFreightUsd.toFixed(2), ar('1. تعرفة الشحن البحري الدولي (من ميناء التصدير إلى ميناء الوصول)'), '1'],
+      [towingCellAr, ar('2. النقل الداخلي وسحب المركبة (إلى ميناء الشحن الأمريكي)'), '2'],
+      [oceanAndTowingSubtotalAr, ar(hasTowing ? '3. المجموع الفرعي للشحن البحري والنقل الداخلي' : '3. المجموع الفرعي للشحن البحري'), '3'],
+      ['$ ' + clearanceFee.toFixed(2), ar('• التخليص الجمركي والمعاملات في موانئ دولة الإمارات'), '4a'],
+      ['$ ' + portHandlingFee.toFixed(2), ar('• رسوم مناولة الرصيف ومحطة الحاويات وإذن التسليم'), '4b'],
+      ['$ ' + clearanceSubtotal.toFixed(2), ar('4. المجموع الفرعي لرسوم التخليص والموانئ في الوجهة'), '4'],
+      ['$ ' + data.customsDutyUsd.toFixed(2), ar('• الرسوم الجمركية النظامية (5% من القيمة التقديرية CIF)'), '5a'],
+      ['$ ' + data.importVatUsd.toFixed(2), ar('• ضريبة القيمة المضافة للاستيراد (5% من وعاء الضريبة CIF + الرسوم)'), '5b'],
+      ['$ ' + uaeGovSubtotal.toFixed(2), ar('5. المجموع الفرعي للرسوم والضرائب الحكومية بدولة الإمارات'), '5'],
     ];
 
-    let rowNum = 5;
     if (surcharges > 0) {
-      tableBodyAr.push(['$ ' + surcharges.toFixed(2), ar('رسوم حالة المركبة الإضافية وتعديل الوقود'), (rowNum++).toString()]);
+      tableBodyAr.push(['$ ' + surcharges.toFixed(2), ar('• رسوم حالة المركبة وتعديل الوقود الإضافية'), '+']);
     }
 
-    tableBodyAr.push(
-      ['$ ' + data.customsDutyUsd.toFixed(2), ar('الرسوم الجمركية النظامية (5% من القيمة التقديرية CIF)'), (rowNum++).toString()],
-      ['$ ' + data.importVatUsd.toFixed(2), ar('ضريبة القيمة المضافة للاستيراد (5% من وعاء الضريبة CIF + الرسوم)'), (rowNum++).toString()]
-    );
+    if (data.declaredValueUsd && data.declaredValueUsd > 0) {
+      tableBodyAr.push([
+        '$ ' + data.declaredValueUsd.toFixed(2),
+        ar('7. القيمة المصرح بها لشراء المركبة (مرجع لاحتساب CIF والرسوم فقط؛ غير مضافة لإجمالي الشحن)'),
+        '7'
+      ]);
+    }
 
     autoTable(doc, {
       startY: currentY,
       margin: { left: margin, right: margin },
-      head: [[ar('المبلغ (دولار)'), ar('بيان الرسوم والتقييم الجمركي النظامي'), ar('#')]],
+      head: [[ar('المبلغ (دولار)'), ar('بيان الرسوم والتقييم الجمركي النظامي المعتمد'), ar('#')]],
       body: tableBodyAr,
       theme: 'grid',
       styles: {
@@ -303,32 +320,44 @@ export async function generateQuotationPdf(
       },
     });
   } else {
-    const towingCell = data.isTowingRange
-      ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)} (Estimated Bracket)`
-      : data.towingFeeMin > 0
-      ? `$${data.towingFeeMin.toFixed(2)} (Fixed Tariff)`
-      : 'Port Delivery (Direct)';
+    const towingCell = hasTowing
+      ? data.isTowingRange
+        ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)} (Estimated Range)`
+        : `$${data.towingFeeMin.toFixed(2)} (Fixed Tariff)`
+      : 'Inland Towing: Not requested ($0.00)';
+
+    const oceanAndTowingSubtotal = hasTowing && data.isTowingRange
+      ? `$${oceanAndTowingSubtotalMin.toFixed(2)} - $${oceanAndTowingSubtotalMax.toFixed(2)}`
+      : `$${oceanAndTowingSubtotalMax.toFixed(2)}`;
 
     const tableBody = [
-      ['1', 'Ocean Freight (Origin Port to UAE Destination Port)', `$${data.oceanFreightUsd.toFixed(2)}`],
-      ['2', 'US Inland Towing to Departure Port', towingCell],
-      ['3', 'UAE Customs Clearance & Port Documentation', `$${clearanceFee.toFixed(2)}`],
-      ['4', 'Destination Port Terminal Handling & Delivery Order', `$${portHandlingFee.toFixed(2)}`],
+      ['1', '1. Ocean Freight Tariff (Origin Port to UAE Port)', `$${data.oceanFreightUsd.toFixed(2)}`],
+      ['2', '2. Inland Towing to Origin Departure Port', towingCell],
+      ['3', hasTowing ? '3. Ocean Freight & Inland Towing Subtotal' : '3. Ocean Freight Subtotal', oceanAndTowingSubtotal],
+      ['4a', '  • Customs Clearance & Port Documentation', `$${clearanceFee.toFixed(2)}`],
+      ['4b', '  • Port & Terminal Handling Charges', `$${portHandlingFee.toFixed(2)}`],
+      ['4', '4. Destination Clearance Subtotal', `$${clearanceSubtotal.toFixed(2)}`],
+      ['5a', '  • Statutory UAE Customs Duty (5% of CIF Valuation)', `$${data.customsDutyUsd.toFixed(2)}`],
+      ['5b', '  • Statutory UAE Import VAT (5% of [CIF + Duty])', `$${data.importVatUsd.toFixed(2)}`],
+      ['5', '5. UAE Government Charges Subtotal', `$${uaeGovSubtotal.toFixed(2)}`],
     ];
 
     if (surcharges > 0) {
-      tableBody.push(['5', 'Vehicle Condition & Fuel Surcharges', `$${surcharges.toFixed(2)}`]);
+      tableBody.push(['+', 'Vehicle Condition & Specialized Surcharges', `$${surcharges.toFixed(2)}`]);
     }
 
-    tableBody.push(
-      ['5', 'Statutory UAE Customs Duty (5% of CIF Valuation)', `$${data.customsDutyUsd.toFixed(2)}`],
-      ['6', 'Statutory UAE Import VAT (5% of CIF + Duty)', `$${data.importVatUsd.toFixed(2)}`]
-    );
+    if (data.declaredValueUsd && data.declaredValueUsd > 0) {
+      tableBody.push([
+        '7',
+        '7. Declared Vehicle Purchase Price (For CIF valuation/duty only; excluded from shipping total)',
+        `$${data.declaredValueUsd.toFixed(2)}`
+      ]);
+    }
 
     autoTable(doc, {
       startY: currentY,
       margin: { left: margin, right: margin },
-      head: [['#', 'Charge Description & Statutory Valuation', 'Amount (USD)']],
+      head: [['#', 'Charge Description & Operational Valuation', 'Amount (USD)']],
       body: tableBody,
       theme: 'grid',
       headStyles: {
@@ -454,9 +483,14 @@ export async function generateQuotationPdf(
         currentY = margin;
       }
 
+      // Helper to strip HTML tags for plain text PDF rendering
+      const cleanHtml = (text: string): string => {
+        return text.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+      };
+
       if (isAr) {
-        const ruleTitleAr = rule.title_ar || rule.title || rule.title_en || 'شرط';
-        const ruleBodyAr = rule.content_ar || rule.content || rule.content_en || '';
+        const ruleTitleAr = cleanHtml(rule.title_ar || rule.title || rule.title_en || 'شرط');
+        const ruleBodyAr = cleanHtml(rule.content_ar || rule.content || rule.content_en || '');
 
         doc.setFontSize(8);
         doc.setFont(fontName, 'normal');
@@ -473,8 +507,8 @@ export async function generateQuotationPdf(
         });
         currentY += 3;
       } else {
-        const ruleTitle = rule.title || rule.title_en || 'Rule';
-        const ruleBody = rule.content || rule.content_en || '';
+        const ruleTitle = cleanHtml(rule.title || rule.title_en || 'Rule');
+        const ruleBody = cleanHtml(rule.content || rule.content_en || '');
 
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');

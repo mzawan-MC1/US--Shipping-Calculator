@@ -52,21 +52,32 @@ import {
 } from 'lucide-react';
 import { CalculatorFormData } from '../../types/calculator';
 
-const calculatorSchema = z.object({
-  vehicleType: z.string().min(1, 'Vehicle category is required'),
-  powertrain: z.string().min(1, 'Powertrain is required'),
-  purchaseSource: z.string().min(1, 'Purchase source is required'),
-  loadingPort: z.string().min(1, 'Loading port is required'),
-  destinationPort: z.string().min(1, 'Destination port is required'),
-  shippingMethod: z.string().default('consolidated_container'),
-  buyingPrice: z.number().min(100, 'Please enter a valid vehicle purchase price ($100 minimum)'),
-  towFromLocation: z.string().optional(),
-  purchaseLocationId: z.string().optional(),
-  customerName: z.string().min(2, 'Name is required (minimum 2 characters)'),
-  customerPhone: z.string().min(7, 'Valid phone / WhatsApp number is required'),
-  customerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
-  notes: z.string().optional(),
-});
+const calculatorSchema = z
+  .object({
+    vehicleType: z.string().min(1, 'Vehicle category is required'),
+    powertrain: z.string().min(1, 'Powertrain is required'),
+    purchaseSource: z.string().min(1, 'Purchase source is required'),
+    loadingPort: z.string().min(1, 'Loading port is required'),
+    destinationPort: z.string().min(1, 'Destination port is required'),
+    shippingMethod: z.string().default('consolidated_container'),
+    buyingPrice: z.number().min(100, 'Please enter a valid vehicle purchase price ($100 minimum)'),
+    includeInlandTowing: z.boolean().default(true),
+    towFromLocation: z.string().optional(),
+    purchaseLocationId: z.string().optional(),
+    customerName: z.string().min(2, 'Name is required (minimum 2 characters)'),
+    customerPhone: z.string().min(7, 'Valid phone / WhatsApp number is required'),
+    customerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.includeInlandTowing && (!data.towFromLocation || data.towFromLocation.trim().length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Pickup location is required when inland towing is included',
+        path: ['towFromLocation'],
+      });
+    }
+  });
 
 type FormData = z.infer<typeof calculatorSchema>;
 
@@ -123,6 +134,7 @@ export const CalculatorPage: React.FC = () => {
       destinationPort: 'khorfakkan',
       shippingMethod: 'consolidated_container',
       buyingPrice: 5000,
+      includeInlandTowing: true,
       towFromLocation: 'Houston, TX (Copart Houston)',
       customerName: '',
       customerPhone: '',
@@ -279,7 +291,11 @@ export const CalculatorPage: React.FC = () => {
     } else if (currentStep === 4) {
       isValid = await trigger(['shippingMethod']);
     } else if (currentStep === 5) {
-      isValid = await trigger(['buyingPrice']);
+      const fieldsToValidate: ('buyingPrice' | 'towFromLocation')[] = ['buyingPrice'];
+      if (formData.includeInlandTowing) {
+        fieldsToValidate.push('towFromLocation');
+      }
+      isValid = await trigger(fieldsToValidate);
     } else if (currentStep === 6) {
       isValid = await trigger(['customerName', 'customerPhone', 'customerEmail']);
     } else {
@@ -310,8 +326,9 @@ export const CalculatorPage: React.FC = () => {
         destinationPort: selectedDestPort ? selectedDestPort.id : data.destinationPort,
         shippingMethod: data.shippingMethod,
         buyingPrice: data.buyingPrice,
-        towFromLocation: data.towFromLocation,
-        purchaseLocationId: data.purchaseLocationId,
+        includeInlandTowing: data.includeInlandTowing,
+        towFromLocation: data.includeInlandTowing ? data.towFromLocation : undefined,
+        purchaseLocationId: data.includeInlandTowing ? data.purchaseLocationId : undefined,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail,
@@ -792,49 +809,82 @@ export const CalculatorPage: React.FC = () => {
                 )}
               />
 
-              {/* Towing Pickup Location with Managed Locations quick suggestions */}
-              <div className="space-y-2">
-                <Controller
-                  control={control}
-                  name="towFromLocation"
-                  render={({ field }) => (
-                    <Input
-                      label={t.towFromLabel}
-                      placeholder={t.towFromPlaceholder}
-                      startIcon={<Truck className="w-4 h-4" />}
-                      error={errors.towFromLocation?.message}
-                      helperText={t.towChargeNotice}
-                      {...field}
-                    />
-                  )}
-                />
-
-                {/* Managed purchase locations helper chips */}
-                {purchaseLocations.length > 0 && (
-                  <div className="pt-1">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                      {isAr ? 'ساحات مزادات شهيرة مدعومة بالتعرفة:' : 'Supported auction branches:'}
+              {/* Inland Towing Checkbox Toggle */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-orange-300 transition-colors">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="mt-1 w-4 h-4 rounded text-brand-orange-600 focus:ring-brand-orange-500 border-slate-300 transition-colors"
+                    checked={formData.includeInlandTowing}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setValue('includeInlandTowing', checked, { shouldValidate: true });
+                      if (!checked) {
+                        setValue('towFromLocation', '');
+                        setValue('purchaseLocationId', undefined);
+                      }
+                    }}
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-bold text-slate-900 block">
+                      {isAr
+                        ? 'تضمين النقل البري الداخلي / سحب السيارة'
+                        : 'Include Inland Towing / Vehicle Pickup'}
                     </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {purchaseLocations.slice(0, 6).map((loc) => (
-                        <button
-                          key={loc.id}
-                          type="button"
-                          onClick={() => {
-                            setValue('towFromLocation', `${loc.name}, ${loc.stateCode}`, {
-                              shouldValidate: true,
-                            });
-                            setValue('purchaseLocationId', loc.id);
-                          }}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-brand-orange-600 border border-slate-200 transition-colors text-slate-700"
-                        >
-                          {loc.name} ({loc.stateCode})
-                        </button>
-                      ))}
-                    </div>
+                    <span className="text-xs text-slate-500 block mt-0.5">
+                      {isAr
+                        ? 'قم بإلغاء التحديد إذا كنت ستقوم بتسليم السيارة مباشرة إلى الميناء بنفسك، ولن يتم احتساب أي رسوم سحب.'
+                        : 'Uncheck this if you or your dealer will deliver the vehicle directly to the port warehouse. Towing charge will be $0.00.'}
+                    </span>
                   </div>
-                )}
+                </label>
               </div>
+
+              {/* Towing Pickup Location with Managed Locations quick suggestions */}
+              {formData.includeInlandTowing && (
+                <div className="space-y-2 pl-1">
+                  <Controller
+                    control={control}
+                    name="towFromLocation"
+                    render={({ field }) => (
+                      <Input
+                        label={t.towFromLabel}
+                        placeholder={t.towFromPlaceholder}
+                        startIcon={<Truck className="w-4 h-4" />}
+                        error={errors.towFromLocation?.message}
+                        helperText={t.towChargeNotice}
+                        {...field}
+                      />
+                    )}
+                  />
+
+                  {/* Managed purchase locations helper chips */}
+                  {purchaseLocations.length > 0 && (
+                    <div className="pt-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                        {isAr ? 'ساحات مزادات شهيرة مدعومة بالتعرفة:' : 'Supported auction branches:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {purchaseLocations.slice(0, 6).map((loc) => (
+                          <button
+                            key={loc.id}
+                            type="button"
+                            onClick={() => {
+                              setValue('towFromLocation', `${loc.name}, ${loc.stateCode}`, {
+                                shouldValidate: true,
+                              });
+                              setValue('purchaseLocationId', loc.id);
+                            }}
+                            className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-brand-orange-600 border border-slate-200 transition-colors text-slate-700"
+                          >
+                            {loc.name} ({loc.stateCode})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
                 <Info className="w-4 h-4 shrink-0 mt-0.5" />
@@ -948,10 +998,12 @@ export const CalculatorPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between sm:block">
                     <span className="text-slate-500 block">
-                      {isAr ? 'موقع النقل الداخلي:' : 'Towing Origin:'}
+                      {isAr ? 'حالة وموقع النقل الداخلي:' : 'Inland Towing:'}
                     </span>
                     <strong className="text-slate-800 break-words">
-                      {formData.towFromLocation || (isAr ? 'غير محدد (تسليم الميناء)' : 'Not specified (Direct to port)')}
+                      {formData.includeInlandTowing
+                        ? formData.towFromLocation || (isAr ? 'مطلوب (الموقع قيد التحديد)' : 'Requested')
+                        : (isAr ? 'غير مطلوب - تسليم مباشر للميناء ($0.00)' : 'Not requested - Direct port delivery ($0.00)')}
                     </strong>
                   </div>
                 </div>

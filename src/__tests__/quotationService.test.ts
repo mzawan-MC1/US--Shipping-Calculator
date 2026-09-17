@@ -169,6 +169,85 @@ describe('QuotationService (Phase 2A)', () => {
     expect(quotationService.getActiveQuote()).toBeNull();
   });
 
+  it('handles optional inland towing explicitly set to false', async () => {
+    const rpcSpy = vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+      data: {
+        success: true,
+        is_idempotent_replay: false,
+        quotation_id: '33333333-3333-3333-3333-333333333333',
+        quotation_reference: 'QT-20260917-NOTOW',
+        enquiry_reference: 'ENQ-20260917-NOTOW',
+        snapshot: {
+          quotation_reference: 'QT-20260917-NOTOW',
+          enquiry_reference: 'ENQ-20260917-NOTOW',
+          include_inland_towing: false,
+          disclaimer: 'Statutory UAE Customs Duty (5%) and Import VAT (5%) are calculated on CIF valuation.',
+          financials: {
+            subtotal_ocean_freight: 1250,
+            towing_fee_min: 0,
+            towing_fee_max: 0,
+            is_towing_range: false,
+            customs_duty_min: 680,
+            customs_duty_max: 680,
+            import_vat_min: 714,
+            import_vat_max: 714,
+            total_charges_usd_min: 2994,
+            total_charges_usd_max: 2994,
+            total_charges_aed_min: 10995.47,
+            total_charges_aed_max: 10995.47,
+          },
+          line_items: [
+            {
+              code: 'INLAND_TOWING',
+              category: 'towing',
+              name_en: 'Inland Towing: Not requested ($0.00)',
+              amount_usd_min: 0,
+              amount_usd_max: 0,
+              is_requested: false,
+            },
+          ],
+          route: {
+            origin_port_name: 'Port of Savannah',
+            destination_port_name: 'Port of Khor Fakkan',
+          },
+          rules: [],
+        },
+      },
+      error: null,
+      count: null,
+      status: 200,
+      statusText: 'OK',
+    } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+
+    const input: CalculatorFormData = {
+      vehicleType: 'sedan',
+      powertrain: 'petrol',
+      purchaseSource: 'copart',
+      loadingPort: 'savannah',
+      destinationPort: 'khorfakkan',
+      buyingPrice: 10000,
+      includeInlandTowing: false,
+      towFromLocation: 'Atlanta, GA',
+      customerName: 'No Tow Customer',
+      customerPhone: '+971509998877',
+    };
+
+    const quote = await quotationService.calculateQuote(input);
+
+    expect(rpcSpy).toHaveBeenCalledWith(
+      'calculate_shipping_quote_v1',
+      expect.objectContaining({
+        p_payload: expect.objectContaining({
+          include_inland_towing: false,
+        }),
+      })
+    );
+
+    expect(quote.includeInlandTowing).toBe(false);
+    expect(quote.towingFeeMin).toBe(0);
+    expect(quote.towingFeeMax).toBe(0);
+  });
+
   it('returns null when no active quotation exists in session', () => {
     sessionStorage.clear();
     expect(quotationService.getActiveQuote()).toBeNull();

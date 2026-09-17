@@ -9,6 +9,7 @@ import { adminService, AdminQuotation } from '../../services/adminService';
 import { formatCurrency, formatAED } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
+import { sanitizeHtml } from '../../components/ui/RichTextEditor';
 import {
   FileSpreadsheet,
   Search,
@@ -249,37 +250,47 @@ export const AdminQuotationsPage: React.FC = () => {
 
       {/* Reorganized Authoritative Quotation Breakdown Modal (Sections A through G) */}
       {selectedQuote && (() => {
+        const snap = (selectedQuote.pricingSnapshot as Record<string, unknown>) || {};
         const rate = selectedQuote.exchangeRate || 3.6725;
         const declaredValue = selectedQuote.declaredValueUsd || 0;
         const oceanFreight = selectedQuote.oceanFreightUsd || 0;
         const towingMin = selectedQuote.towingFeeMin || 0;
         const towingMax = selectedQuote.towingFeeMax || 0;
-        const effectiveTowing = selectedQuote.isTowingRange ? towingMax : (towingMin || towingMax);
         const portHandling = selectedQuote.portHandlingUsd || 200;
         const clearance = selectedQuote.customsClearanceUsd || 150;
         const surcharges = selectedQuote.surchargesUsd || 0;
-
-        // Subtotal of shipping charges (strictly services, NO vehicle purchase price)
-        const subtotalShippingUsd = oceanFreight + effectiveTowing + portHandling + clearance + surcharges;
-        const subtotalShippingAed = subtotalShippingUsd * rate;
-
-        // CIF Base & Government Charges
         const cifUsd = selectedQuote.cifMax || (declaredValue + oceanFreight);
+
+        // Inland towing flags and location
+        const includeInlandTowing = snap.include_inland_towing !== false && (towingMin > 0 || towingMax > 0 || (snap.towing_fee_min as number) > 0 || (snap.towing_fee_max as number) > 0);
+        const towingLocationName = (snap.towing_location_name as string) || (snap.towing_pickup_location as string) || 'Origin Pickup Location';
+
+        // 1 & 2 & 3: Ocean freight & Inland towing
+        const effectiveTowingMin = includeInlandTowing ? towingMin : 0;
+        const effectiveTowingMax = includeInlandTowing ? towingMax : 0;
+        const oceanAndTowingSubtotalMin = oceanFreight + effectiveTowingMin;
+        const oceanAndTowingSubtotalMax = oceanFreight + effectiveTowingMax;
+
+        // 4: Destination clearance subtotal ($350)
+        const destinationClearanceSubtotal = portHandling + clearance;
+
+        // 5: UAE Government statutory charges
         const customsDutyUsd = selectedQuote.customsDutyUsd || (cifUsd * 0.05);
         const vatBaseUsd = cifUsd + customsDutyUsd;
         const importVatUsd = selectedQuote.importVatUsd || (vatBaseUsd * 0.05);
         const totalGovChargesUsd = customsDutyUsd + importVatUsd;
         const totalGovChargesAed = totalGovChargesUsd * rate;
 
-        // Grand Totals
-        const grandTotalShippingAndGovUsd = subtotalShippingUsd + totalGovChargesUsd;
-        const grandTotalShippingAndGovAed = grandTotalShippingAndGovUsd * rate;
+        // 6: Grand total shipping & clearance (excluding vehicle price)
+        const grandTotalShippingUsdMin = oceanAndTowingSubtotalMin + destinationClearanceSubtotal + surcharges + totalGovChargesUsd;
+        const grandTotalShippingUsdMax = oceanAndTowingSubtotalMax + destinationClearanceSubtotal + surcharges + totalGovChargesUsd;
+        const grandTotalShippingAedMin = grandTotalShippingUsdMin * rate;
+        const grandTotalShippingAedMax = grandTotalShippingUsdMax * rate;
 
         const createdDate = new Date(selectedQuote.createdAt);
         const validUntilDate = new Date(createdDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-        const snap = (selectedQuote.pricingSnapshot as Record<string, unknown>) || {};
-        const originPort = (snap.originPort as string) || selectedQuote.route.split('→')[0]?.trim() || 'USA Port / Auction';
-        const destinationPort = (snap.destinationPort as string) || selectedQuote.route.split('→')[1]?.trim() || 'UAE Port (Jebel Ali)';
+        const originPort = (snap.origin_port_name as string) || (snap.originPort as string) || selectedQuote.route.split('→')[0]?.trim() || 'USA Port';
+        const destinationPort = (snap.destination_port_name as string) || (snap.destinationPort as string) || selectedQuote.route.split('→')[1]?.trim() || 'UAE Port (Jebel Ali / Khorfakkan)';
 
         return (
           <Modal
@@ -379,10 +390,10 @@ export const AdminQuotationsPage: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold uppercase block">
-                      Destination Country / Emirate
+                      Destination Country
                     </span>
                     <span className="text-slate-700 font-medium">
-                      United Arab Emirates (Dubai / Sharjah)
+                      United Arab Emirates
                     </span>
                   </div>
                 </div>
@@ -434,7 +445,7 @@ export const AdminQuotationsPage: React.FC = () => {
                     D
                   </span>
                   <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
-                    Vehicle Value & CIF Valuation Base
+                    Declared Vehicle Purchase Value (Reference Only)
                   </h3>
                 </div>
 
@@ -449,8 +460,8 @@ export const AdminQuotationsPage: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-200/60 text-slate-700">
                       <tr>
-                        <td className="py-1.5 px-2">Declared Vehicle Purchase Value</td>
-                        <td className="py-1.5 px-2 text-end font-medium">
+                        <td className="py-1.5 px-2 font-medium">Declared Vehicle Purchase Value (7)</td>
+                        <td className="py-1.5 px-2 text-end font-bold text-slate-900">
                           {declaredValue > 0 ? formatCurrency(declaredValue) : 'Not Declared ($0.00)'}
                         </td>
                         <td className="py-1.5 px-2 text-end text-slate-500">
@@ -462,11 +473,6 @@ export const AdminQuotationsPage: React.FC = () => {
                         <td className="py-1.5 px-2 text-end font-medium">{formatCurrency(oceanFreight)}</td>
                         <td className="py-1.5 px-2 text-end text-slate-500">{formatAED(oceanFreight * rate)}</td>
                       </tr>
-                      <tr>
-                        <td className="py-1.5 px-2">Transit Marine Cargo Insurance</td>
-                        <td className="py-1.5 px-2 text-end font-medium">Included / Standard</td>
-                        <td className="py-1.5 px-2 text-end text-slate-500">Carrier Terms</td>
-                      </tr>
                       <tr className="font-bold bg-white/60">
                         <td className="py-2 px-2 text-brand-navy-950">Total Official CIF Valuation Base</td>
                         <td className="py-2 px-2 text-end text-brand-navy-950 font-bold">{formatCurrency(cifUsd)}</td>
@@ -475,6 +481,9 @@ export const AdminQuotationsPage: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-2">
+                  * Note: Declared vehicle price is used solely for statutory Customs Duty and Import VAT assessment; it is NOT added to the shipping charge total.
+                </p>
               </div>
 
               {/* SECTION E: Itemized Shipping & Logistics Charges */}
@@ -506,46 +515,85 @@ export const AdminQuotationsPage: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 text-slate-700">
                       <tr>
                         <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                          <Truck className="w-3.5 h-3.5 text-brand-orange-500" /> Inland Towing (Origin Auction to US Port)
+                          <Ship className="w-3.5 h-3.5 text-blue-500" /> 1. Ocean Freight Tariff ({originPort} → {destinationPort})
                         </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-500">
-                          {selectedQuote.isTowingRange ? 'Carrier Range Bracket' : 'Fixed Station Rate'}
-                        </td>
-                        <td className="py-2 px-3 text-end font-semibold">
-                          {selectedQuote.isTowingRange
-                            ? `${formatCurrency(towingMin)} – ${formatCurrency(towingMax)}`
-                            : formatCurrency(towingMin || towingMax)}
-                        </td>
-                        <td className="py-2 px-3 text-end text-slate-500">
-                          {selectedQuote.isTowingRange
-                            ? `${formatAED(towingMin * rate)} – ${formatAED(towingMax * rate)}`
-                            : formatAED((towingMin || towingMax) * rate)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                          <Ship className="w-3.5 h-3.5 text-blue-500" /> Ocean Freight (US Port to UAE)
-                        </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-500">Containerized Cargo Carrier</td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Scheduled Ocean Carrier</td>
                         <td className="py-2 px-3 text-end font-semibold">{formatCurrency(oceanFreight)}</td>
                         <td className="py-2 px-3 text-end text-slate-500">{formatAED(oceanFreight * rate)}</td>
                       </tr>
                       <tr>
                         <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                          <Ship className="w-3.5 h-3.5 text-indigo-500" /> Destination Port Handling & Terminal Charges
+                          <Truck className="w-3.5 h-3.5 text-brand-orange-500" /> 2. Inland Towing ({includeInlandTowing ? `${towingLocationName} → ${originPort}` : 'Inland Towing: Not requested ($0.00)'})
                         </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-500">Non-VAT Base / Destination Service</td>
-                        <td className="py-2 px-3 text-end font-semibold">{formatCurrency(portHandling)}</td>
-                        <td className="py-2 px-3 text-end text-slate-500">{formatAED(portHandling * rate)}</td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">
+                          {includeInlandTowing
+                            ? selectedQuote.isTowingRange
+                              ? 'Carrier Range Bracket'
+                              : 'Fixed Station Rate'
+                            : 'Direct Port Delivery'}
+                        </td>
+                        <td className="py-2 px-3 text-end font-semibold">
+                          {includeInlandTowing
+                            ? selectedQuote.isTowingRange
+                              ? `${formatCurrency(towingMin)} – ${formatCurrency(towingMax)}`
+                              : formatCurrency(towingMin || towingMax)
+                            : '$0.00'}
+                        </td>
+                        <td className="py-2 px-3 text-end text-slate-500">
+                          {includeInlandTowing
+                            ? selectedQuote.isTowingRange
+                              ? `${formatAED(towingMin * rate)} – ${formatAED(towingMax * rate)}`
+                              : formatAED((towingMin || towingMax) * rate)
+                            : 'AED 0.00'}
+                        </td>
                       </tr>
+
+                      {/* 3. Ocean Freight & Inland Towing Subtotal */}
+                      <tr className="bg-slate-50/70 font-semibold text-slate-900">
+                        <td colSpan={2} className="py-2 px-3">
+                          3. {includeInlandTowing ? 'Ocean Freight & Inland Towing Subtotal' : 'Ocean Freight Subtotal'}
+                        </td>
+                        <td className="py-2 px-3 text-end text-brand-orange-600 font-bold">
+                          {includeInlandTowing && selectedQuote.isTowingRange
+                            ? `${formatCurrency(oceanAndTowingSubtotalMin)} – ${formatCurrency(oceanAndTowingSubtotalMax)}`
+                            : formatCurrency(oceanAndTowingSubtotalMax)}
+                        </td>
+                        <td className="py-2 px-3 text-end text-slate-600">
+                          {includeInlandTowing && selectedQuote.isTowingRange
+                            ? `${formatAED(oceanAndTowingSubtotalMin * rate)} – ${formatAED(oceanAndTowingSubtotalMax * rate)}`
+                            : formatAED(oceanAndTowingSubtotalMax * rate)}
+                        </td>
+                      </tr>
+
+                      {/* 4. Destination Clearance Charges */}
                       <tr>
                         <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-slate-500" /> UAE Customs Clearance & Documentation
+                          <FileText className="w-3.5 h-3.5 text-slate-500" /> • Customs Clearance & Documentation
                         </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-500">Agency filing & port paperwork</td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Agency filing & customs gate pass</td>
                         <td className="py-2 px-3 text-end font-semibold">{formatCurrency(clearance)}</td>
                         <td className="py-2 px-3 text-end text-slate-500">{formatAED(clearance * rate)}</td>
                       </tr>
+                      <tr>
+                        <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                          <Ship className="w-3.5 h-3.5 text-indigo-500" /> • Port & Terminal Handling Charges
+                        </td>
+                        <td className="py-2 px-3 text-[11px] text-slate-500">Container de-vanning & terminal handling</td>
+                        <td className="py-2 px-3 text-end font-semibold">{formatCurrency(portHandling)}</td>
+                        <td className="py-2 px-3 text-end text-slate-500">{formatAED(portHandling * rate)}</td>
+                      </tr>
+                      <tr className="bg-slate-50/50 font-semibold text-slate-800">
+                        <td colSpan={2} className="py-1.5 px-3 pl-6 text-[11px]">
+                          4. Destination Clearance Subtotal
+                        </td>
+                        <td className="py-1.5 px-3 text-end font-bold text-slate-900">
+                          {formatCurrency(destinationClearanceSubtotal)}
+                        </td>
+                        <td className="py-1.5 px-3 text-end text-slate-500">
+                          {formatAED(destinationClearanceSubtotal * rate)}
+                        </td>
+                      </tr>
+
                       {surcharges > 0 && (
                         <tr>
                           <td className="py-2 px-3 font-medium flex items-center gap-1.5 text-amber-800">
@@ -557,19 +605,6 @@ export const AdminQuotationsPage: React.FC = () => {
                         </tr>
                       )}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-brand-orange-50/50 border-t-2 border-brand-orange-200 font-bold text-brand-navy-950">
-                        <td colSpan={2} className="py-2.5 px-3">
-                          Subtotal of Shipping & Logistics Services
-                        </td>
-                        <td className="py-2.5 px-3 text-end font-black text-brand-navy-950">
-                          {formatCurrency(subtotalShippingUsd)}
-                        </td>
-                        <td className="py-2.5 px-3 text-end font-black text-brand-orange-600">
-                          {formatAED(subtotalShippingAed)}
-                        </td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               </div>
@@ -581,7 +616,7 @@ export const AdminQuotationsPage: React.FC = () => {
                     F
                   </span>
                   <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
-                    UAE Customs Duty & Import VAT (Statutory Government Fees)
+                    5. UAE Government Statutory Charges
                   </h3>
                 </div>
 
@@ -611,7 +646,7 @@ export const AdminQuotationsPage: React.FC = () => {
                     </tbody>
                     <tfoot>
                       <tr className="bg-emerald-100/50 font-bold border-t border-emerald-300 text-emerald-950">
-                        <td colSpan={2} className="py-2 px-2">Total UAE Government Charges</td>
+                        <td colSpan={2} className="py-2 px-2">UAE Government Charges Subtotal</td>
                         <td className="py-2 px-2 text-end font-black">{formatCurrency(totalGovChargesUsd)}</td>
                         <td className="py-2 px-2 text-end font-black text-emerald-700">{formatAED(totalGovChargesAed)}</td>
                       </tr>
@@ -627,32 +662,36 @@ export const AdminQuotationsPage: React.FC = () => {
                     G
                   </span>
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Quotation Grand Totals (Landed Services Summary)
+                    6. Total Estimated Shipping & Clearance (Excluding Vehicle Price)
                   </h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
                   <div className="p-3 rounded-xl bg-brand-navy-900 border border-brand-navy-800">
                     <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                      Total Logistics & Shipping
+                      Ocean & Towing Subtotal
                     </span>
                     <strong className="text-white text-base block mt-0.5">
-                      {formatCurrency(subtotalShippingUsd)}
+                      {includeInlandTowing && selectedQuote.isTowingRange
+                        ? `${formatCurrency(oceanAndTowingSubtotalMin)} – ${formatCurrency(oceanAndTowingSubtotalMax)}`
+                        : formatCurrency(oceanAndTowingSubtotalMax)}
                     </strong>
                     <span className="text-[11px] text-brand-orange-400 font-semibold">
-                      {formatAED(subtotalShippingAed)}
+                      {includeInlandTowing && selectedQuote.isTowingRange
+                        ? `${formatAED(oceanAndTowingSubtotalMin * rate)} – ${formatAED(oceanAndTowingSubtotalMax * rate)}`
+                        : formatAED(oceanAndTowingSubtotalMax * rate)}
                     </span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-brand-navy-900 border border-brand-navy-800">
                     <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                      Total Government Charges
+                      Clearance & Government Fees
                     </span>
                     <strong className="text-emerald-300 text-base block mt-0.5">
-                      {formatCurrency(totalGovChargesUsd)}
+                      {formatCurrency(destinationClearanceSubtotal + totalGovChargesUsd)}
                     </strong>
                     <span className="text-[11px] text-emerald-400 font-semibold">
-                      {formatAED(totalGovChargesAed)}
+                      {formatAED((destinationClearanceSubtotal + totalGovChargesUsd) * rate)}
                     </span>
                   </div>
 
@@ -661,24 +700,62 @@ export const AdminQuotationsPage: React.FC = () => {
                       Quotation Grand Total
                     </span>
                     <strong className="text-white text-lg block font-black mt-0.5">
-                      {formatCurrency(grandTotalShippingAndGovUsd)}
+                      {includeInlandTowing && selectedQuote.isTowingRange
+                        ? `${formatCurrency(grandTotalShippingUsdMin)} – ${formatCurrency(grandTotalShippingUsdMax)}`
+                        : formatCurrency(grandTotalShippingUsdMax)}
                     </strong>
                     <span className="text-xs text-white font-bold block">
-                      {formatAED(grandTotalShippingAndGovAed)}
+                      {includeInlandTowing && selectedQuote.isTowingRange
+                        ? `${formatAED(grandTotalShippingAedMin)} – ${formatAED(grandTotalShippingAedMax)}`
+                        : formatAED(grandTotalShippingAedMax)}
                     </span>
                   </div>
                 </div>
 
+                {includeInlandTowing && selectedQuote.isTowingRange && (
+                  <p className="text-[11px] text-amber-300 mt-3 pt-2 border-t border-brand-navy-800/80">
+                    ⚠️ Advisory: Final towing charge is subject to confirmation based on exact vehicle condition, location access, and carrier availability.
+                  </p>
+                )}
                 {declaredValue > 0 && (
                   <p className="text-[10px] text-slate-400 mt-3 pt-2 border-t border-brand-navy-800/80">
                     * Total Estimated Landed Investment (Vehicle Purchase + Shipping + UAE Government Charges):{' '}
                     <strong className="text-white font-bold">
-                      {formatCurrency(declaredValue + grandTotalShippingAndGovUsd)}
+                      {formatCurrency(declaredValue + (includeInlandTowing ? grandTotalShippingUsdMax : grandTotalShippingUsdMin))}
                     </strong>{' '}
-                    ({formatAED((declaredValue + grandTotalShippingAndGovUsd) * rate)})
+                    ({formatAED((declaredValue + (includeInlandTowing ? grandTotalShippingUsdMax : grandTotalShippingUsdMin)) * rate)})
                   </p>
                 )}
               </div>
+
+              {/* SECTION H: Quotation Rules & Regulations Snapshot */}
+              {Array.isArray(snap.rules) && (snap.rules as Array<Record<string, string>>).length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-100">
+                    <ShieldCheck className="w-4 h-4 text-brand-orange-500" />
+                    <h3 className="text-xs font-bold text-brand-navy-950 uppercase tracking-wider">
+                      Locked Quotation Rules & Regulations Snapshot
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {(snap.rules as Array<Record<string, string>>).map((rule, idx) => {
+                      const title = rule.title || rule.title_en || 'Rule';
+                      const content = rule.content || rule.content_en || '';
+                      return (
+                        <div key={idx} className="text-xs border-b border-slate-50 pb-2.5 last:border-b-0 last:pb-0">
+                          <strong className="text-slate-900 block font-semibold mb-0.5">
+                            {idx + 1}. {title}
+                          </strong>
+                          <div
+                            className="text-[11px] text-slate-600 leading-relaxed prose prose-xs max-w-none"
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Disclaimer */}
               {selectedQuote.disclaimer && (

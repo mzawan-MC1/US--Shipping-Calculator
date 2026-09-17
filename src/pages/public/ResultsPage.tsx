@@ -11,6 +11,7 @@ import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
+import { sanitizeHtml } from '../../components/ui/RichTextEditor';
 import {
   Clock,
   Car,
@@ -26,6 +27,7 @@ import {
   CheckCircle2,
   Share2,
   Printer,
+  AlertCircle,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
@@ -130,30 +132,51 @@ export const ResultsPage: React.FC = () => {
     quote.input.model,
   ].filter(Boolean).join(' ') || `${quote.input.vehicleType} (${quote.input.powertrain})`;
 
-  const towingSummary = quote.isTowingRange
-    ? `$${quote.towingFeeMin} - $${quote.towingFeeMax} (Estimated Range)`
-    : quote.towingFeeMin && quote.towingFeeMin > 0
-      ? `$${quote.towingFeeMin} (Fixed Tariff)`
-      : 'Port Delivery (Direct)';
+  const towingSummary = quote.includeInlandTowing
+    ? quote.isTowingRange
+      ? `$${quote.towingFeeMin} - $${quote.towingFeeMax} (Estimated Range)`
+      : quote.towingFeeMin && quote.towingFeeMin > 0
+        ? `$${quote.towingFeeMin} (Fixed Tariff)`
+        : 'Port Delivery (Direct)'
+    : 'Not requested ($0.00)';
+
+  const oceanAndTowingSubtotalFormatted = quote.isTowingRange && quote.includeInlandTowing
+    ? displayRangeOrAmount(
+        (quote.oceanAndTowingSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0))),
+        (quote.oceanAndTowingSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0)))
+      )
+    : displayAmount(quote.oceanFreightTotal + (quote.includeInlandTowing ? (quote.towingFeeMin || 0) : 0));
+
+  const uaeGovChargesFormatted = quote.isTowingRange
+    ? displayRangeOrAmount(
+        quote.uaeGovernmentChargesSubtotalMin ?? ((quote.dutyMin || quote.customsDuty) + (quote.vatMin || quote.vat)),
+        quote.uaeGovernmentChargesSubtotalMax ?? ((quote.dutyMax || quote.customsDuty) + (quote.vatMax || quote.vat))
+      )
+    : displayAmount((quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat));
 
   const whatsappMessage = `*${brandNameHeader} - OFFICIAL SHIPPING QUOTATION*
 📄 *Quote Ref:* ${quote.referenceNumber}
 👤 *Customer:* ${quote.input.customerName || 'Customer'}
 🚗 *Vehicle:* ${vehicleDesc}
-🚢 *Route:* ${originDisplay.name} (${originDisplay.subtitle}) ➔ ${destDisplay.name} (${destDisplay.subtitle})
+🚢 *Route:* ${originDisplay.name} ➔ ${destDisplay.name}
 ⏱️ *Transit Time:* ${quote.estimatedTransitDaysMin && quote.estimatedTransitDaysMax ? `${quote.estimatedTransitDaysMin}-${quote.estimatedTransitDaysMax} Days` : `${quote.estimatedTransitDays} Days`}
 
-💵 *Cost Summary:*
-• Ocean Freight: $${quote.oceanFreight?.toLocaleString()}
-• Inland Towing: ${towingSummary}
-• Customs Clearance: $${quote.customsClearance?.toLocaleString()}
-• Port Handling: $${quote.destinationCharges?.toLocaleString()}
-• Customs Duty (5%): $${(quote.dutyMax ?? quote.customsDuty)?.toLocaleString()}
-• UAE Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
+💵 *Standard Cost Breakdown:*
+1. Ocean Freight Tariff: $${quote.oceanFreight?.toLocaleString()}
+2. Inland Towing: ${towingSummary}
+3. ${quote.includeInlandTowing ? 'Ocean Freight & Towing Subtotal' : 'Ocean Freight Subtotal'}: ${oceanAndTowingSubtotalFormatted}
+4. Destination Clearance Charges:
+   • Customs Clearance: $${(quote.customsClearance || 150)?.toLocaleString()}
+   • Port Handling: $${(quote.destinationCharges || 200)?.toLocaleString()}
+   • Clearance Subtotal: $350.00
+5. UAE Government Statutory Charges:
+   • Customs Duty (5%): $${(quote.dutyMax ?? quote.customsDuty)?.toLocaleString()}
+   • UAE Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
+   • Gov Charges Subtotal: ${uaeGovChargesFormatted}
+6. *Total Estimated Shipping & Clearance:* ${totalFormatted} (${totalAedFormatted})
+7. *Declared Vehicle Price:* $${quote.input.buyingPrice?.toLocaleString()} USD (Used for CIF & statutory duty/VAT only; never added to shipping total)
 
-💰 *Total Estimated:* ${totalFormatted} (${totalAedFormatted})
-
-ℹ️ *Note:* ${quote.disclaimer || 'Statutory UAE Customs Duty (5%) and Import VAT (5%) are calculated on CIF valuation. Quotation valid for 14 days.'}
+${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final towing charge is subject to confirmation based on exact vehicle condition, location access, and carrier availability.\n\n' : ''}ℹ️ *Note:* ${quote.disclaimer || 'Quotation valid for 14 days.'}
 
 🔗 *View Online:* ${window.location.origin}/results`;
 
@@ -448,45 +471,45 @@ export const ResultsPage: React.FC = () => {
 
           {/* Cost Breakdown Table */}
           <Card className="p-5 sm:p-6 divide-y divide-slate-100">
-            {/* Ocean Freight Section */}
+            {/* 1. Ocean Freight Tariff & 2. Inland Towing */}
             <div className="pb-3.5">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
                   {t.costBreakdown}
                 </h4>
                 <Badge variant="info" size="sm">
-                  Consolidated Container
+                  {quote.input.shippingMethod ? quote.input.shippingMethod.replace(/_/g, ' ').toUpperCase() : 'CONSOLIDATED CONTAINER'}
                 </Badge>
               </div>
               <div className="space-y-2 text-xs text-slate-600">
+                {/* 1. Ocean Freight Tariff */}
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">
-                    Ocean Freight ({quote.input.loadingPort.toUpperCase()} to{' '}
-                    {quote.input.destinationPort.toUpperCase()})
+                  <span className="break-words font-medium text-slate-800">
+                    1. Ocean Freight Tariff ({originDisplay.name} → {destDisplay.name})
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayAmount(quote.oceanFreight)}
                   </span>
                 </div>
 
-                {/* Inland Towing Line Item */}
-                {(quote.towingFeeMin !== undefined && quote.towingFeeMin > 0) ||
-                (quote.towingFeeMax !== undefined && quote.towingFeeMax > 0) ? (
-                  <div className="flex justify-between gap-2">
-                    <span className="break-words">
-                      Inland Towing to Port{' '}
-                      {quote.isTowingRange ? '(Estimated Range)' : '(Fixed Tariff)'}
-                    </span>
-                    <span className="font-semibold text-slate-900 shrink-0">
-                      {displayRangeOrAmount(quote.towingFeeMin, quote.towingFeeMax)}
-                    </span>
-                  </div>
-                ) : null}
+                {/* 2. Inland Towing */}
+                <div className="flex justify-between gap-2">
+                  <span className="break-words">
+                    2. Inland Towing ({quote.includeInlandTowing
+                      ? `${quote.towingLocationName || quote.input.towFromLocation || 'Pickup Location'} → ${originDisplay.name}${quote.isTowingRange ? ' (Estimated Range)' : ''}`
+                      : isAr ? 'النقل الداخلي: غير مطلوب ($0.00)' : 'Inland Towing: Not requested ($0.00)'})
+                  </span>
+                  <span className="font-semibold text-slate-900 shrink-0">
+                    {quote.includeInlandTowing
+                      ? displayRangeOrAmount(quote.towingFeeMin, quote.towingFeeMax)
+                      : displayAmount(0)}
+                  </span>
+                </div>
 
                 {quote.powertrainSurcharge > 0 && (
                   <div className="flex justify-between gap-2 text-amber-700">
                     <span className="break-words">
-                      Powertrain / Handling Surcharge ({quote.input.powertrain})
+                      • Powertrain / Handling Surcharge ({quote.input.powertrain})
                     </span>
                     <span className="font-semibold shrink-0">
                       {displayAmount(quote.powertrainSurcharge)}
@@ -496,91 +519,139 @@ export const ResultsPage: React.FC = () => {
                 {quote.vehicleTypeSurcharge > 0 && (
                   <div className="flex justify-between gap-2 text-amber-700">
                     <span className="break-words">
-                      Vehicle Category Surcharge ({quote.input.vehicleType})
+                      • Vehicle Category Surcharge ({quote.input.vehicleType})
                     </span>
                     <span className="font-semibold shrink-0">
                       {displayAmount(quote.vehicleTypeSurcharge)}
                     </span>
                   </div>
                 )}
+
+                {/* 3. Ocean Freight & Inland Towing Subtotal */}
                 <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-100">
-                  <span>Ocean Freight & Inland Logistics Subtotal</span>
+                  <span>
+                    3. {quote.includeInlandTowing
+                      ? (isAr ? 'المجموع الفرعي للشحن البحري والنقل الداخلي' : 'Ocean Freight & Inland Towing Subtotal')
+                      : (isAr ? 'المجموع الفرعي للشحن البحري' : 'Ocean Freight Subtotal')}
+                  </span>
                   <span className="text-brand-orange-600">
-                    {quote.isTowingRange
+                    {quote.isTowingRange && quote.includeInlandTowing
                       ? displayRangeOrAmount(
-                          quote.oceanFreightTotal + (quote.towingFeeMin || 0),
-                          quote.oceanFreightTotal + (quote.towingFeeMax || 0)
+                          (quote.oceanAndTowingSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0))),
+                          (quote.oceanAndTowingSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0)))
                         )
-                      : displayAmount(quote.oceanFreightTotal + (quote.towingFeeMin || 0))}
+                      : displayAmount(quote.oceanFreightTotal + (quote.includeInlandTowing ? (quote.towingFeeMin || 0) : 0))}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Destination Clearance Section */}
+            {/* 4. Destination Clearance Charges */}
             <div className="py-3.5">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
-                {t.customsClearanceTitle}
+                4. {t.customsClearanceTitle}
               </h4>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">{t.customsClearanceFee}</span>
+                  <span className="break-words">• Customs Clearance & Documentation</span>
                   <span className="font-semibold text-slate-900 shrink-0">
-                    {displayAmount(quote.customsClearance)}
+                    {displayAmount(quote.customsClearance || 150)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">{t.additionalPortCharges}</span>
+                  <span className="break-words">• Port & Terminal Handling Charges</span>
                   <span className="font-semibold text-slate-900 shrink-0">
-                    {displayAmount(quote.destinationCharges)}
+                    {displayAmount(quote.destinationCharges || 200)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
+                  <span>• Destination Clearance Subtotal</span>
+                  <span className="font-bold text-slate-900">
+                    {displayAmount(quote.destinationClearanceSubtotal || ((quote.customsClearance || 150) + (quote.destinationCharges || 200)))}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Government Duties Section (Statutory 5% Duty + 5% VAT) */}
+            {/* 5. UAE Government Statutory Charges */}
             <div className="py-3.5">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
-                UAE Statutory Government Charges
+                5. UAE Government Statutory Charges
               </h4>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">Customs Duty (5% of CIF valuation)</span>
+                  <span className="break-words">• Customs Duty (5% of CIF valuation)</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayRangeOrAmount(quote.dutyMin, quote.dutyMax, quote.customsDuty)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">UAE Import VAT (5% of VAT Base)</span>
+                  <span className="break-words">• UAE Import VAT (5% of [CIF + Duty])</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayRangeOrAmount(quote.vatMin, quote.vatMax, quote.vat)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
+                  <span>• UAE Government Charges Subtotal</span>
+                  <span className="font-bold text-slate-900">
+                    {quote.isTowingRange
+                      ? displayRangeOrAmount(
+                          quote.uaeGovernmentChargesSubtotalMin ?? ((quote.dutyMin || quote.customsDuty) + (quote.vatMin || quote.vat)),
+                          quote.uaeGovernmentChargesSubtotalMax ?? ((quote.dutyMax || quote.customsDuty) + (quote.vatMax || quote.vat))
+                        )
+                      : displayAmount(
+                          (quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat)
+                        )}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Total Callout (Cleanly displays range if applicable) */}
+            {/* 6. Total Estimated Shipping & Clearance (Excluding Vehicle Price) */}
             <div className="pt-4">
               <div className="p-4 sm:p-5 rounded-2xl bg-brand-navy-950 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-brand-orange-400 block">
-                    {t.totalCharges} ({currency}) {quote.isTowingRange ? '• Estimated Range' : ''}
+                    6. {isAr ? 'إجمالي تكاليف الشحن والتخليص المقدرة (باستثناء ثمن شراء المركبة)' : 'Total Estimated Shipping & Clearance (Excluding Vehicle Price)'} {quote.isTowingRange ? '• Estimated Range' : ''}
                   </span>
                   <span className="text-xs text-slate-400">
-                    All maritime, inland towing, clearance & statutory duties
+                    {isAr ? 'جميع أجور الشحن البحري، النقل الداخلي، التخليص والرسوم الجمركية النظامية' : 'All ocean freight, towing, port handling, clearance, and statutory UAE duties'}
                   </span>
                 </div>
                 <div className="text-start sm:text-end w-full sm:w-auto">
                   <span className="text-xl sm:text-2xl lg:text-3xl font-black text-brand-orange-400 block break-words">
                     {totalFormatted}
                   </span>
-                  {currency === 'USD' && (
-                    <span className="text-[11px] text-slate-300 font-semibold block">
-                      ≈ {totalAedFormatted}
-                    </span>
-                  )}
+                  <span className="text-[11px] text-slate-300 font-semibold block">
+                    ≈ {totalAedFormatted}
+                  </span>
                 </div>
               </div>
+
+              {/* 7. Declared Vehicle Purchase Price Note */}
+              <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
+                <Receipt className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-800">
+                    7. Declared Vehicle Purchase Price: ${quote.input.buyingPrice?.toLocaleString()} USD
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {isAr
+                      ? 'قيمة شراء المركبة مستخدمة حصراً لاحتساب وعاء التقييم الجمركي (CIF) والرسوم/الضريبة، وليست مضافة إلى إجمالي تكلفة الشحن أعلاه.'
+                      : 'The vehicle purchase price is used solely for statutory CIF valuation and Customs Duty/VAT calculations; it is NEVER added into your shipping invoice total.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Advisory note for estimated range towing */}
+              {quote.isTowingRange && quote.includeInlandTowing && (
+                <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Advisory:</strong> Final towing charge is subject to confirmation based on exact vehicle condition, location access, and carrier availability.
+                  </span>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -593,23 +664,29 @@ export const ResultsPage: React.FC = () => {
                   {isAr ? 'الشروط والأحكام واللوائح الرسمية' : 'Quotation Rules, Terms & Regulations'}
                 </h4>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {quote.rules.map((rule, idx) => {
                   const ruleTitle = (isAr ? rule.title_ar : null) || rule.title || rule.title_en || 'Quotation Rule';
-                  const ruleContent = (isAr ? rule.content_ar : null) || rule.content || rule.content_en || '';
+                  const rawContent = (isAr ? rule.content_ar : null) || rule.content || rule.content_en || '';
+                  const cleanContent = sanitizeHtml(rawContent);
                   return (
-                    <div key={rule.ruleKey || rule.rule_key || rule.id || idx} className="text-xs">
+                    <div
+                      key={rule.ruleKey || rule.rule_key || rule.id || idx}
+                      dir={isAr ? 'rtl' : 'ltr'}
+                      className="text-xs border-b border-slate-50 pb-3 last:border-b-0 last:pb-0"
+                    >
                       <div className="flex items-start gap-2.5">
-                        <span className="w-4 h-4 rounded-full bg-brand-navy-900 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="w-5 h-5 rounded-full bg-brand-navy-900 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                           {idx + 1}
                         </span>
-                        <div>
-                          <strong className="text-slate-900 font-bold block mb-0.5">
+                        <div className="flex-1">
+                          <strong className="text-slate-900 font-bold block mb-1 text-sm">
                             {ruleTitle}
                           </strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            {ruleContent}
-                          </p>
+                          <div
+                            className="text-xs text-slate-600 leading-relaxed prose prose-xs max-w-none"
+                            dangerouslySetInnerHTML={{ __html: cleanContent }}
+                          />
                         </div>
                       </div>
                     </div>

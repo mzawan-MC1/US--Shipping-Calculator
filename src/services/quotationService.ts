@@ -74,7 +74,8 @@ export const quotationService = {
         condition_id: 'operable',
         shipping_method_id: input.shippingMethod || 'consolidated_container',
         purchase_source_id: input.purchaseSource,
-        purchase_location_id: purchaseLocationId || null,
+        include_inland_towing: input.includeInlandTowing !== false,
+        purchase_location_id: input.includeInlandTowing !== false ? (purchaseLocationId || null) : null,
         declared_value_usd: input.buyingPrice,
         notes: input.notes || null,
         idempotency_key: idempotencyKey,
@@ -105,9 +106,13 @@ export const quotationService = {
             towing_fee_min: number;
             towing_fee_max: number;
             is_towing_range: boolean;
+            include_inland_towing?: boolean;
             surcharges_total: number;
+            ocean_and_towing_subtotal_min?: number;
+            ocean_and_towing_subtotal_max?: number;
             customs_clearance_fee: number;
             port_additional_charges: number;
+            destination_clearance_subtotal?: number;
             cif_value_min: number;
             cif_value_max: number;
             customs_duty_min: number;
@@ -116,10 +121,23 @@ export const quotationService = {
             vat_taxable_value_max: number;
             import_vat_min: number;
             import_vat_max: number;
+            uae_government_charges_subtotal_min?: number;
+            uae_government_charges_subtotal_max?: number;
             total_charges_usd_min: number;
             total_charges_usd_max: number;
             total_charges_aed_min: number;
             total_charges_aed_max: number;
+          };
+          towing?: {
+            is_requested?: boolean;
+            location_id?: string | null;
+            location_name?: string;
+            city?: string | null;
+            state_code?: string | null;
+            fee_min?: number;
+            fee_max?: number;
+            is_range?: boolean;
+            description?: string;
           };
           route: {
             route_id?: string;
@@ -152,13 +170,14 @@ export const quotationService = {
 
       const fin = res.snapshot.financials;
       const isRange = fin.is_towing_range;
+      const towingRequested = fin.include_inland_towing ?? (input.includeInlandTowing !== false);
 
       const liveQuote: QuotationBreakdown = {
         id: res.quotation_id,
         referenceNumber: res.quotation_reference,
         enquiryReference: res.enquiry_reference,
         createdAt: res.snapshot.calculation_timestamp || new Date().toISOString(),
-        input: { ...input, idempotencyKey },
+        input: { ...input, includeInlandTowing: towingRequested, idempotencyKey },
         estimatedTransitDays: res.snapshot.route.transit_days_max || 60,
         estimatedTransitDaysMin: res.snapshot.route.transit_days_min,
         estimatedTransitDaysMax: res.snapshot.route.transit_days_max,
@@ -179,6 +198,14 @@ export const quotationService = {
         towingFeeMin: fin.towing_fee_min,
         towingFeeMax: fin.towing_fee_max,
         isTowingRange: isRange,
+        includeInlandTowing: towingRequested,
+        towingLocationName: res.snapshot.towing?.location_name,
+        towingDescription: res.snapshot.towing?.description,
+        oceanAndTowingSubtotalMin: fin.ocean_and_towing_subtotal_min ?? (fin.subtotal_ocean_freight + fin.towing_fee_min),
+        oceanAndTowingSubtotalMax: fin.ocean_and_towing_subtotal_max ?? (fin.subtotal_ocean_freight + fin.towing_fee_max),
+        destinationClearanceSubtotal: fin.destination_clearance_subtotal ?? (fin.customs_clearance_fee + fin.port_additional_charges),
+        uaeGovernmentChargesSubtotalMin: fin.uae_government_charges_subtotal_min ?? (fin.customs_duty_min + fin.import_vat_min),
+        uaeGovernmentChargesSubtotalMax: fin.uae_government_charges_subtotal_max ?? (fin.customs_duty_max + fin.import_vat_max),
         totalChargesUsd: fin.total_charges_usd_max,
         totalChargesUsdMin: fin.total_charges_usd_min,
         totalChargesUsdMax: fin.total_charges_usd_max,

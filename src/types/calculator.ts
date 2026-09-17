@@ -34,6 +34,7 @@ export interface CalculatorFormData {
   loadingPort: UsLoadingPort;
   destinationPort: UaeDestinationPort;
   buyingPrice: number;
+  includeInlandTowing?: boolean;
   towFromLocation?: string;
   purchaseLocationId?: string;
   shippingMethod?: string;
@@ -59,6 +60,7 @@ export interface QuotationLineItem {
   amount_usd_min?: number;
   amount_usd_max?: number;
   is_range?: boolean;
+  is_requested?: boolean;
 }
 
 export interface QuotationRouteInfo {
@@ -126,6 +128,14 @@ export interface QuotationBreakdown {
   towingFeeMin?: number;
   towingFeeMax?: number;
   isTowingRange?: boolean;
+  includeInlandTowing?: boolean;
+  towingLocationName?: string;
+  towingDescription?: string;
+  oceanAndTowingSubtotalMin?: number;
+  oceanAndTowingSubtotalMax?: number;
+  destinationClearanceSubtotal?: number;
+  uaeGovernmentChargesSubtotalMin?: number;
+  uaeGovernmentChargesSubtotalMax?: number;
   totalChargesUsd: number;
   totalChargesUsdMin?: number;
   totalChargesUsdMax?: number;

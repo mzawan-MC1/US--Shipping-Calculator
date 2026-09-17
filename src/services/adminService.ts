@@ -1920,32 +1920,63 @@ export const adminService = {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id || null;
 
-    const payload: Database['public']['Tables']['quotation_rules']['Update'] = {
-      updated_at: new Date().toISOString(),
-      updated_by: userId,
-    };
-
-    if (updates.titleEn !== undefined) payload.title_en = updates.titleEn;
-    if (updates.titleAr !== undefined) payload.title_ar = updates.titleAr;
-    if (updates.contentEn !== undefined) payload.content_en = updates.contentEn;
-    if (updates.contentAr !== undefined) payload.content_ar = updates.contentAr;
-    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
-    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
-    if (updates.effectiveFrom !== undefined) payload.effective_from = updates.effectiveFrom;
-    if (updates.effectiveUntil !== undefined) {
-      payload.effective_until = updates.effectiveUntil;
-      payload.effective_to = updates.effectiveUntil;
-    }
-    if (updates.currentVersion !== undefined) {
-      payload.version = updates.currentVersion + 1;
-    }
-
-    const { error } = await supabase
+    // Fetch existing rule to preserve unchanged fields and version
+    const { data: existingRule, error: fetchError } = await supabase
       .from('quotation_rules')
-      .update(payload)
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existingRule) {
+      throw new Error(fetchError?.message || 'Quotation rule not found');
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newVersion = (existingRule.version || updates.currentVersion || 1) + 1;
+
+    // 1. Archive the existing rule row
+    const { error: archiveError } = await supabase
+      .from('quotation_rules')
+      .update({
+        is_active: false,
+        is_archived: true,
+        effective_to: todayStr,
+        effective_until: todayStr,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      })
       .eq('id', id);
 
-    if (error) throw error;
+    if (archiveError) throw archiveError;
+
+    // 2. Insert new incremented version row
+    const newTitleEn = updates.titleEn !== undefined ? updates.titleEn : existingRule.title_en;
+    const newTitleAr = updates.titleAr !== undefined ? updates.titleAr : existingRule.title_ar;
+    const newContentEn = updates.contentEn !== undefined ? updates.contentEn : existingRule.content_en;
+    const newContentAr = updates.contentAr !== undefined ? updates.contentAr : existingRule.content_ar;
+    const newDisplayOrder = updates.displayOrder !== undefined ? updates.displayOrder : existingRule.display_order;
+    const newIsActive = updates.isActive !== undefined ? updates.isActive : existingRule.is_active;
+    const newEffectiveFrom = updates.effectiveFrom !== undefined ? updates.effectiveFrom : todayStr;
+    const newEffectiveUntil = updates.effectiveUntil !== undefined ? updates.effectiveUntil : existingRule.effective_until;
+
+    const { error: insertError } = await supabase
+      .from('quotation_rules')
+      .insert({
+        title_en: newTitleEn,
+        title_ar: newTitleAr,
+        content_en: newContentEn,
+        content_ar: newContentAr,
+        display_order: newDisplayOrder,
+        is_active: newIsActive,
+        is_archived: false,
+        effective_from: newEffectiveFrom,
+        effective_to: newEffectiveUntil,
+        effective_until: newEffectiveUntil,
+        version: newVersion,
+        updated_by: userId,
+      });
+
+    if (insertError) throw insertError;
   },
 
   async toggleQuotationRuleStatus(id: string, isActive: boolean): Promise<void> {
