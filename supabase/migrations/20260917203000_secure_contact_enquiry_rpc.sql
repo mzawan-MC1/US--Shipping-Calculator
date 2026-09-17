@@ -9,6 +9,9 @@ CREATE SEQUENCE IF NOT EXISTS public.contact_enquiry_seq
     NO MAXVALUE
     CACHE 1;
 
+-- Revoke all sequence permissions from PUBLIC, anon, and authenticated (accessible solely via postgres owner in SECURITY DEFINER RPC)
+REVOKE ALL ON SEQUENCE public.contact_enquiry_seq FROM PUBLIC, anon, authenticated;
+
 -- 2. Revoke table-level access on customers and enquiries from anon (public access must strictly go through submit_contact_enquiry RPC)
 REVOKE ALL ON TABLE public.customers FROM anon;
 REVOKE ALL ON TABLE public.enquiries FROM anon;
