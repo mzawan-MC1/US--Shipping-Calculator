@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { normalizePhone } from '../lib/utils';
+import { sanitizeRuleContent } from '../utils/sanitizeHtml';
 import type { Database, Json } from '../types/database';
 
 type RouteUpdate = Database['public']['Tables']['shipping_routes']['Update'];
@@ -1856,50 +1857,56 @@ export const adminService = {
       isActive?: boolean;
       effectiveFrom?: string;
       effectiveUntil?: string | null;
+      ruleKey?: string | null;
     }
   ): Promise<AdminQuotationRule> {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id || null;
-
+    const cleanContentEn = sanitizeRuleContent(rule.contentEn);
+    const cleanContentAr = rule.contentAr ? sanitizeRuleContent(rule.contentAr) : null;
     const effFrom = rule.effectiveFrom || new Date().toISOString().split('T')[0];
     const effUntil = rule.effectiveUntil || null;
 
-    const { data, error } = await supabase
-      .from('quotation_rules')
-      .insert({
-        title_en: rule.titleEn,
-        title_ar: rule.titleAr || null,
-        content_en: rule.contentEn,
-        content_ar: rule.contentAr || null,
-        display_order: rule.displayOrder,
-        is_active: rule.isActive ?? true,
-        is_archived: false,
-        effective_from: effFrom,
-        effective_to: effUntil,
-        effective_until: effUntil,
-        version: 1,
-        updated_by: userId,
-      })
-      .select()
-      .single();
+    // Use atomic database RPC
+    const { data, error } = await supabase.rpc('create_quotation_rule_v1', {
+      p_title_en: rule.titleEn.trim(),
+      p_title_ar: rule.titleAr?.trim() || null,
+      p_content_en: cleanContentEn,
+      p_content_ar: cleanContentAr,
+      p_display_order: rule.displayOrder,
+      p_effective_from: effFrom,
+      p_effective_until: effUntil,
+      p_rule_key: rule.ruleKey || null,
+    });
 
     if (error) throw error;
 
+    const res = data as { success: boolean; rule_id: string; rule_key: string; version: number };
+
+    // Fetch newly created rule
+    const { data: newRow, error: fetchErr } = await supabase
+      .from('quotation_rules')
+      .select('*')
+      .eq('id', res.rule_id)
+      .single();
+
+    if (fetchErr || !newRow) {
+      throw new Error(fetchErr?.message || 'Failed to fetch newly created quotation rule');
+    }
+
     return {
-      id: data.id,
-      titleEn: data.title_en,
-      titleAr: data.title_ar,
-      contentEn: data.content_en,
-      contentAr: data.content_ar,
-      displayOrder: data.display_order,
-      isActive: data.is_active,
-      isArchived: data.is_archived,
-      effectiveFrom: data.effective_from,
-      effectiveUntil: data.effective_until || data.effective_to,
-      version: data.version,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-      updatedBy: data.updated_by,
+      id: newRow.id,
+      titleEn: newRow.title_en,
+      titleAr: newRow.title_ar,
+      contentEn: newRow.content_en,
+      contentAr: newRow.content_ar,
+      displayOrder: newRow.display_order,
+      isActive: newRow.is_active,
+      isArchived: newRow.is_archived,
+      effectiveFrom: newRow.effective_from,
+      effectiveUntil: newRow.effective_until || newRow.effective_to,
+      version: newRow.version,
+      createdAt: newRow.created_at,
+      updatedAt: newRow.updated_at,
+      updatedBy: newRow.updated_by,
     };
   },
 
@@ -1917,10 +1924,7 @@ export const adminService = {
       currentVersion?: number;
     }
   ): Promise<void> {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id || null;
-
-    // Fetch existing rule to preserve unchanged fields and version
+    // 1. Fetch current rule to populate defaults for any omitted fields
     const { data: existingRule, error: fetchError } = await supabase
       .from('quotation_rules')
       .select('*')
@@ -1931,52 +1935,27 @@ export const adminService = {
       throw new Error(fetchError?.message || 'Quotation rule not found');
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const newVersion = (existingRule.version || updates.currentVersion || 1) + 1;
+    const titleEn = updates.titleEn !== undefined ? updates.titleEn.trim() : existingRule.title_en;
+    const titleAr = updates.titleAr !== undefined ? (updates.titleAr?.trim() || null) : existingRule.title_ar;
+    const contentEn = updates.contentEn !== undefined ? sanitizeRuleContent(updates.contentEn) : existingRule.content_en;
+    const contentAr = updates.contentAr !== undefined ? (updates.contentAr ? sanitizeRuleContent(updates.contentAr) : null) : existingRule.content_ar;
+    const displayOrder = updates.displayOrder !== undefined ? updates.displayOrder : existingRule.display_order;
+    const effFrom = updates.effectiveFrom || existingRule.effective_from || new Date().toISOString().split('T')[0];
+    const effUntil = updates.effectiveUntil !== undefined ? updates.effectiveUntil : (existingRule.effective_until || existingRule.effective_to);
 
-    // 1. Archive the existing rule row
-    const { error: archiveError } = await supabase
-      .from('quotation_rules')
-      .update({
-        is_active: false,
-        is_archived: true,
-        effective_to: todayStr,
-        effective_until: todayStr,
-        updated_at: new Date().toISOString(),
-        updated_by: userId,
-      })
-      .eq('id', id);
+    // 2. Call atomic database RPC that locks the row, archives v1, and inserts v2 in one transaction
+    const { error: rpcError } = await supabase.rpc('revise_quotation_rule_v1', {
+      p_rule_id: id,
+      p_title_en: titleEn,
+      p_title_ar: titleAr,
+      p_content_en: contentEn,
+      p_content_ar: contentAr,
+      p_display_order: displayOrder,
+      p_effective_from: effFrom,
+      p_effective_until: effUntil,
+    });
 
-    if (archiveError) throw archiveError;
-
-    // 2. Insert new incremented version row
-    const newTitleEn = updates.titleEn !== undefined ? updates.titleEn : existingRule.title_en;
-    const newTitleAr = updates.titleAr !== undefined ? updates.titleAr : existingRule.title_ar;
-    const newContentEn = updates.contentEn !== undefined ? updates.contentEn : existingRule.content_en;
-    const newContentAr = updates.contentAr !== undefined ? updates.contentAr : existingRule.content_ar;
-    const newDisplayOrder = updates.displayOrder !== undefined ? updates.displayOrder : existingRule.display_order;
-    const newIsActive = updates.isActive !== undefined ? updates.isActive : existingRule.is_active;
-    const newEffectiveFrom = updates.effectiveFrom !== undefined ? updates.effectiveFrom : todayStr;
-    const newEffectiveUntil = updates.effectiveUntil !== undefined ? updates.effectiveUntil : existingRule.effective_until;
-
-    const { error: insertError } = await supabase
-      .from('quotation_rules')
-      .insert({
-        title_en: newTitleEn,
-        title_ar: newTitleAr,
-        content_en: newContentEn,
-        content_ar: newContentAr,
-        display_order: newDisplayOrder,
-        is_active: newIsActive,
-        is_archived: false,
-        effective_from: newEffectiveFrom,
-        effective_to: newEffectiveUntil,
-        effective_until: newEffectiveUntil,
-        version: newVersion,
-        updated_by: userId,
-      });
-
-    if (insertError) throw insertError;
+    if (rpcError) throw rpcError;
   },
 
   async toggleQuotationRuleStatus(id: string, isActive: boolean): Promise<void> {

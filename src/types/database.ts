@@ -1554,6 +1554,32 @@ export type Database = {
       }
       bootstrap_super_admin: { Args: { target_email: string }; Returns: Json }
       calculate_shipping_quote_v1: { Args: { input_json: Json }; Returns: Json }
+      create_quotation_rule_v1: {
+        Args: {
+          p_content_ar?: string | null
+          p_content_en: string
+          p_display_order?: number
+          p_effective_from?: string | null
+          p_effective_until?: string | null
+          p_rule_key?: string | null
+          p_title_ar?: string | null
+          p_title_en: string
+        }
+        Returns: Json
+      }
+      revise_quotation_rule_v1: {
+        Args: {
+          p_content_ar?: string | null
+          p_content_en: string
+          p_display_order?: number
+          p_effective_from?: string | null
+          p_effective_until?: string | null
+          p_rule_id: string
+          p_title_ar?: string | null
+          p_title_en: string
+        }
+        Returns: Json
+      }
       get_user_permissions: {
         Args: { target_user_id?: string }
         Returns: {

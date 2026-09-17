@@ -237,7 +237,7 @@ describe('QuotationService (Phase 2A)', () => {
     expect(rpcSpy).toHaveBeenCalledWith(
       'calculate_shipping_quote_v1',
       expect.objectContaining({
-        p_payload: expect.objectContaining({
+        input_json: expect.objectContaining({
           include_inland_towing: false,
         }),
       })

@@ -223,16 +223,26 @@ export async function generateQuotationPdf(
     doc.setTextColor(...orangeColor);
     doc.text(ar('مواصفات المركبة ومسار الشحن الدولي'), rightX, currentY + 5, { align: 'right' });
 
+    const isUUID = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+    const safeOriginPort = data.originPort && !isUUID(data.originPort) ? data.originPort : 'US Loading Port';
+    const safeDestPort = data.destinationPort && !isUUID(data.destinationPort) ? data.destinationPort : 'UAE Destination Port';
+    const safeOriginPortAr = data.originPortAr && !isUUID(data.originPortAr) ? data.originPortAr : safeOriginPort;
+    const safeDestPortAr = data.destinationPortAr && !isUUID(data.destinationPortAr) ? data.destinationPortAr : safeDestPort;
+
     doc.setFontSize(8);
     doc.setTextColor(...navyColor);
     doc.text(ar(`المركبة: ${data.vehicleDetails || 'سيارة ركاب (سيدان / قياسية)'}`), rightX, currentY + 11, { align: 'right' });
-    const routeText = `${data.originPortAr || data.originPort} إلى ${data.destinationPortAr || data.destinationPort}`;
+    const routeText = `${safeOriginPortAr} إلى ${safeDestPortAr}`;
     doc.text(ar(`المسار: ${routeText}`), rightX, currentY + 17, { align: 'right' });
 
     const leftX = margin + 5;
     doc.text(ar(`طريقة الشحن: ${data.shippingMethodAr || data.shippingMethod || 'حاوية بحرية مشتركة'}`), leftX, currentY + 11);
     doc.text(ar(`المدة المتوقعة: ${data.transitTime || '28 - 35 يوماً'}`), leftX, currentY + 17);
   } else {
+    const isUUID = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+    const safeOriginPort = data.originPort && !isUUID(data.originPort) ? data.originPort : 'US Loading Port';
+    const safeDestPort = data.destinationPort && !isUUID(data.destinationPort) ? data.destinationPort : 'UAE Destination Port';
+
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...orangeColor);
@@ -242,7 +252,7 @@ export async function generateQuotationPdf(
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...navyColor);
     doc.text(`Vehicle: ${data.vehicleDetails || 'Sedan (Standard Passenger)'}`, margin + 5, currentY + 11);
-    doc.text(`Route: ${data.originPort || 'US Loading Port'} -> ${data.destinationPort || 'UAE Destination Port'}`, margin + 5, currentY + 17);
+    doc.text(`Route: ${safeOriginPort} -> ${safeDestPort}`, margin + 5, currentY + 17);
 
     const routeCol2X = margin + contentWidth * 0.55;
     doc.text(`Shipping Method: ${data.shippingMethod || 'Consolidated Ocean Container'}`, routeCol2X, currentY + 11);

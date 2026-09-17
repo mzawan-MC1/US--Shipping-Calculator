@@ -340,11 +340,22 @@ export const CalculatorPage: React.FC = () => {
       navigate('/results');
     } catch (err: unknown) {
       console.error('[CalculatorPage] Submission error:', err);
-      setSubmissionError(
-        isAr
-          ? 'تعذر إتمام احتساب عرض السعر في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب.'
-          : 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.'
-      );
+      const errMsg = err instanceof Error ? err.message : '';
+      if (
+        errMsg.includes('Please contact us for assistance') ||
+        errMsg.includes('Purchase location is required') ||
+        errMsg.includes('Selected pickup location does not exist') ||
+        errMsg.includes('Customer full name is required') ||
+        errMsg.includes('Customer phone number is required')
+      ) {
+        setSubmissionError(errMsg);
+      } else {
+        setSubmissionError(
+          isAr
+            ? 'تعذر إتمام احتساب عرض السعر في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب.'
+            : 'We could not complete your quotation right now. Please try again or contact us on WhatsApp.'
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }

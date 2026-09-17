@@ -136,6 +136,7 @@ export const AdminTariffsPage: React.FC = () => {
   const [ruleFormIsActive, setRuleFormIsActive] = useState(true);
   const [ruleFormCurrentVersion, setRuleFormCurrentVersion] = useState(1);
   const [isSavingRule, setIsSavingRule] = useState(false);
+  const [isRuleFormDirty, setIsRuleFormDirty] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -519,6 +520,7 @@ export const AdminTariffsPage: React.FC = () => {
     setRuleFormEffectiveUntil('');
     setRuleFormIsActive(true);
     setRuleFormCurrentVersion(1);
+    setIsRuleFormDirty(false);
     setIsRuleModalOpen(true);
   };
 
@@ -534,7 +536,19 @@ export const AdminTariffsPage: React.FC = () => {
     setRuleFormEffectiveUntil(r.effectiveUntil || '');
     setRuleFormIsActive(r.isActive);
     setRuleFormCurrentVersion(r.version || 1);
+    setIsRuleFormDirty(false);
     setIsRuleModalOpen(true);
+  };
+
+  const handleCloseRuleModal = () => {
+    if (isRuleFormDirty) {
+      const confirmDiscard = window.confirm(
+        'You have unsaved changes in this quotation rule. Are you sure you want to discard them?'
+      );
+      if (!confirmDiscard) return;
+    }
+    setIsRuleModalOpen(false);
+    setIsRuleFormDirty(false);
   };
 
   const handleSaveRule = async (e: React.FormEvent) => {
@@ -576,6 +590,7 @@ export const AdminTariffsPage: React.FC = () => {
         });
         setActionSuccess('Quotation rule updated successfully (version incremented).');
       }
+      setIsRuleFormDirty(false);
       setIsRuleModalOpen(false);
       await loadData();
     } catch (err: unknown) {
@@ -1861,7 +1876,7 @@ export const AdminTariffsPage: React.FC = () => {
       {/* Quotation Rule Create/Edit Modal */}
       <Modal
         isOpen={isRuleModalOpen}
-        onClose={() => setIsRuleModalOpen(false)}
+        onClose={handleCloseRuleModal}
         title={
           ruleModalMode === 'create'
             ? 'Add Quotation Rule'
@@ -1871,7 +1886,7 @@ export const AdminTariffsPage: React.FC = () => {
         <form onSubmit={handleSaveRule} className="space-y-4 pt-2 text-xs">
           {ruleModalMode === 'edit' && (
             <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed">
-              <strong>Revision Notice:</strong> Saving changes will increment this rule to <strong>v{ruleFormCurrentVersion + 1}</strong> and log your user audit ID. Historical customer quotation snapshots remain permanently locked.
+              <strong>Revision Notice:</strong> Saving changes will atomically archive this version, create <strong>v{ruleFormCurrentVersion + 1}</strong>, and log your staff user audit ID. Historical customer quotation snapshots remain permanently unchanged.
             </div>
           )}
 
@@ -1884,7 +1899,10 @@ export const AdminTariffsPage: React.FC = () => {
                 type="text"
                 placeholder="e.g. Quotation Validity Period"
                 value={ruleFormTitleEn}
-                onChange={(e) => setRuleFormTitleEn(e.target.value)}
+                onChange={(e) => {
+                  setRuleFormTitleEn(e.target.value);
+                  setIsRuleFormDirty(true);
+                }}
                 required
               />
             </div>
@@ -1898,7 +1916,10 @@ export const AdminTariffsPage: React.FC = () => {
                 dir="rtl"
                 placeholder="مثال: صلاحية عرض الأسعار"
                 value={ruleFormTitleAr}
-                onChange={(e) => setRuleFormTitleAr(e.target.value)}
+                onChange={(e) => {
+                  setRuleFormTitleAr(e.target.value);
+                  setIsRuleFormDirty(true);
+                }}
               />
             </div>
           </div>
@@ -1906,23 +1927,28 @@ export const AdminTariffsPage: React.FC = () => {
           <div>
             <RichTextEditor
               label="Official Rule Text (English)"
-              required
-              dir="ltr"
+              direction="ltr"
               value={ruleFormContentEn}
-              onChange={(val) => setRuleFormContentEn(val)}
+              onChange={(val) => {
+                setRuleFormContentEn(val);
+                setIsRuleFormDirty(true);
+              }}
               placeholder="Full description and conditions in English to appear on customer quotations..."
-              minHeight="120px"
+              minHeight="140px"
             />
           </div>
 
           <div>
             <RichTextEditor
               label="Official Rule Text (Arabic)"
-              dir="rtl"
+              direction="rtl"
               value={ruleFormContentAr}
-              onChange={(val) => setRuleFormContentAr(val)}
+              onChange={(val) => {
+                setRuleFormContentAr(val);
+                setIsRuleFormDirty(true);
+              }}
               placeholder="الشروط والأحكام باللغة العربية لعرضها في عروض الأسعار وملفات PDF..."
-              minHeight="120px"
+              minHeight="140px"
             />
           </div>
 
@@ -1933,7 +1959,10 @@ export const AdminTariffsPage: React.FC = () => {
                 type="number"
                 min="1"
                 value={ruleFormDisplayOrder}
-                onChange={(e) => setRuleFormDisplayOrder(e.target.value)}
+                onChange={(e) => {
+                  setRuleFormDisplayOrder(e.target.value);
+                  setIsRuleFormDirty(true);
+                }}
                 required
               />
             </div>
@@ -1943,7 +1972,10 @@ export const AdminTariffsPage: React.FC = () => {
               <Input
                 type="date"
                 value={ruleFormEffectiveFrom}
-                onChange={(e) => setRuleFormEffectiveFrom(e.target.value)}
+                onChange={(e) => {
+                  setRuleFormEffectiveFrom(e.target.value);
+                  setIsRuleFormDirty(true);
+                }}
                 required
               />
             </div>
@@ -1953,7 +1985,10 @@ export const AdminTariffsPage: React.FC = () => {
               <Input
                 type="date"
                 value={ruleFormEffectiveUntil}
-                onChange={(e) => setRuleFormEffectiveUntil(e.target.value)}
+                onChange={(e) => {
+                  setRuleFormEffectiveUntil(e.target.value);
+                  setIsRuleFormDirty(true);
+                }}
                 placeholder="Ongoing if blank"
               />
             </div>
@@ -1964,7 +1999,10 @@ export const AdminTariffsPage: React.FC = () => {
               type="checkbox"
               id="ruleFormIsActive"
               checked={ruleFormIsActive}
-              onChange={(e) => setRuleFormIsActive(e.target.checked)}
+              onChange={(e) => {
+                setRuleFormIsActive(e.target.checked);
+                setIsRuleFormDirty(true);
+              }}
               className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
             />
             <label htmlFor="ruleFormIsActive" className="font-bold text-slate-700">
@@ -1977,7 +2015,7 @@ export const AdminTariffsPage: React.FC = () => {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsRuleModalOpen(false)}
+              onClick={handleCloseRuleModal}
               disabled={isSavingRule}
             >
               Cancel

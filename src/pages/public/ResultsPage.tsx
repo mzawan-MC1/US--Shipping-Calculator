@@ -11,7 +11,7 @@ import { QuotationBreakdown } from '../../types/calculator';
 import { formatCurrency, convertUsdToAed } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
-import { sanitizeHtml } from '../../components/ui/RichTextEditor';
+import { sanitizeRuleContent } from '../../utils/sanitizeHtml';
 import {
   Clock,
   Car,
@@ -496,7 +496,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                 <div className="flex justify-between gap-2">
                   <span className="break-words">
                     2. Inland Towing ({quote.includeInlandTowing
-                      ? `${quote.towingLocationName || quote.input.towFromLocation || 'Pickup Location'} → ${originDisplay.name}${quote.isTowingRange ? ' (Estimated Range)' : ''}`
+                      ? `${(quote.towingLocationName && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.towingLocationName)) ? quote.towingLocationName : (quote.input.towFromLocation && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.input.towFromLocation) ? quote.input.towFromLocation : 'Pickup Location')} → ${originDisplay.name}${quote.isTowingRange ? ' (Estimated Range)' : ''}`
                       : isAr ? 'النقل الداخلي: غير مطلوب ($0.00)' : 'Inland Towing: Not requested ($0.00)'})
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
@@ -668,7 +668,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                 {quote.rules.map((rule, idx) => {
                   const ruleTitle = (isAr ? rule.title_ar : null) || rule.title || rule.title_en || 'Quotation Rule';
                   const rawContent = (isAr ? rule.content_ar : null) || rule.content || rule.content_en || '';
-                  const cleanContent = sanitizeHtml(rawContent);
+                  const cleanContent = sanitizeRuleContent(rawContent);
                   return (
                     <div
                       key={rule.ruleKey || rule.rule_key || rule.id || idx}

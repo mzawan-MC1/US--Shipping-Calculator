@@ -9,7 +9,7 @@ import { adminService, AdminQuotation } from '../../services/adminService';
 import { formatCurrency, formatAED } from '../../lib/utils';
 import { useWebsiteSettings } from '../../features/cms/WebsiteSettingsContext';
 import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfService';
-import { sanitizeHtml } from '../../components/ui/RichTextEditor';
+import { sanitizeRuleContent } from '../../utils/sanitizeHtml';
 import {
   FileSpreadsheet,
   Search,
@@ -263,7 +263,8 @@ export const AdminQuotationsPage: React.FC = () => {
 
         // Inland towing flags and location
         const includeInlandTowing = snap.include_inland_towing !== false && (towingMin > 0 || towingMax > 0 || (snap.towing_fee_min as number) > 0 || (snap.towing_fee_max as number) > 0);
-        const towingLocationName = (snap.towing_location_name as string) || (snap.towing_pickup_location as string) || 'Origin Pickup Location';
+        const rawLoc = ((snap.towing as Record<string, unknown>)?.location_name as string) || (snap.towing_location_name as string) || (snap.towing_pickup_location as string);
+        const towingLocationName = rawLoc && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawLoc) ? rawLoc : 'Origin Pickup Location';
 
         // 1 & 2 & 3: Ocean freight & Inland towing
         const effectiveTowingMin = includeInlandTowing ? towingMin : 0;
@@ -748,7 +749,7 @@ export const AdminQuotationsPage: React.FC = () => {
                           </strong>
                           <div
                             className="text-[11px] text-slate-600 leading-relaxed prose prose-xs max-w-none"
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeRuleContent(content) }}
                           />
                         </div>
                       );

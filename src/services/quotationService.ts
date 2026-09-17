@@ -87,6 +87,16 @@ export const quotationService = {
 
       if (error) {
         console.error('[QuotationService] Live RPC calculation error:', error);
+        const msg = error.message || '';
+        if (
+          msg.includes('Please contact us for assistance') ||
+          msg.includes('Purchase location is required') ||
+          msg.includes('Selected pickup location does not exist') ||
+          msg.includes('Customer full name is required') ||
+          msg.includes('Customer phone number is required')
+        ) {
+          throw new Error(msg);
+        }
         throw new Error('We could not complete your quotation right now. Please try again or contact us on WhatsApp.');
       }
 
