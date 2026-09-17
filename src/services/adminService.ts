@@ -1718,35 +1718,62 @@ export const adminService = {
     const { data, error } = await supabase
       .from('quotation_rules')
       .select('*')
+      .eq('is_archived', false)
       .order('display_order', { ascending: true });
 
     if (error) throw error;
 
     return (data || []).map((r) => ({
       id: r.id,
-      ruleKey: r.rule_key,
-      title: r.title,
-      content: r.content,
-      category: r.category,
-      isActive: r.is_active,
+      titleEn: r.title_en,
+      titleAr: r.title_ar,
+      contentEn: r.content_en,
+      contentAr: r.content_ar,
       displayOrder: r.display_order,
+      isActive: r.is_active,
+      isArchived: r.is_archived,
+      effectiveFrom: r.effective_from,
+      effectiveUntil: r.effective_until || r.effective_to,
+      version: r.version,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      updatedBy: r.updated_by,
     }));
   },
 
   async createQuotationRule(
-    rule: Omit<AdminQuotationRule, 'id' | 'createdAt' | 'updatedAt'>
+    rule: {
+      titleEn: string;
+      titleAr?: string | null;
+      contentEn: string;
+      contentAr?: string | null;
+      displayOrder: number;
+      isActive?: boolean;
+      effectiveFrom?: string;
+      effectiveUntil?: string | null;
+    }
   ): Promise<AdminQuotationRule> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const effFrom = rule.effectiveFrom || new Date().toISOString().split('T')[0];
+    const effUntil = rule.effectiveUntil || null;
+
     const { data, error } = await supabase
       .from('quotation_rules')
       .insert({
-        rule_key: rule.ruleKey,
-        title: rule.title,
-        content: rule.content,
-        category: rule.category || 'terms',
+        title_en: rule.titleEn,
+        title_ar: rule.titleAr || null,
+        content_en: rule.contentEn,
+        content_ar: rule.contentAr || null,
         display_order: rule.displayOrder,
         is_active: rule.isActive ?? true,
+        is_archived: false,
+        effective_from: effFrom,
+        effective_to: effUntil,
+        effective_until: effUntil,
+        version: 1,
+        updated_by: userId,
       })
       .select()
       .single();
@@ -1755,30 +1782,58 @@ export const adminService = {
 
     return {
       id: data.id,
-      ruleKey: data.rule_key,
-      title: data.title,
-      content: data.content,
-      category: data.category,
-      isActive: data.is_active,
+      titleEn: data.title_en,
+      titleAr: data.title_ar,
+      contentEn: data.content_en,
+      contentAr: data.content_ar,
       displayOrder: data.display_order,
+      isActive: data.is_active,
+      isArchived: data.is_archived,
+      effectiveFrom: data.effective_from,
+      effectiveUntil: data.effective_until || data.effective_to,
+      version: data.version,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
+      updatedBy: data.updated_by,
     };
   },
 
   async updateQuotationRule(
     id: string,
-    updates: Partial<Omit<AdminQuotationRule, 'id' | 'createdAt' | 'updatedAt'>>
+    updates: {
+      titleEn?: string;
+      titleAr?: string | null;
+      contentEn?: string;
+      contentAr?: string | null;
+      displayOrder?: number;
+      isActive?: boolean;
+      effectiveFrom?: string;
+      effectiveUntil?: string | null;
+      currentVersion?: number;
+    }
   ): Promise<void> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
     const payload: Database['public']['Tables']['quotation_rules']['Update'] = {
       updated_at: new Date().toISOString(),
+      updated_by: userId,
     };
-    if (updates.ruleKey !== undefined) payload.rule_key = updates.ruleKey;
-    if (updates.title !== undefined) payload.title = updates.title;
-    if (updates.content !== undefined) payload.content = updates.content;
-    if (updates.category !== undefined) payload.category = updates.category;
+
+    if (updates.titleEn !== undefined) payload.title_en = updates.titleEn;
+    if (updates.titleAr !== undefined) payload.title_ar = updates.titleAr;
+    if (updates.contentEn !== undefined) payload.content_en = updates.contentEn;
+    if (updates.contentAr !== undefined) payload.content_ar = updates.contentAr;
     if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    if (updates.effectiveFrom !== undefined) payload.effective_from = updates.effectiveFrom;
+    if (updates.effectiveUntil !== undefined) {
+      payload.effective_until = updates.effectiveUntil;
+      payload.effective_to = updates.effectiveUntil;
+    }
+    if (updates.currentVersion !== undefined) {
+      payload.version = updates.currentVersion + 1;
+    }
 
     const { error } = await supabase
       .from('quotation_rules')
@@ -1789,9 +1844,16 @@ export const adminService = {
   },
 
   async toggleQuotationRuleStatus(id: string, isActive: boolean): Promise<void> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
     const { error } = await supabase
       .from('quotation_rules')
-      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .update({
+        is_active: isActive,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      })
       .eq('id', id);
 
     if (error) throw error;
@@ -1809,10 +1871,17 @@ export const adminService = {
   async reorderQuotationRules(
     ruleOrders: Array<{ id: string; displayOrder: number }>
   ): Promise<void> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
     for (const item of ruleOrders) {
       const { error } = await supabase
         .from('quotation_rules')
-        .update({ display_order: item.displayOrder, updated_at: new Date().toISOString() })
+        .update({
+          display_order: item.displayOrder,
+          updated_at: new Date().toISOString(),
+          updated_by: userId,
+        })
         .eq('id', item.id);
       if (error) throw error;
     }
@@ -1821,12 +1890,17 @@ export const adminService = {
 
 export interface AdminQuotationRule {
   id: string;
-  ruleKey: string;
-  title: string;
-  content: string;
-  category: string;
-  isActive: boolean;
+  titleEn: string;
+  titleAr: string | null;
+  contentEn: string;
+  contentAr: string | null;
   displayOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  effectiveFrom: string;
+  effectiveUntil?: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
+  updatedBy?: string | null;
 }

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS public.quotation_rules (
     is_archived BOOLEAN NOT NULL DEFAULT false,
     effective_from DATE NOT NULL DEFAULT CURRENT_DATE,
     effective_to DATE,
+    effective_until DATE,
     version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -159,44 +160,8 @@ ON public.quotation_rules FOR DELETE
 TO authenticated
 USING (public.has_permission('pricing.manage'));
 
--- Initial Seed of authoritative Rules & Regulations
-INSERT INTO public.quotation_rules (title_en, title_ar, content_en, content_ar, display_order, is_active)
-VALUES
-(
-    'Quotation Validity & Carrier Bunker Clause',
-    'صلاحية العرض وبند تعديل أسعار الوقود',
-    'Quotation rates are valid for 14 calendar days from the date of issue and remain subject to carrier bunker adjustments (BAF), currency fluctuations, and terminal tariff changes prior to vessel departure.',
-    'أسعار عروض الشحن صالحة لمدة 14 يوماً من تاريخ الإصدار وتخضع لتعديلات رسوم الوقود الملاحية (BAF) وتقلبات أسعار الصرف وتغييرات رسوم الموانئ قبل إبحار السفينة.',
-    1,
-    true
-),
-(
-    'Inland Towing & Auction Dispatch Policy',
-    'سياسة السحب الداخلي والتسليم من المزادات',
-    'Inland towing rates for vehicles purchased at US auctions (Copart, IAAI, Manheim) reflect standard local dispatch fees. Any additional storage, gate fees, or auction penalties incurred before vehicle release are payable at actual cost.',
-    'تعكس أسعار السحب الداخلي للمركبات المشتراة من المزادات الأمريكية (Copart, IAAI, Manheim) الرسوم القياسية. أي رسوم تخزين إضافية أو غرامات مزاد مستحقة قبل استلام السيارة تدفع بالتكلفة الفعلية.',
-    2,
-    true
-),
-(
-    'US Title Clearance & Documentation Requirements',
-    'متطلبات التخليص الجمركي الأمريكي وملكية المركبة',
-    'Vehicle export requires original, clean title documentation approved by US Customs & Border Protection. Vehicles with liens, pending paperwork, or unapproved salvage titles cannot be loaded until document clearance is finalized.',
-    'يتطلب تصدير المركبة تقديم وثيقة الملكية الأصلية (Title) والموافقة عليها من قبل الجمارك وحرس الحدود الأمريكي. لا يمكن شحن السيارات ذات الرهونات أو الوثائق المعلقة حتى استكمال التخليص الجمركي.',
-    3,
-    true
-),
-(
-    'UAE Customs Duty & Statutory Import VAT',
-    'الرسوم الجمركية وضريبة القيمة المضافة في دولة الإمارات',
-    'Customs duty (5%) and Import VAT (5%) are statutory governmental charges collected by UAE Federal Tax and Customs Authorities. Calculations are determined on CIF valuation at port of entry in accordance with UAE customs tariff regulations.',
-    'الرسوم الجمركية (5%) وضريبة القيمة المضافة على الاستيراد (5%) هي رسوم حكومية إلزامية يتم تحصيلها من قبل الهيئة الاتحادية للجمارك والضرائب في دولة الإمارات بناءً على القيمة التقديرية (CIF) عند الوصول.',
-    4,
-    true
-)
-ON CONFLICT DO NOTHING;
-
 -- 4. Correct Port Handling in additional_charge_rules to be excluded from VAT base
 UPDATE public.additional_charge_rules
 SET is_included_in_vat_base = false
 WHERE category = 'port_handling';
+

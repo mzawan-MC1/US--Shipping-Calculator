@@ -162,17 +162,21 @@ export const ResultsPage: React.FC = () => {
   const handleDownloadQuotation = async () => {
     try {
       const pdfData: PdfQuotationData = {
+        language: isAr ? 'ar' : 'en',
         referenceNumber: quote.referenceNumber,
         enquiryReference: quote.enquiryReference,
         createdAt: quote.createdAt,
-        customerName: quote.input.customerName || 'Valued Customer',
+        customerName: quote.input.customerName || (isAr ? 'العميل المحترم' : 'Valued Customer'),
         customerPhone: quote.input.customerPhone || 'N/A',
         customerEmail: quote.input.customerEmail,
         vehicleDetails: `${quote.input.year} ${quote.input.make} ${quote.input.model}`.trim(),
         originPort: originDisplay.name,
         destinationPort: destDisplay.name,
+        originPortAr: quote.routeInfo?.origin_port_name_ar || originDisplay.name,
+        destinationPortAr: quote.routeInfo?.destination_port_name_ar || destDisplay.name,
         shippingMethod: quote.input.shippingMethod || 'Containerized Ocean Freight',
-        transitTime: `${quote.estimatedTransitDaysMin || quote.estimatedTransitDays || 30}-${quote.estimatedTransitDaysMax || 45} Days`,
+        shippingMethodAr: isAr ? 'شحن بحري في حاويات' : undefined,
+        transitTime: `${quote.estimatedTransitDaysMin || quote.estimatedTransitDays || 30}-${quote.estimatedTransitDaysMax || 45} ${isAr ? 'يوم' : 'Days'}`,
         declaredValueUsd: quote.input.buyingPrice,
         oceanFreightUsd: quote.oceanFreight,
         towingFeeMin: quote.towingFeeMin || 0,

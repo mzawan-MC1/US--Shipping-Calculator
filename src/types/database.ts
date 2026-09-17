@@ -598,6 +598,60 @@ export type Database = {
         }
         Relationships: []
       }
+      quotation_rules: {
+        Row: {
+          content_ar: string | null
+          content_en: string
+          created_at: string
+          display_order: number
+          effective_from: string
+          effective_to: string | null
+          effective_until: string | null
+          id: string
+          is_active: boolean
+          is_archived: boolean
+          title_ar: string | null
+          title_en: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          content_ar?: string | null
+          content_en: string
+          created_at?: string
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          effective_until?: string | null
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          title_ar?: string | null
+          title_en: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          content_ar?: string | null
+          content_en?: string
+          created_at?: string
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          effective_until?: string | null
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          title_ar?: string | null
+          title_en?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       purchase_locations: {
         Row: {
           created_at: string
@@ -1076,42 +1130,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      quotation_rules: {
-        Row: {
-          id: string
-          rule_key: string
-          title: string
-          content: string
-          category: string
-          is_active: boolean
-          display_order: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          rule_key: string
-          title: string
-          content: string
-          category?: string
-          is_active?: boolean
-          display_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          rule_key?: string
-          title?: string
-          content?: string
-          category?: string
-          is_active?: boolean
-          display_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       staff_profiles: {
         Row: {

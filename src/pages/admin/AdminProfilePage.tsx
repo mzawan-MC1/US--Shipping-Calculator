@@ -373,15 +373,6 @@ export const AdminProfilePage: React.FC = () => {
                   Active Staff Member
                 </div>
               </div>
-
-              <div>
-                <label className="text-slate-400 font-medium block mb-1">
-                  User Identifier (UUID)
-                </label>
-                <div className="p-2 rounded bg-slate-50 font-mono text-[10px] text-slate-500 truncate select-all">
-                  {user?.id || 'N/A'}
-                </div>
-              </div>
             </div>
           </div>
         </div>

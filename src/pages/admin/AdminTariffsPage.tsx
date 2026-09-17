@@ -123,12 +123,17 @@ export const AdminTariffsPage: React.FC = () => {
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [ruleModalMode, setRuleModalMode] = useState<'create' | 'edit'>('create');
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [ruleFormKey, setRuleFormKey] = useState('');
-  const [ruleFormTitle, setRuleFormTitle] = useState('');
-  const [ruleFormContent, setRuleFormContent] = useState('');
-  const [ruleFormCategory, setRuleFormCategory] = useState('terms');
+  const [ruleFormTitleEn, setRuleFormTitleEn] = useState('');
+  const [ruleFormTitleAr, setRuleFormTitleAr] = useState('');
+  const [ruleFormContentEn, setRuleFormContentEn] = useState('');
+  const [ruleFormContentAr, setRuleFormContentAr] = useState('');
   const [ruleFormDisplayOrder, setRuleFormDisplayOrder] = useState('1');
+  const [ruleFormEffectiveFrom, setRuleFormEffectiveFrom] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+  const [ruleFormEffectiveUntil, setRuleFormEffectiveUntil] = useState('');
   const [ruleFormIsActive, setRuleFormIsActive] = useState(true);
+  const [ruleFormCurrentVersion, setRuleFormCurrentVersion] = useState(1);
   const [isSavingRule, setIsSavingRule] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -504,35 +509,40 @@ export const AdminTariffsPage: React.FC = () => {
   const handleOpenCreateRule = () => {
     setRuleModalMode('create');
     setEditingRuleId(null);
-    setRuleFormKey('');
-    setRuleFormTitle('');
-    setRuleFormContent('');
-    setRuleFormCategory('terms');
+    setRuleFormTitleEn('');
+    setRuleFormTitleAr('');
+    setRuleFormContentEn('');
+    setRuleFormContentAr('');
     setRuleFormDisplayOrder((quotationRules.length + 1).toString());
+    setRuleFormEffectiveFrom(new Date().toISOString().split('T')[0]);
+    setRuleFormEffectiveUntil('');
     setRuleFormIsActive(true);
+    setRuleFormCurrentVersion(1);
     setIsRuleModalOpen(true);
   };
 
   const handleOpenEditRule = (r: AdminQuotationRule) => {
     setRuleModalMode('edit');
     setEditingRuleId(r.id);
-    setRuleFormKey(r.ruleKey);
-    setRuleFormTitle(r.title);
-    setRuleFormContent(r.content);
-    setRuleFormCategory(r.category);
+    setRuleFormTitleEn(r.titleEn);
+    setRuleFormTitleAr(r.titleAr || '');
+    setRuleFormContentEn(r.contentEn);
+    setRuleFormContentAr(r.contentAr || '');
     setRuleFormDisplayOrder(r.displayOrder.toString());
+    setRuleFormEffectiveFrom(r.effectiveFrom || new Date().toISOString().split('T')[0]);
+    setRuleFormEffectiveUntil(r.effectiveUntil || '');
     setRuleFormIsActive(r.isActive);
+    setRuleFormCurrentVersion(r.version || 1);
     setIsRuleModalOpen(true);
   };
 
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ruleFormTitle.trim() || !ruleFormContent.trim()) {
-      setActionError('Rule title and content are required.');
+    if (!ruleFormTitleEn.trim() || !ruleFormContentEn.trim()) {
+      setActionError('Rule title and content in English are required.');
       return;
     }
     const order = parseInt(ruleFormDisplayOrder, 10) || 1;
-    const key = ruleFormKey.trim() || ruleFormTitle.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     setIsSavingRule(true);
     setActionError(null);
@@ -541,24 +551,29 @@ export const AdminTariffsPage: React.FC = () => {
     try {
       if (ruleModalMode === 'create') {
         await adminService.createQuotationRule({
-          ruleKey: key,
-          title: ruleFormTitle.trim(),
-          content: ruleFormContent.trim(),
-          category: ruleFormCategory,
+          titleEn: ruleFormTitleEn.trim(),
+          titleAr: ruleFormTitleAr.trim() || null,
+          contentEn: ruleFormContentEn.trim(),
+          contentAr: ruleFormContentAr.trim() || null,
           displayOrder: order,
+          effectiveFrom: ruleFormEffectiveFrom || new Date().toISOString().split('T')[0],
+          effectiveUntil: ruleFormEffectiveUntil.trim() || null,
           isActive: ruleFormIsActive,
         });
         setActionSuccess('Quotation rule created successfully.');
       } else if (editingRuleId) {
         await adminService.updateQuotationRule(editingRuleId, {
-          ruleKey: key,
-          title: ruleFormTitle.trim(),
-          content: ruleFormContent.trim(),
-          category: ruleFormCategory,
+          titleEn: ruleFormTitleEn.trim(),
+          titleAr: ruleFormTitleAr.trim() || null,
+          contentEn: ruleFormContentEn.trim(),
+          contentAr: ruleFormContentAr.trim() || null,
           displayOrder: order,
+          effectiveFrom: ruleFormEffectiveFrom || new Date().toISOString().split('T')[0],
+          effectiveUntil: ruleFormEffectiveUntil.trim() || null,
           isActive: ruleFormIsActive,
+          currentVersion: ruleFormCurrentVersion,
         });
-        setActionSuccess('Quotation rule updated successfully.');
+        setActionSuccess('Quotation rule updated successfully (version incremented).');
       }
       setIsRuleModalOpen(false);
       await loadData();
@@ -1176,15 +1191,15 @@ export const AdminTariffsPage: React.FC = () => {
 
               <Card className="bg-white border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-start text-xs min-w-[700px]">
+                  <table className="w-full text-start text-xs min-w-[760px]">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                         <th className="py-3 px-4 text-center w-16">Order</th>
-                        <th className="py-3 px-4">Rule Key</th>
-                        <th className="py-3 px-4">Title & Description</th>
-                        <th className="py-3 px-4">Category</th>
-                        <th className="py-3 px-4">Status</th>
-                        {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
+                        <th className="py-3 px-4">Rule Content (Bilingual)</th>
+                        <th className="py-3 px-4 w-36">Effective Dates</th>
+                        <th className="py-3 px-4 text-center w-20">Version</th>
+                        <th className="py-3 px-4 text-center w-24">Status</th>
+                        {canManagePricing && <th className="py-3 px-4 text-end w-28">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1226,21 +1241,50 @@ export const AdminTariffsPage: React.FC = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="py-3.5 px-4 font-mono font-bold text-brand-navy-950">
-                              {r.ruleKey}
+                            <td className="py-3.5 px-4 max-w-lg space-y-2">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 uppercase">
+                                    EN
+                                  </span>
+                                  <strong className="text-slate-900 font-bold">{r.titleEn}</strong>
+                                </div>
+                                <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
+                                  {r.contentEn}
+                                </p>
+                              </div>
+                              {r.titleAr || r.contentAr ? (
+                                <div className="border-t border-slate-100 pt-1.5" dir="rtl">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase">
+                                      عربي
+                                    </span>
+                                    <strong className="text-slate-900 font-bold">{r.titleAr || 'بدون عنوان'}</strong>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
+                                    {r.contentAr}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="inline-block text-[10px] text-slate-400 italic">
+                                  No Arabic translation configured
+                                </span>
+                              )}
                             </td>
-                            <td className="py-3.5 px-4 max-w-md">
-                              <strong className="block text-slate-900 font-bold mb-0.5">{r.title}</strong>
-                              <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                                {r.content}
-                              </p>
+                            <td className="py-3.5 px-4 text-[11px]">
+                              <div className="text-slate-700 font-medium">
+                                <span className="text-slate-400">From:</span> {r.effectiveFrom || 'Immediate'}
+                              </div>
+                              <div className="text-slate-500 mt-0.5">
+                                <span className="text-slate-400">Until:</span> {r.effectiveUntil || 'Ongoing'}
+                              </div>
                             </td>
-                            <td className="py-3.5 px-4">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
-                                {r.category}
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                v{r.version || 1}
                               </span>
                             </td>
-                            <td className="py-3.5 px-4">
+                            <td className="py-3.5 px-4 text-center">
                               <button
                                 type="button"
                                 disabled={!canManagePricing}
@@ -1817,50 +1861,76 @@ export const AdminTariffsPage: React.FC = () => {
       <Modal
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
-        title={ruleModalMode === 'create' ? 'Add Quotation Rule' : 'Edit Quotation Rule'}
+        title={
+          ruleModalMode === 'create'
+            ? 'Add Quotation Rule'
+            : `Edit Quotation Rule (Current: v${ruleFormCurrentVersion})`
+        }
       >
         <form onSubmit={handleSaveRule} className="space-y-4 pt-2 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Rule Title <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. Quotation Validity Period"
-              value={ruleFormTitle}
-              onChange={(e) => setRuleFormTitle(e.target.value)}
-              required
-            />
-          </div>
+          {ruleModalMode === 'edit' && (
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed">
+              <strong>Revision Notice:</strong> Saving changes will increment this rule to <strong>v{ruleFormCurrentVersion + 1}</strong> and log your user audit ID. Historical customer quotation snapshots remain permanently locked.
+            </div>
+          )}
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Rule Key (Identifier)
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. validity_period (auto-generated if blank)"
-              value={ruleFormKey}
-              onChange={(e) => setRuleFormKey(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Category</label>
-              <select
-                value={ruleFormCategory}
-                onChange={(e) => setRuleFormCategory(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-brand-orange-500"
-              >
-                <option value="terms">General Terms</option>
-                <option value="storage">Storage & Demurrage</option>
-                <option value="customs">Customs & Inspection</option>
-                <option value="shipping">Ocean & Towing</option>
-                <option value="payment">Payment & Settlement</option>
-              </select>
+              <label className="block font-bold text-slate-700 mb-1">
+                Rule Title (English) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Quotation Validity Period"
+                value={ruleFormTitleEn}
+                onChange={(e) => setRuleFormTitleEn(e.target.value)}
+                required
+              />
             </div>
 
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Rule Title (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="مثال: صلاحية عرض الأسعار"
+                value={ruleFormTitleAr}
+                onChange={(e) => setRuleFormTitleAr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Official Rule Text (English) <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              required
+              value={ruleFormContentEn}
+              onChange={(e) => setRuleFormContentEn(e.target.value)}
+              placeholder="Full description and conditions in English to appear on customer quotations..."
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Official Rule Text (Arabic)
+            </label>
+            <textarea
+              rows={3}
+              dir="rtl"
+              value={ruleFormContentAr}
+              onChange={(e) => setRuleFormContentAr(e.target.value)}
+              placeholder="الشروط والأحكام باللغة العربية لعرضها في عروض الأسعار وملفات PDF..."
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 text-end"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-bold text-slate-700 mb-1">Display Order</label>
               <Input
@@ -1871,20 +1941,26 @@ export const AdminTariffsPage: React.FC = () => {
                 required
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Official Rule Text / Content <span className="text-rose-500">*</span>
-            </label>
-            <textarea
-              rows={4}
-              required
-              value={ruleFormContent}
-              onChange={(e) => setRuleFormContent(e.target.value)}
-              placeholder="Full description and conditions of the rule to appear on customer quotations..."
-              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
-            />
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
+              <Input
+                type="date"
+                value={ruleFormEffectiveFrom}
+                onChange={(e) => setRuleFormEffectiveFrom(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective Until (Optional)</label>
+              <Input
+                type="date"
+                value={ruleFormEffectiveUntil}
+                onChange={(e) => setRuleFormEffectiveUntil(e.target.value)}
+                placeholder="Ongoing if blank"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2 pt-1">
@@ -1896,7 +1972,7 @@ export const AdminTariffsPage: React.FC = () => {
               className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
             />
             <label htmlFor="ruleFormIsActive" className="font-bold text-slate-700">
-              Active Rule (Included in new quotation snapshots)
+              Active Rule (Immediately eligible for new quotation snapshots)
             </label>
           </div>
 
@@ -1917,7 +1993,7 @@ export const AdminTariffsPage: React.FC = () => {
               disabled={isSavingRule}
               className="font-bold"
             >
-              {isSavingRule ? 'Saving...' : 'Save Rule'}
+              {isSavingRule ? 'Saving...' : ruleModalMode === 'create' ? 'Create Rule' : 'Save Revision'}
             </Button>
           </div>
         </form>
