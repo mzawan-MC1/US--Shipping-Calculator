@@ -62,6 +62,9 @@ export interface QuotationLineItem {
   amount_usd_max?: number;
   is_range?: boolean;
   is_requested?: boolean;
+  reason?: string;
+  is_included_in_cif?: boolean;
+  is_included_in_vat_base?: boolean;
 }
 
 export interface QuotationRouteInfo {
@@ -113,9 +116,12 @@ export interface QuotationBreakdown {
   estimatedTransitDaysMin?: number;
   estimatedTransitDaysMax?: number;
   oceanFreight: number;
+  oceanFreightBase?: number;
+  oceanFreightAdjustments?: number;
   powertrainSurcharge: number;
   vehicleTypeSurcharge: number;
   oceanFreightTotal: number;
+  surchargesTotal?: number;
   customsClearance: number;
   destinationCharges: number;
   customsDuty: number;
@@ -128,6 +134,9 @@ export interface QuotationBreakdown {
   cifMax?: number;
   towingFeeMin?: number;
   towingFeeMax?: number;
+  towingFeeBaseMin?: number;
+  towingFeeBaseMax?: number;
+  towingAdjustments?: number;
   isTowingRange?: boolean;
   includeInlandTowing?: boolean;
   towingLocationName?: string;
@@ -193,10 +202,122 @@ export interface EligibleShippingMethod {
   currency: string;
 }
 
+export interface EligiblePowertrain {
+  id: string;
+  name: string;
+  name_ar?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  display_order: number;
+}
+
+export interface EligibleCondition {
+  id: string;
+  name: string;
+  name_ar?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  display_order: number;
+}
+
+export interface AttributePriceAdjustment {
+  id: string;
+  attribute_type: 'vehicle_category' | 'powertrain' | 'vehicle_condition';
+  attribute_id: string;
+  context: 'towing' | 'shipping';
+  amount_usd: number;
+  reason_en: string;
+  reason_ar?: string | null;
+  display_order: number;
+  effective_from: string;
+  effective_to?: string | null;
+  is_active: boolean;
+  admin_notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VehicleCategoryCompatibility {
+  id: string;
+  vehicle_category_id: string;
+  target_type: 'powertrain' | 'vehicle_condition' | 'condition';
+  target_id: string;
+  is_active: boolean;
+  created_at?: string;
+  created_by?: string | null;
+}
+
+export interface AdminVehicleAttribute {
+  id: string;
+  type: 'category' | 'powertrain' | 'condition';
+  name: string;
+  nameAr?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  icon?: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AdminAdditionalChargeRuleExtended {
+  id: string;
+  code?: string | null;
+  name: string;
+  nameAr?: string | null;
+  descriptionEn?: string | null;
+  descriptionAr?: string | null;
+  category: string;
+  chargeType: string;
+  amount: number;
+  currency: string;
+  destinationPortId?: string | null;
+  destinationPortName?: string;
+  countryCode?: string | null;
+  shippingMethodId?: string | null;
+  shippingMethodName?: string;
+  vehicleCategoryId?: string | null;
+  vehicleCategoryName?: string;
+  powertrainId?: string | null;
+  powertrainName?: string;
+  conditionId?: string | null;
+  conditionName?: string;
+  displayOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  isMandatory: boolean;
+  isIncludedInCif: boolean;
+  isIncludedInVatBase: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+}
+
+export interface VinDecodeResult {
+  success: boolean;
+  vin: string;
+  year?: number;
+  make?: string;
+  model?: string;
+  vehicleType?: string;
+  bodyClass?: string;
+  fuelType?: string;
+  suggestedCategoryId?: string;
+  suggestedPowertrainId?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  rawDetails?: Record<string, string | null>;
+}
+
 export interface CalculatorAvailabilityResponse {
   eligible_pickup_locations: EligiblePickupLocation[];
   eligible_origin_ports: EligibleOriginPort[];
   eligible_destination_ports: EligibleDestinationPort[];
   eligible_shipping_methods: EligibleShippingMethod[];
+  eligible_powertrains?: EligiblePowertrain[];
+  eligible_conditions?: EligibleCondition[];
+  active_adjustments?: AttributePriceAdjustment[];
 }
+
 

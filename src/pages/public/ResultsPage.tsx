@@ -485,12 +485,22 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                 {/* 1. Ocean Freight Tariff */}
                 <div className="flex justify-between gap-2">
                   <span className="break-words font-medium text-slate-800">
-                    1. Ocean Freight Tariff ({originDisplay.name} → {destDisplay.name})
+                    1. Ocean Freight Base Tariff ({originDisplay.name} → {destDisplay.name})
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
-                    {displayAmount(quote.oceanFreight)}
+                    {displayAmount(quote.oceanFreightBase ?? quote.oceanFreight)}
                   </span>
                 </div>
+
+                {/* Ocean Freight Adjustments */}
+                {quote.lineItems
+                  ?.filter((item) => item.category === 'shipping_adjustment')
+                  .map((adj, idx) => (
+                    <div key={`ship-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
+                      <span className="break-words">• {adj.description || adj.reason || 'Ocean Freight Adjustment'}</span>
+                      <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
+                    </div>
+                  ))}
 
                 {/* 2. Inland Towing */}
                 <div className="flex justify-between gap-2">
@@ -501,31 +511,20 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {quote.includeInlandTowing
-                      ? displayRangeOrAmount(quote.towingFeeMin, quote.towingFeeMax)
+                      ? displayRangeOrAmount(quote.towingFeeBaseMin ?? quote.towingFeeMin, quote.towingFeeBaseMax ?? quote.towingFeeMax)
                       : displayAmount(0)}
                   </span>
                 </div>
 
-                {quote.powertrainSurcharge > 0 && (
-                  <div className="flex justify-between gap-2 text-amber-700">
-                    <span className="break-words">
-                      • Powertrain / Handling Surcharge ({quote.input.powertrain})
-                    </span>
-                    <span className="font-semibold shrink-0">
-                      {displayAmount(quote.powertrainSurcharge)}
-                    </span>
-                  </div>
-                )}
-                {quote.vehicleTypeSurcharge > 0 && (
-                  <div className="flex justify-between gap-2 text-amber-700">
-                    <span className="break-words">
-                      • Vehicle Category Surcharge ({quote.input.vehicleType})
-                    </span>
-                    <span className="font-semibold shrink-0">
-                      {displayAmount(quote.vehicleTypeSurcharge)}
-                    </span>
-                  </div>
-                )}
+                {/* Towing Adjustments */}
+                {quote.includeInlandTowing && quote.lineItems
+                  ?.filter((item) => item.category === 'towing_adjustment')
+                  .map((adj, idx) => (
+                    <div key={`tow-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
+                      <span className="break-words">• {adj.description || adj.reason || 'Towing Winching / Condition Adjustment'}</span>
+                      <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
+                    </div>
+                  ))}
 
                 {/* 3. Ocean Freight & Inland Towing Subtotal */}
                 <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-100">
@@ -564,6 +563,17 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                     {displayAmount(quote.destinationCharges || 200)}
                   </span>
                 </div>
+
+                {/* Additional Surcharges from line items */}
+                {quote.lineItems
+                  ?.filter((item) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(item.category))
+                  .map((surch, idx) => (
+                    <div key={`add-surch-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
+                      <span className="break-words">• {surch.description || surch.category}</span>
+                      <span className="font-medium shrink-0">{displayAmount(surch.amount_usd ?? 0)}</span>
+                    </div>
+                  ))}
+
                 <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
                   <span>• Destination Clearance Subtotal</span>
                   <span className="font-bold text-slate-900">

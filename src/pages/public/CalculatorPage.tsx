@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
 import { quotationService } from '../../services/quotationService';
+import { vinService } from '../../services/vinService';
 import {
   referenceDataService,
   CountryOption,
@@ -193,6 +194,120 @@ export const CalculatorPage: React.FC = () => {
 
   const formData = watch();
 
+  // VIN Decoding State
+  const [isDecodingVin, setIsDecodingVin] = useState(false);
+  const [vinDecodeSuccess, setVinDecodeSuccess] = useState<string | null>(null);
+  const [vinDecodeError, setVinDecodeError] = useState<string | null>(null);
+  const [pendingVinOverwrite, setPendingVinOverwrite] = useState<{
+    year?: number;
+    make?: string;
+    model?: string;
+    suggestedCategoryId?: string;
+    suggestedPowertrainId?: string;
+  } | null>(null);
+
+  const applyDecodedVin = (decoded: {
+    year?: number;
+    make?: string;
+    model?: string;
+    suggestedCategoryId?: string;
+    suggestedPowertrainId?: string;
+  }) => {
+    if (decoded.year) setValue('year', decoded.year, { shouldValidate: true });
+    if (decoded.make) setValue('make', decoded.make, { shouldValidate: true });
+    if (decoded.model) setValue('model', decoded.model, { shouldValidate: true });
+    if (decoded.suggestedCategoryId) {
+      setValue('vehicleType', decoded.suggestedCategoryId, { shouldValidate: true });
+    }
+    if (decoded.suggestedPowertrainId) {
+      setValue('powertrain', decoded.suggestedPowertrainId, { shouldValidate: true });
+    }
+
+    const summary = [decoded.year, decoded.make, decoded.model].filter(Boolean).join(' ');
+    setVinDecodeSuccess(
+      isAr
+        ? `تم فك الشفرة بنجاح: ${summary}`
+        : `Decoded successfully: ${summary}`
+    );
+    setPendingVinOverwrite(null);
+  };
+
+  const handleDecodeVin = async (overrideVin?: string) => {
+    const rawVin = overrideVin !== undefined ? overrideVin : (formData.vin || '');
+    const cleanVin = vinService.sanitizeVin(rawVin);
+    if (!cleanVin || cleanVin.length !== 17) {
+      setVinDecodeError(
+        isAr
+          ? 'يرجى إدخال رقم شاصي (VIN) صحيح مكون من 17 حرفاً ورقم.'
+          : 'Please enter a valid 17-character VIN (excluding I, O, Q).'
+      );
+      setVinDecodeSuccess(null);
+      return;
+    }
+
+    setIsDecodingVin(true);
+    setVinDecodeError(null);
+    setVinDecodeSuccess(null);
+
+    try {
+      const res = await vinService.decodeVin(cleanVin);
+      if (res.success && (res.year || res.make || res.model)) {
+        const hasExisting = Boolean(formData.year || formData.make || formData.model);
+        if (hasExisting) {
+          const isDifferent =
+            (res.year && formData.year && res.year !== formData.year) ||
+            (res.make && formData.make && res.make.toLowerCase() !== formData.make.toLowerCase()) ||
+            (res.model && formData.model && res.model.toLowerCase() !== formData.model.toLowerCase());
+
+          if (isDifferent) {
+            setPendingVinOverwrite({
+              year: res.year,
+              make: res.make,
+              model: res.model,
+              suggestedCategoryId: res.suggestedCategoryId,
+              suggestedPowertrainId: res.suggestedPowertrainId,
+            });
+            return;
+          }
+        }
+
+        applyDecodedVin(res);
+      } else {
+        setVinDecodeError(
+          res.errorMessage ||
+            (isAr
+              ? 'لم يتم التعرف على تفاصيل المركبة تلقائياً. يمكنك إدخال البيانات يدوياً.'
+              : 'Vehicle details could not be decoded. You can enter them manually.')
+        );
+      }
+    } catch {
+      setVinDecodeError(
+        isAr
+          ? 'تعذر الاتصال بقاعدة بيانات VIN. يرجى إدخال البيانات يدوياً.'
+          : 'Unable to connect to VIN database. Please enter details manually.'
+      );
+    } finally {
+      setIsDecodingVin(false);
+    }
+  };
+
+  // Debounced auto-decode when 17 valid characters are typed
+  const vinValue = formData.vin;
+  useEffect(() => {
+    if (!vinValue) {
+      setVinDecodeSuccess(null);
+      setVinDecodeError(null);
+      return;
+    }
+    const clean = vinService.sanitizeVin(vinValue);
+    if (clean.length === 17 && vinService.isValidVin(clean)) {
+      const timer = setTimeout(() => {
+        handleDecodeVin(clean);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [vinValue]);
+
   // 1. Initial Load of Master Reference Data
   useEffect(() => {
     let isMounted = true;
@@ -287,6 +402,20 @@ export const CalculatorPage: React.FC = () => {
         if (!isMounted) return;
 
         setAvailability(res);
+
+        // Auto-reselect compatible powertrain & condition if current selection is not eligible
+        if (res.eligible_powertrains && res.eligible_powertrains.length > 0) {
+          const isPtValid = res.eligible_powertrains.some((p) => p.id === formData.powertrain);
+          if (!isPtValid) {
+            setValue('powertrain', res.eligible_powertrains[0].id, { shouldValidate: true });
+          }
+        }
+        if (res.eligible_conditions && res.eligible_conditions.length > 0) {
+          const isCondValid = res.eligible_conditions.some((c) => c.id === formData.conditionId);
+          if (!isCondValid) {
+            setValue('conditionId', res.eligible_conditions[0].id, { shouldValidate: true });
+          }
+        }
 
         // Check if vehicle specs changed and invalidated downstream selections
         const prev = prevVehicleRef.current;
@@ -520,6 +649,55 @@ export const CalculatorPage: React.FC = () => {
       ? selectedDestPort.name_ar
       : selectedDestPort.name
     : formData.destinationPort;
+
+  // Dynamically eligible Powertrains and Conditions based on Category compatibility
+  const displayPowertrains = useMemo(() => {
+    if (availability.eligible_powertrains && availability.eligible_powertrains.length > 0) {
+      return availability.eligible_powertrains.map((p) => ({
+        id: p.id,
+        name: p.name,
+        nameAr: p.name_ar || undefined,
+        isActive: true,
+      }));
+    }
+    return powertrains.map((p) => ({
+      id: p.id,
+      name: p.name,
+      nameAr: undefined as string | undefined,
+      isActive: p.isActive,
+    }));
+  }, [availability.eligible_powertrains, powertrains]);
+
+  const displayConditions = useMemo(() => {
+    if (availability.eligible_conditions && availability.eligible_conditions.length > 0) {
+      return availability.eligible_conditions.map((c) => ({
+        id: c.id,
+        title: isAr && c.name_ar ? c.name_ar : c.name,
+        desc: c.description || '',
+        icon: c.id === 'non_runner' ? Wrench : c.id === 'salvage_damaged' ? ShieldAlert : CheckCircle2,
+      }));
+    }
+    return [
+      {
+        id: 'operable',
+        title: t.conditionOperable,
+        desc: t.conditionOperableDesc,
+        icon: CheckCircle2,
+      },
+      {
+        id: 'non_runner',
+        title: t.conditionNonRunner,
+        desc: t.conditionNonRunnerDesc,
+        icon: Wrench,
+      },
+      {
+        id: 'salvage_damaged',
+        title: t.conditionSalvage,
+        desc: t.conditionSalvageDesc,
+        icon: ShieldAlert,
+      },
+    ];
+  }, [availability.eligible_conditions, isAr, t]);
 
   // Filtered pickup locations based on search query
   const filteredPickupLocations = useMemo(() => {
@@ -800,17 +978,12 @@ export const CalculatorPage: React.FC = () => {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   {isAr ? '2. نوع المحرك والوقود' : '2. Powertrain / Fuel Type'}
                 </label>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  {(powertrains.length > 0
-                    ? powertrains
-                    : POWERTRAINS_CONFIG.map((p) => ({ id: p.id, name: p.id, isActive: true }))
-                  ).map((pt) => {
+                <div className="grid grid-cols-2 min-[380px]:grid-cols-3 gap-2 sm:gap-3">
+                  {displayPowertrains.map((pt) => {
                     const isSelected = formData.powertrain === pt.id;
                     const Icon = pt.id === 'electric' ? Zap : pt.id === 'hybrid' ? Fuel : Flame;
                     const configMatch = POWERTRAINS_CONFIG.find((c) => c.id === pt.id);
-                    const label = configMatch
-                      ? t[configMatch.labelKey as keyof typeof t] || pt.name
-                      : pt.name;
+                    const label = isAr && pt.nameAr ? pt.nameAr : configMatch ? t[configMatch.labelKey as keyof typeof t] || pt.name : pt.name;
 
                     return (
                       <Card
@@ -839,26 +1012,7 @@ export const CalculatorPage: React.FC = () => {
                   {isAr ? '3. حالة تشغيل المركبة' : '3. Vehicle Operational Condition'}
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    {
-                      id: 'operable',
-                      title: t.conditionOperable,
-                      desc: t.conditionOperableDesc,
-                      icon: CheckCircle2,
-                    },
-                    {
-                      id: 'non_runner',
-                      title: t.conditionNonRunner,
-                      desc: t.conditionNonRunnerDesc,
-                      icon: Wrench,
-                    },
-                    {
-                      id: 'salvage_damaged',
-                      title: t.conditionSalvage,
-                      desc: t.conditionSalvageDesc,
-                      icon: ShieldAlert,
-                    },
-                  ].map((cond) => {
+                  {displayConditions.map((cond) => {
                     const isSelected = formData.conditionId === cond.id;
                     const Icon = cond.icon;
 
@@ -878,9 +1032,11 @@ export const CalculatorPage: React.FC = () => {
                             <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
                               {cond.title}
                             </h4>
-                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                              {cond.desc}
-                            </p>
+                            {cond.desc && (
+                              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                                {cond.desc}
+                              </p>
+                            )}
                           </div>
                         </div>
                         {isSelected && (
@@ -896,24 +1052,117 @@ export const CalculatorPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Optional Vehicle Details */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
-                  {isAr
-                    ? 'بيانات إضافية للمركبة (اختياري)'
-                    : 'Additional Vehicle Details (Optional)'}
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {/* Optional Vehicle Details with VIN-First Decoder */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    {isAr
+                      ? 'بيانات المركبة التلقائية برقم الشاصي (اختياري)'
+                      : 'Vehicle Identification & Specifications (Optional)'}
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {isAr ? 'فك الشفرة التلقائي عبر NHTSA' : 'Instant NHTSA Auto-Decoding'}
+                  </span>
+                </div>
+
+                {/* Overwrite Confirmation Alert */}
+                {pendingVinOverwrite && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-2">
+                    <p className="font-bold text-amber-900">
+                      {isAr
+                        ? `قامت قاعدة بيانات NHTSA بتحديد المركبة كـ: ${[pendingVinOverwrite.year, pendingVinOverwrite.make, pendingVinOverwrite.model].filter(Boolean).join(' ')}. هل تريد استبدال الحقول التي قمت بإدخالها؟`
+                        : `NHTSA decoder identified: ${[pendingVinOverwrite.year, pendingVinOverwrite.make, pendingVinOverwrite.model].filter(Boolean).join(' ')}. Overwrite your manually entered fields?`}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => applyDecodedVin(pendingVinOverwrite)}
+                      >
+                        {isAr ? 'نعم، استبدل البيانات' : 'Yes, Overwrite'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingVinOverwrite(null)}
+                      >
+                        {isAr ? 'إلغاء والاحتفاظ بما كتبت' : 'Keep Current Values'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 1. VIN Input & Decoder */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isAr ? '1. رقم الشاصي (VIN)' : '1. Vehicle Identification Number (VIN)'}
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Controller
+                        control={control}
+                        name="vin"
+                        render={({ field }) => (
+                          <Input
+                            placeholder="e.g. 1HGCR2F83HA123456"
+                            maxLength={17}
+                            value={field.value || ''}
+                            onChange={(e) => {
+                              const sanitized = vinService.sanitizeVin(e.target.value);
+                              field.onChange(sanitized);
+                            }}
+                            className="font-mono uppercase tracking-wider"
+                          />
+                        )}
+                      />
+                      {isDecodingVin && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-brand-orange-600 bg-white/90 px-1">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-[11px] font-semibold">{isAr ? 'فك الشفرة...' : 'Decoding...'}</span>
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="md"
+                      disabled={isDecodingVin || !formData.vin || formData.vin.length !== 17}
+                      onClick={() => handleDecodeVin()}
+                      className="shrink-0 font-bold"
+                    >
+                      {isAr ? 'فك الشفرة' : 'Decode VIN'}
+                    </Button>
+                  </div>
+
+                  {vinDecodeSuccess && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{vinDecodeSuccess}</span>
+                    </div>
+                  )}
+
+                  {vinDecodeError && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 font-medium bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{vinDecodeError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Year, 3. Make, 4. Model */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <Controller
                     control={control}
                     name="year"
                     render={({ field }) => (
                       <Input
-                        label={isAr ? 'سنة الصنع' : 'Year'}
-                        placeholder="2022"
+                        label={isAr ? '2. سنة الصنع' : '2. Year'}
+                        placeholder="e.g. 2022"
                         type="number"
                         min={1950}
-                        max={2030}
+                        max={new Date().getFullYear() + 2}
                         value={field.value || ''}
                         onChange={(e) =>
                           field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
@@ -926,7 +1175,7 @@ export const CalculatorPage: React.FC = () => {
                     name="make"
                     render={({ field }) => (
                       <Input
-                        label={isAr ? 'الشركة المصنعة' : 'Make'}
+                        label={isAr ? '3. الشركة المصنعة' : '3. Make'}
                         placeholder="e.g. Toyota"
                         {...field}
                       />
@@ -937,23 +1186,32 @@ export const CalculatorPage: React.FC = () => {
                     name="model"
                     render={({ field }) => (
                       <Input
-                        label={isAr ? 'الموديل' : 'Model'}
+                        label={isAr ? '4. الموديل' : '4. Model'}
                         placeholder="e.g. Camry"
                         {...field}
                       />
                     )}
                   />
+                </div>
+
+                {/* 5. Lot Number (distinct, separate from VIN) */}
+                <div>
                   <Controller
                     control={control}
                     name="lotNumber"
                     render={({ field }) => (
                       <Input
-                        label={isAr ? 'رقم اللوت / الشاصي' : 'Lot # / VIN'}
-                        placeholder="54321098"
+                        label={isAr ? '5. رقم اللوت بالمزاد (اختياري، منفصل عن الشاصي)' : '5. Auction Lot Number (Optional, distinct from VIN)'}
+                        placeholder="e.g. 54321098"
                         {...field}
                       />
                     )}
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {isAr
+                      ? 'رقم اللوت الصادر من المزاد (Copart / IAAI / Manheim) منفصل عن رقم الشاصي.'
+                      : 'Auction-assigned stock or lot number (Copart / IAAI / Manheim), separate from the vehicle VIN.'}
+                  </p>
                 </div>
               </div>
             </div>

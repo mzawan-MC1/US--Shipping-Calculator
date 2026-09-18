@@ -18,6 +18,9 @@ import {
   AdminPurchaseLocation,
   AdminAdditionalChargeRule,
   AdminQuotationRule,
+  AdminVehicleAttribute,
+  VehicleCategoryCompatibility,
+  AttributePriceAdjustment,
 } from '../../services/adminService';
 import { RichTextEditor } from '../../components/ui/RichTextEditor';
 import { formatCurrency } from '../../lib/utils';
@@ -41,13 +44,16 @@ import {
   FileText,
   ArrowUp,
   ArrowDown,
+  Layers,
+  Zap,
+  Wrench,
 } from 'lucide-react';
 
 export const AdminTariffsPage: React.FC = () => {
   const { hasPermission } = useAuth();
   const canManagePricing = hasPermission('pricing.manage');
 
-  const [activeTab, setActiveTab] = useState<'freight' | 'towing' | 'surcharges' | 'rules' | 'exchange'>('freight');
+  const [activeTab, setActiveTab] = useState<'freight' | 'towing' | 'attributes' | 'surcharges' | 'rules' | 'exchange'>('freight');
   const [freightRates, setFreightRates] = useState<AdminFreightRate[]>([]);
   const [towingRates, setTowingRates] = useState<AdminTowingRate[]>([]);
   const [routes, setRoutes] = useState<AdminRoute[]>([]);
@@ -57,6 +63,50 @@ export const AdminTariffsPage: React.FC = () => {
   const [powertrains, setPowertrains] = useState<AdminPowertrain[]>([]);
   const [purchaseLocations, setPurchaseLocations] = useState<AdminPurchaseLocation[]>([]);
   const [additionalCharges, setAdditionalCharges] = useState<AdminAdditionalChargeRule[]>([]);
+
+  // Vehicle Attributes & Adjustments State
+  const [attributeSubTab, setAttributeSubTab] = useState<'categories' | 'powertrains' | 'conditions' | 'adjustments' | 'compatibilities'>('categories');
+  const [categoryAttributes, setCategoryAttributes] = useState<AdminVehicleAttribute[]>([]);
+  const [powertrainAttributes, setPowertrainAttributes] = useState<AdminVehicleAttribute[]>([]);
+  const [conditionAttributes, setConditionAttributes] = useState<AdminVehicleAttribute[]>([]);
+  const [priceAdjustments, setPriceAdjustments] = useState<AttributePriceAdjustment[]>([]);
+  const [compatibilities, setCompatibilities] = useState<VehicleCategoryCompatibility[]>([]);
+  const [selectedCategoryForCompat, setSelectedCategoryForCompat] = useState<string>('sedan');
+  const [compatPowertrains, setCompatPowertrains] = useState<string[]>([]);
+  const [compatConditions, setCompatConditions] = useState<string[]>([]);
+  const [isSavingCompat, setIsSavingCompat] = useState(false);
+
+  // Attribute Modal State
+  const [isAttributeModalOpen, setIsAttributeModalOpen] = useState(false);
+  const [attributeModalMode, setAttributeModalMode] = useState<'create' | 'edit'>('create');
+  const [attributeModalType, setAttributeModalType] = useState<'category' | 'powertrain' | 'condition'>('category');
+  const [editingAttributeId, setEditingAttributeId] = useState<string | null>(null);
+  const [attributeFormId, setAttributeFormId] = useState('');
+  const [attributeFormName, setAttributeFormName] = useState('');
+  const [attributeFormNameAr, setAttributeFormNameAr] = useState('');
+  const [attributeFormDesc, setAttributeFormDesc] = useState('');
+  const [attributeFormDescAr, setAttributeFormDescAr] = useState('');
+  const [attributeFormIcon, setAttributeFormIcon] = useState('');
+  const [attributeFormOrder, setAttributeFormOrder] = useState('1');
+  const [attributeFormIsActive, setAttributeFormIsActive] = useState(true);
+  const [isSavingAttribute, setIsSavingAttribute] = useState(false);
+
+  // Adjustment Modal State
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [adjustmentModalMode, setAdjustmentModalMode] = useState<'create' | 'edit'>('create');
+  const [editingAdjustmentId, setEditingAdjustmentId] = useState<string | null>(null);
+  const [adjFormContext, setAdjFormContext] = useState<'towing' | 'shipping'>('towing');
+  const [adjFormType, setAdjFormType] = useState<'vehicle_category' | 'powertrain' | 'vehicle_condition'>('vehicle_condition');
+  const [adjFormAttributeId, setAdjFormAttributeId] = useState('non_runner');
+  const [adjFormAmount, setAdjFormAmount] = useState('150');
+  const [adjFormReasonEn, setAdjFormReasonEn] = useState('');
+  const [adjFormReasonAr, setAdjFormReasonAr] = useState('');
+  const [adjFormDisplayOrder, setAdjFormDisplayOrder] = useState('1');
+  const [adjFormEffectiveFrom, setAdjFormEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [adjFormEffectiveTo, setAdjFormEffectiveTo] = useState('');
+  const [adjFormIsActive, setAdjFormIsActive] = useState(true);
+  const [adjFormAdminNotes, setAdjFormAdminNotes] = useState('');
+  const [isSavingAdjustment, setIsSavingAdjustment] = useState(false);
 
   const [exchangeRate, setExchangeRate] = useState<{ rate: number; updatedAt: string }>({
     rate: 3.6725,
@@ -111,12 +161,30 @@ export const AdminTariffsPage: React.FC = () => {
   const [towingFormIsActive, setTowingFormIsActive] = useState(true);
   const [isSavingTowing, setIsSavingTowing] = useState(false);
 
-  // Surcharge / Charge Rule Modal
+  // Extended Surcharge / Charge Rule Modal
   const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
+  const [chargeModalMode, setChargeModalMode] = useState<'create' | 'edit'>('create');
   const [editingChargeRule, setEditingChargeRule] = useState<AdminAdditionalChargeRule | null>(null);
+  const [chargeRuleCode, setChargeRuleCode] = useState('');
+  const [chargeRuleName, setChargeRuleName] = useState('');
+  const [chargeRuleNameAr, setChargeRuleNameAr] = useState('');
+  const [chargeRuleDescEn, setChargeRuleDescEn] = useState('');
+  const [chargeRuleDescAr, setChargeRuleDescAr] = useState('');
+  const [chargeRuleCategory, setChargeRuleCategory] = useState('customs_clearance');
+  const [chargeRuleType, setChargeRuleType] = useState('fixed');
   const [chargeRuleAmount, setChargeRuleAmount] = useState('150');
   const [chargeRuleMandatory, setChargeRuleMandatory] = useState(true);
+  const [chargeRuleIncludedInCif, setChargeRuleIncludedInCif] = useState(false);
   const [chargeRuleVatBase, setChargeRuleVatBase] = useState(false);
+  const [chargeRuleDestinationPortId, setChargeRuleDestinationPortId] = useState('');
+  const [chargeRuleShippingMethodId, setChargeRuleShippingMethodId] = useState('');
+  const [chargeRuleVehicleCategoryId, setChargeRuleVehicleCategoryId] = useState('');
+  const [chargeRulePowertrainId, setChargeRulePowertrainId] = useState('');
+  const [chargeRuleConditionId, setChargeRuleConditionId] = useState('');
+  const [chargeRuleDisplayOrder, setChargeRuleDisplayOrder] = useState('1');
+  const [chargeRuleEffectiveFrom, setChargeRuleEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [chargeRuleEffectiveTo, setChargeRuleEffectiveTo] = useState('');
+  const [chargeRuleIsActive, setChargeRuleIsActive] = useState(true);
   const [isSavingCharge, setIsSavingCharge] = useState(false);
 
   // Quotation Rules State
@@ -140,7 +208,7 @@ export const AdminTariffsPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr] = await Promise.all([
+      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr, cats, pts, conds, adjs, comps] = await Promise.all([
         adminService.getFreightRates(),
         adminService.getTowingRates(),
         adminService.getExchangeRate(),
@@ -152,6 +220,11 @@ export const AdminTariffsPage: React.FC = () => {
         adminService.getPurchaseLocations(),
         adminService.getAdditionalChargeRules(),
         adminService.getQuotationRules(),
+        adminService.getVehicleAttributes('category'),
+        adminService.getVehicleAttributes('powertrain'),
+        adminService.getVehicleAttributes('condition'),
+        adminService.getAttributePriceAdjustments(),
+        adminService.getCategoryCompatibilities(),
       ]);
       setFreightRates(f);
       setTowingRates(t);
@@ -165,6 +238,11 @@ export const AdminTariffsPage: React.FC = () => {
       setPurchaseLocations(pl);
       setAdditionalCharges(ac);
       setQuotationRules(qr);
+      setCategoryAttributes(cats);
+      setPowertrainAttributes(pts);
+      setConditionAttributes(conds);
+      setPriceAdjustments(adjs);
+      setCompatibilities(comps);
 
       if (r.length > 0 && !freightFormRouteId) {
         setFreightFormRouteId(r[0].id);
@@ -446,40 +524,392 @@ export const AdminTariffsPage: React.FC = () => {
     }
   };
 
-  // Charge Rule Edit Handlers
+  // -----------------------------------------------------------
+  // Surcharge (Additional Charge Rule) Handlers
+  // -----------------------------------------------------------
+  const handleOpenCreateCharge = () => {
+    setChargeModalMode('create');
+    setEditingChargeRule(null);
+    setChargeRuleCode('');
+    setChargeRuleName('');
+    setChargeRuleNameAr('');
+    setChargeRuleDescEn('');
+    setChargeRuleDescAr('');
+    setChargeRuleCategory('customs_clearance');
+    setChargeRuleType('fixed');
+    setChargeRuleAmount('150');
+    setChargeRuleMandatory(true);
+    setChargeRuleIncludedInCif(false);
+    setChargeRuleVatBase(false);
+    setChargeRuleDestinationPortId('');
+    setChargeRuleShippingMethodId('');
+    setChargeRuleVehicleCategoryId('');
+    setChargeRulePowertrainId('');
+    setChargeRuleConditionId('');
+    setChargeRuleDisplayOrder((additionalCharges.length + 1).toString());
+    setChargeRuleEffectiveFrom(new Date().toISOString().split('T')[0]);
+    setChargeRuleEffectiveTo('');
+    setChargeRuleIsActive(true);
+    setIsChargeModalOpen(true);
+  };
+
   const handleOpenEditCharge = (rule: AdminAdditionalChargeRule) => {
+    setChargeModalMode('edit');
     setEditingChargeRule(rule);
+    setChargeRuleCode(rule.code || '');
+    setChargeRuleName(rule.name);
+    setChargeRuleNameAr(rule.nameAr || '');
+    setChargeRuleDescEn(rule.descriptionEn || '');
+    setChargeRuleDescAr(rule.descriptionAr || '');
+    setChargeRuleCategory(rule.category);
+    setChargeRuleType(rule.chargeType);
     setChargeRuleAmount(rule.amount.toString());
     setChargeRuleMandatory(rule.isMandatory);
+    setChargeRuleIncludedInCif(Boolean(rule.isIncludedInCif));
     setChargeRuleVatBase(rule.isIncludedInVatBase);
+    setChargeRuleDestinationPortId(rule.destinationPortId || '');
+    setChargeRuleShippingMethodId(rule.shippingMethodId || '');
+    setChargeRuleVehicleCategoryId(rule.vehicleCategoryId || '');
+    setChargeRulePowertrainId(rule.powertrainId || '');
+    setChargeRuleConditionId(rule.conditionId || '');
+    setChargeRuleDisplayOrder((rule.displayOrder || 1).toString());
+    setChargeRuleEffectiveFrom(rule.effectiveFrom || new Date().toISOString().split('T')[0]);
+    setChargeRuleEffectiveTo(rule.effectiveTo || '');
+    setChargeRuleIsActive(rule.isActive);
     setIsChargeModalOpen(true);
   };
 
   const handleSaveChargeRule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingChargeRule) return;
     const amt = parseFloat(chargeRuleAmount);
     if (isNaN(amt) || amt < 0) {
       setActionError('Please specify a valid charge amount.');
+      return;
+    }
+    if (!chargeRuleName.trim()) {
+      setActionError('Charge rule name is required.');
       return;
     }
 
     setIsSavingCharge(true);
     setActionError(null);
     try {
-      await adminService.updateAdditionalChargeRule(editingChargeRule.id, {
+      const payload = {
+        name: chargeRuleName.trim(),
+        nameAr: chargeRuleNameAr.trim() || null,
+        code: chargeRuleCode.trim() ? chargeRuleCode.trim().toUpperCase() : null,
+        descriptionEn: chargeRuleDescEn.trim() || null,
+        descriptionAr: chargeRuleDescAr.trim() || null,
+        category: chargeRuleCategory,
+        chargeType: chargeRuleType,
         amount: amt,
+        currency: 'USD',
         isMandatory: chargeRuleMandatory,
+        isIncludedInCif: chargeRuleIncludedInCif,
         isIncludedInVatBase: chargeRuleVatBase,
-      });
-      setActionSuccess(`Updated ${editingChargeRule.name} tariff.`);
+        destinationPortId: chargeRuleDestinationPortId || null,
+        shippingMethodId: chargeRuleShippingMethodId || null,
+        vehicleCategoryId: chargeRuleVehicleCategoryId || null,
+        powertrainId: chargeRulePowertrainId || null,
+        conditionId: chargeRuleConditionId || null,
+        displayOrder: parseInt(chargeRuleDisplayOrder, 10) || 1,
+        effectiveFrom: chargeRuleEffectiveFrom || new Date().toISOString().split('T')[0],
+        effectiveTo: chargeRuleEffectiveTo || null,
+        isActive: chargeRuleIsActive,
+      };
+
+      if (chargeModalMode === 'create') {
+        await adminService.createAdditionalChargeRule(payload);
+        setActionSuccess('Surcharge rule created successfully.');
+      } else if (editingChargeRule) {
+        await adminService.updateAdditionalChargeRule(editingChargeRule.id, payload);
+        setActionSuccess(`Updated ${chargeRuleName} tariff.`);
+      }
       setIsChargeModalOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update charge rule';
+      const msg = err instanceof Error ? err.message : 'Failed to save surcharge rule';
       setActionError(msg);
     } finally {
       setIsSavingCharge(false);
+    }
+  };
+
+  const handleDeleteChargeRule = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this surcharge rule? Quotation snapshots already generated will remain unaffected.')) return;
+    setActionError(null);
+    try {
+      await adminService.deleteAdditionalChargeRule(id);
+      setActionSuccess('Surcharge rule deleted.');
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete surcharge rule';
+      setActionError(msg);
+    }
+  };
+
+  const handleToggleChargeStatus = async (rule: AdminAdditionalChargeRule) => {
+    setActionError(null);
+    try {
+      await adminService.updateAdditionalChargeRule(rule.id, { isActive: !rule.isActive });
+      setActionSuccess(`Surcharge rule ${!rule.isActive ? 'activated' : 'deactivated'}.`);
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update surcharge status';
+      setActionError(msg);
+    }
+  };
+
+  const handleMoveCharge = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= additionalCharges.length) return;
+
+    const currentItem = additionalCharges[index];
+    const targetItem = additionalCharges[targetIndex];
+
+    try {
+      await adminService.reorderAdditionalChargeRules([
+        { id: currentItem.id, displayOrder: targetItem.displayOrder || targetIndex + 1 },
+        { id: targetItem.id, displayOrder: currentItem.displayOrder || index + 1 },
+      ]);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to reorder surcharges:', err);
+    }
+  };
+
+  // -----------------------------------------------------------
+  // Vehicle Attributes Handlers
+  // -----------------------------------------------------------
+  const handleOpenCreateAttribute = (type: 'category' | 'powertrain' | 'condition') => {
+    setAttributeModalMode('create');
+    setAttributeModalType(type);
+    setEditingAttributeId(null);
+    setAttributeFormId('');
+    setAttributeFormName('');
+    setAttributeFormNameAr('');
+    setAttributeFormDesc('');
+    setAttributeFormDescAr('');
+    setAttributeFormIcon('');
+    setAttributeFormOrder('1');
+    setAttributeFormIsActive(true);
+    setIsAttributeModalOpen(true);
+  };
+
+  const handleOpenEditAttribute = (attr: AdminVehicleAttribute) => {
+    setAttributeModalMode('edit');
+    setAttributeModalType(attr.type);
+    setEditingAttributeId(attr.id);
+    setAttributeFormId(attr.id);
+    setAttributeFormName(attr.name);
+    setAttributeFormNameAr(attr.nameAr || '');
+    setAttributeFormDesc(attr.description || '');
+    setAttributeFormDescAr(attr.descriptionAr || '');
+    setAttributeFormIcon(attr.icon || '');
+    setAttributeFormOrder((attr.displayOrder || 1).toString());
+    setAttributeFormIsActive(attr.isActive);
+    setIsAttributeModalOpen(true);
+  };
+
+  const handleSaveAttribute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!attributeFormName.trim()) {
+      setActionError('Attribute name is required.');
+      return;
+    }
+    if (attributeModalMode === 'create' && !attributeFormId.trim()) {
+      setActionError('Attribute code/identifier is required.');
+      return;
+    }
+
+    setIsSavingAttribute(true);
+    setActionError(null);
+    try {
+      if (attributeModalMode === 'create') {
+        await adminService.createVehicleAttribute(attributeModalType, {
+          id: attributeFormId,
+          name: attributeFormName,
+          nameAr: attributeFormNameAr || null,
+          description: attributeFormDesc || null,
+          descriptionAr: attributeFormDescAr || null,
+          icon: attributeFormIcon || null,
+          displayOrder: parseInt(attributeFormOrder, 10) || 1,
+          isActive: attributeFormIsActive,
+        });
+        setActionSuccess(`Created ${attributeModalType}: ${attributeFormName}.`);
+      } else if (editingAttributeId) {
+        await adminService.updateVehicleAttribute(attributeModalType, editingAttributeId, {
+          name: attributeFormName,
+          nameAr: attributeFormNameAr || null,
+          description: attributeFormDesc || null,
+          descriptionAr: attributeFormDescAr || null,
+          icon: attributeFormIcon || null,
+          displayOrder: parseInt(attributeFormOrder, 10) || 1,
+          isActive: attributeFormIsActive,
+        });
+        setActionSuccess(`Updated ${attributeModalType}: ${attributeFormName}.`);
+      }
+      setIsAttributeModalOpen(false);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save attribute');
+    } finally {
+      setIsSavingAttribute(false);
+    }
+  };
+
+  const handleDeleteAttribute = async (type: 'category' | 'powertrain' | 'condition', id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete or archive ${type} "${name}"? Active tariffs and quotations referencing this attribute will prevent hard deletion and safely archive it.`)) return;
+    setActionError(null);
+    try {
+      await adminService.deleteVehicleAttribute(type, id);
+      setActionSuccess(`Attribute "${name}" removed/archived.`);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete attribute.');
+    }
+  };
+
+  const handleToggleAttributeStatus = async (attr: AdminVehicleAttribute) => {
+    setActionError(null);
+    try {
+      await adminService.updateVehicleAttribute(attr.type, attr.id, { isActive: !attr.isActive });
+      setActionSuccess(`Attribute "${attr.name}" ${!attr.isActive ? 'activated' : 'deactivated'}.`);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to update attribute status.');
+    }
+  };
+
+  // -----------------------------------------------------------
+  // Price Adjustments Handlers
+  // -----------------------------------------------------------
+  const handleOpenCreateAdjustment = () => {
+    setAdjustmentModalMode('create');
+    setEditingAdjustmentId(null);
+    setAdjFormContext('towing');
+    setAdjFormType('vehicle_condition');
+    setAdjFormAttributeId(conditionAttributes[0]?.id || 'non_runner');
+    setAdjFormAmount('150');
+    setAdjFormReasonEn('Non-Runner / Inoperable Winching Surcharge');
+    setAdjFormReasonAr('رسوم ونش للسيارات المعطلة');
+    setAdjFormDisplayOrder((priceAdjustments.length + 1).toString());
+    setAdjFormEffectiveFrom(new Date().toISOString().split('T')[0]);
+    setAdjFormEffectiveTo('');
+    setAdjFormIsActive(true);
+    setAdjFormAdminNotes('');
+    setIsAdjustmentModalOpen(true);
+  };
+
+  const handleOpenEditAdjustment = (adj: AttributePriceAdjustment) => {
+    setAdjustmentModalMode('edit');
+    setEditingAdjustmentId(adj.id);
+    setAdjFormContext(adj.context);
+    setAdjFormType(adj.attribute_type);
+    setAdjFormAttributeId(adj.attribute_id);
+    setAdjFormAmount(adj.amount_usd.toString());
+    setAdjFormReasonEn(adj.reason_en);
+    setAdjFormReasonAr(adj.reason_ar || '');
+    setAdjFormDisplayOrder(adj.display_order.toString());
+    setAdjFormEffectiveFrom(adj.effective_from);
+    setAdjFormEffectiveTo(adj.effective_to || '');
+    setAdjFormIsActive(adj.is_active);
+    setAdjFormAdminNotes(adj.admin_notes || '');
+    setIsAdjustmentModalOpen(true);
+  };
+
+  const handleSaveAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(adjFormAmount);
+    if (isNaN(amt)) {
+      setActionError('Adjustment amount must be a number.');
+      return;
+    }
+    if (!adjFormReasonEn.trim()) {
+      setActionError('Customer-facing reason in English is required.');
+      return;
+    }
+
+    setIsSavingAdjustment(true);
+    setActionError(null);
+    try {
+      const payload = {
+        attribute_type: adjFormType,
+        attribute_id: adjFormAttributeId,
+        context: adjFormContext,
+        amount_usd: amt,
+        reason_en: adjFormReasonEn.trim(),
+        reason_ar: adjFormReasonAr.trim() || null,
+        display_order: parseInt(adjFormDisplayOrder, 10) || 1,
+        effective_from: adjFormEffectiveFrom || new Date().toISOString().split('T')[0],
+        effective_to: adjFormEffectiveTo || null,
+        is_active: adjFormIsActive,
+        admin_notes: adjFormAdminNotes.trim() || null,
+      };
+
+      if (adjustmentModalMode === 'create') {
+        await adminService.createAttributePriceAdjustment(payload);
+        setActionSuccess('Price adjustment created successfully.');
+      } else if (editingAdjustmentId) {
+        await adminService.updateAttributePriceAdjustment(editingAdjustmentId, payload);
+        setActionSuccess('Price adjustment updated successfully.');
+      }
+      setIsAdjustmentModalOpen(false);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save price adjustment.');
+    } finally {
+      setIsSavingAdjustment(false);
+    }
+  };
+
+  const handleDeleteAdjustment = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this price adjustment?')) return;
+    setActionError(null);
+    try {
+      await adminService.deleteAttributePriceAdjustment(id);
+      setActionSuccess('Price adjustment deleted.');
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete price adjustment.');
+    }
+  };
+
+  const handleToggleAdjustmentStatus = async (adj: AttributePriceAdjustment) => {
+    setActionError(null);
+    try {
+      await adminService.updateAttributePriceAdjustment(adj.id, { is_active: !adj.is_active });
+      setActionSuccess(`Price adjustment ${!adj.is_active ? 'activated' : 'deactivated'}.`);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to toggle adjustment status.');
+    }
+  };
+
+  // Compatibility helper
+  useEffect(() => {
+    const pIds = compatibilities
+      .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && c.target_type === 'powertrain')
+      .map((c) => c.target_id);
+    const cIds = compatibilities
+      .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && (c.target_type === 'vehicle_condition' || c.target_type === 'condition'))
+      .map((c) => c.target_id);
+    setCompatPowertrains(pIds);
+    setCompatConditions(cIds);
+  }, [selectedCategoryForCompat, compatibilities]);
+
+  const handleSaveCompatibilities = async () => {
+    setIsSavingCompat(true);
+    setActionError(null);
+    try {
+      await adminService.setCategoryCompatibilities(selectedCategoryForCompat, 'powertrain', compatPowertrains);
+      await adminService.setCategoryCompatibilities(selectedCategoryForCompat, 'vehicle_condition', compatConditions);
+      setActionSuccess(`Compatibility rules saved for ${selectedCategoryForCompat}.`);
+      await loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save compatibility rules.');
+    } finally {
+      setIsSavingCompat(false);
     }
   };
 
@@ -702,6 +1132,49 @@ export const AdminTariffsPage: React.FC = () => {
             </Button>
           )}
 
+          {canManagePricing && activeTab === 'attributes' && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleOpenCreateAttribute(
+                    attributeSubTab === 'conditions'
+                      ? 'condition'
+                      : attributeSubTab === 'powertrains'
+                      ? 'powertrain'
+                      : 'category'
+                  )
+                }
+                className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Attribute
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenCreateAdjustment}
+                className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Price Adjustment
+              </Button>
+            </div>
+          )}
+
+          {canManagePricing && activeTab === 'surcharges' && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleOpenCreateCharge}
+              className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Surcharge
+            </Button>
+          )}
+
           {canManagePricing && activeTab === 'rules' && (
             <Button
               variant="primary"
@@ -751,6 +1224,18 @@ export const AdminTariffsPage: React.FC = () => {
         >
           <Truck className="w-4 h-4" />
           <span>Inland Towing Brackets ({towingRates.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('attributes')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'attributes'
+              ? 'border-brand-orange-500 text-brand-navy-950'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Vehicle Attributes & Adjustments</span>
         </button>
 
         <button
@@ -1071,77 +1556,597 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 3: PORT SURCHARGES & RULES */}
+          {/* TAB 3: VEHICLE ATTRIBUTES & ADJUSTMENTS */}
+          {activeTab === 'attributes' && (
+            <div className="space-y-6">
+              {/* Sub-tabs header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  <button
+                    onClick={() => setAttributeSubTab('categories')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      attributeSubTab === 'categories'
+                        ? 'bg-brand-navy-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Vehicle Categories ({categoryAttributes.length})
+                  </button>
+                  <button
+                    onClick={() => setAttributeSubTab('powertrains')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      attributeSubTab === 'powertrains'
+                        ? 'bg-brand-navy-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Powertrains ({powertrainAttributes.length})
+                  </button>
+                  <button
+                    onClick={() => setAttributeSubTab('conditions')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      attributeSubTab === 'conditions'
+                        ? 'bg-brand-navy-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Operational Conditions ({conditionAttributes.length})
+                  </button>
+                  <button
+                    onClick={() => setAttributeSubTab('adjustments')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      attributeSubTab === 'adjustments'
+                        ? 'bg-brand-orange-500 text-white shadow-sm'
+                        : 'bg-orange-50 text-brand-orange-700 hover:bg-orange-100'
+                    }`}
+                  >
+                    Price Adjustments ({priceAdjustments.length})
+                  </button>
+                  <button
+                    onClick={() => setAttributeSubTab('compatibilities')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      attributeSubTab === 'compatibilities'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                    }`}
+                  >
+                    Compatibility Rules
+                  </button>
+                </div>
+
+                {canManagePricing && attributeSubTab !== 'compatibilities' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      if (attributeSubTab === 'adjustments') {
+                        handleOpenCreateAdjustment();
+                      } else {
+                        handleOpenCreateAttribute(
+                          attributeSubTab === 'conditions'
+                            ? 'condition'
+                            : attributeSubTab === 'powertrains'
+                            ? 'powertrain'
+                            : 'category'
+                        );
+                      }
+                    }}
+                    className="text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {attributeSubTab === 'adjustments' ? 'Add Adjustment' : 'Add Attribute'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Sub-tab 1: Categories / Powertrains / Conditions Table */}
+              {(attributeSubTab === 'categories' ||
+                attributeSubTab === 'powertrains' ||
+                attributeSubTab === 'conditions') && (
+                <Card className="bg-white border border-slate-200 overflow-hidden">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-brand-navy-950 capitalize">
+                        {attributeSubTab === 'categories'
+                          ? 'Vehicle Categories Master Data'
+                          : attributeSubTab === 'powertrains'
+                          ? 'Powertrain & Fuel Classifications'
+                          : 'Operational & Mechanical Conditions'}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Authoritative database attributes controlling quotation options and tariff lookups.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-start text-xs min-w-[650px]">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="py-3 px-4">Identifier / Code</th>
+                          <th className="py-3 px-4">Name (English)</th>
+                          <th className="py-3 px-4">Name (Arabic)</th>
+                          <th className="py-3 px-4">Description</th>
+                          <th className="py-3 px-4 text-center">Display Order</th>
+                          <th className="py-3 px-4 text-center">Status</th>
+                          {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {(attributeSubTab === 'categories'
+                          ? categoryAttributes
+                          : attributeSubTab === 'powertrains'
+                          ? powertrainAttributes
+                          : conditionAttributes
+                        ).map((attr) => (
+                          <tr key={attr.id} className="hover:bg-slate-50/50">
+                            <td className="py-3.5 px-4 font-mono font-bold text-slate-600">{attr.id}</td>
+                            <td className="py-3.5 px-4 font-bold text-brand-navy-950 flex items-center gap-1.5">
+                              {attr.icon && <span className="text-sm">{attr.icon}</span>}
+                              <span>{attr.name}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-arabic text-slate-700">{attr.nameAr || '—'}</td>
+                            <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">
+                              {attr.description || '—'}
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-bold text-slate-600">
+                              {attr.displayOrder}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              {attr.isActive ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <XCircle className="w-3 h-3 text-rose-600" /> Inactive
+                                </span>
+                              )}
+                            </td>
+                            {canManagePricing && (
+                              <td className="py-3.5 px-4 text-end">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleToggleAttributeStatus(attr)}
+                                    className="text-[10px] py-1 px-2 font-bold"
+                                  >
+                                    {attr.isActive ? 'Deactivate' : 'Activate'}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleOpenEditAttribute(attr)}
+                                    className="p-1 text-slate-600 hover:text-slate-900"
+                                    title="Edit Attribute"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteAttribute(attr.type, attr.id, attr.name)}
+                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                    title="Delete / Archive Attribute"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Sub-tab 2: Price Adjustments Table */}
+              {attributeSubTab === 'adjustments' && (
+                <Card className="bg-white border border-slate-200 overflow-hidden">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-brand-navy-950">
+                        Granular Towing & Ocean Freight Price Adjustments
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Configurable surcharges and discounts applied based on vehicle attributes with bilingual customer explanations.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-start text-xs min-w-[750px]">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="py-3 px-4">Context</th>
+                          <th className="py-3 px-4">Trigger Attribute</th>
+                          <th className="py-3 px-4">Adjustment Amount</th>
+                          <th className="py-3 px-4">Customer Reason (EN)</th>
+                          <th className="py-3 px-4">Customer Reason (AR)</th>
+                          <th className="py-3 px-4 text-center">Status</th>
+                          {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {priceAdjustments.length === 0 ? (
+                          <tr>
+                            <td colSpan={canManagePricing ? 7 : 6} className="py-8 text-center text-slate-400 text-xs">
+                              No price adjustments configured. Click "Add Price Adjustment" to create one.
+                            </td>
+                          </tr>
+                        ) : (
+                          priceAdjustments.map((adj) => (
+                            <tr key={adj.id} className="hover:bg-slate-50/50">
+                              <td className="py-3.5 px-4">
+                                {adj.context === 'towing' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    <Truck className="w-3 h-3" /> Inland Towing
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                    <Ship className="w-3 h-3" /> Ocean Shipping
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="font-mono font-bold text-slate-700 capitalize">
+                                  {adj.attribute_type.replace('_', ' ')}: {adj.attribute_id}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-brand-orange-600 text-sm">
+                                {adj.amount_usd >= 0 ? `+${formatCurrency(adj.amount_usd)}` : `-${formatCurrency(Math.abs(adj.amount_usd))}`}
+                              </td>
+                              <td className="py-3.5 px-4 font-medium text-slate-800 max-w-xs truncate">
+                                {adj.reason_en}
+                              </td>
+                              <td className="py-3.5 px-4 font-arabic text-slate-700 max-w-xs truncate">
+                                {adj.reason_ar || '—'}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                {adj.is_active ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <XCircle className="w-3 h-3 text-rose-600" /> Inactive
+                                  </span>
+                                )}
+                              </td>
+                              {canManagePricing && (
+                                <td className="py-3.5 px-4 text-end">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleToggleAdjustmentStatus(adj)}
+                                      className="text-[10px] py-1 px-2 font-bold"
+                                    >
+                                      {adj.is_active ? 'Deactivate' : 'Activate'}
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenEditAdjustment(adj)}
+                                      className="p-1 text-slate-600 hover:text-slate-900"
+                                      title="Edit Adjustment"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteAdjustment(adj.id)}
+                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                      title="Delete Adjustment"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Sub-tab 3: Category Compatibility Rules */}
+              {attributeSubTab === 'compatibilities' && (
+                <Card className="p-5 bg-white border border-slate-200 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-base font-bold text-brand-navy-950">
+                        Vehicle Category Attribute Compatibility Rules
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Restrict which powertrains and operational conditions are selectable for each vehicle category in the calculator.
+                      </p>
+                    </div>
+                    {canManagePricing && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSaveCompatibilities}
+                        disabled={isSavingCompat}
+                        className="text-xs font-bold"
+                      >
+                        {isSavingCompat ? 'Saving Rules...' : 'Save Compatibility Rules'}
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="max-w-xs">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Select Vehicle Category</label>
+                    <select
+                      value={selectedCategoryForCompat}
+                      onChange={(e) => setSelectedCategoryForCompat(e.target.value)}
+                      className="w-full text-xs font-semibold p-2 border border-slate-300 rounded-lg bg-white"
+                    >
+                      {categoryAttributes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                    {/* Powertrain compatibility */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-brand-navy-950 flex items-center gap-1.5">
+                          <Zap className="w-4 h-4 text-amber-500" />
+                          Eligible Powertrains for "{selectedCategoryForCompat}"
+                        </h4>
+                        <span className="text-[11px] text-slate-500">
+                          {compatPowertrains.length} of {powertrainAttributes.length} selected
+                        </span>
+                      </div>
+                      <div className="space-y-2 pt-1">
+                        {powertrainAttributes.map((pt) => {
+                          const isChecked = compatPowertrains.includes(pt.id);
+                          return (
+                            <label
+                              key={pt.id}
+                              className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer ${
+                                isChecked
+                                  ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                                  : 'bg-white border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCompatPowertrains([...compatPowertrains, pt.id]);
+                                  } else {
+                                    setCompatPowertrains(compatPowertrains.filter((x) => x !== pt.id));
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+                              />
+                              <span className="text-xs font-bold">{pt.name}</span>
+                              <span className="text-[10px] font-mono text-slate-400">({pt.id})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Condition compatibility */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-brand-navy-950 flex items-center gap-1.5">
+                          <Wrench className="w-4 h-4 text-slate-600" />
+                          Eligible Conditions for "{selectedCategoryForCompat}"
+                        </h4>
+                        <span className="text-[11px] text-slate-500">
+                          {compatConditions.length} of {conditionAttributes.length} selected
+                        </span>
+                      </div>
+                      <div className="space-y-2 pt-1">
+                        {conditionAttributes.map((cond) => {
+                          const isChecked = compatConditions.includes(cond.id);
+                          return (
+                            <label
+                              key={cond.id}
+                              className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer ${
+                                isChecked
+                                  ? 'bg-blue-50/70 border-blue-200 text-blue-950'
+                                  : 'bg-white border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCompatConditions([...compatConditions, cond.id]);
+                                  } else {
+                                    setCompatConditions(compatConditions.filter((x) => x !== cond.id));
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+                              />
+                              <span className="text-xs font-bold">{cond.name}</span>
+                              <span className="text-[10px] font-mono text-slate-400">({cond.id})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: PORT SURCHARGES & RULES (UPGRADED FULL CRUD) */}
           {activeTab === 'surcharges' && (
             <div className="space-y-6">
               <Card className="bg-white border border-slate-200 overflow-hidden">
                 <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                   <div>
-                    <h3 className="text-base font-bold text-brand-navy-950">UAE Port Handling & Statutory Surcharges</h3>
+                    <h3 className="text-base font-bold text-brand-navy-950">UAE Port Handling & Additional Surcharges</h3>
                     <p className="text-xs text-slate-500">
-                      Standard terminal delivery order, port clearance, and customs handling tariffs automatically calculated into CIF quotations.
+                      Standard terminal delivery orders, port clearance, documentation fees, and applicable CIF/VAT rules.
                     </p>
                   </div>
+                  {canManagePricing && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleOpenCreateCharge}
+                      className="text-xs font-bold flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Surcharge
+                    </Button>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-start text-xs min-w-[650px]">
+                  <table className="w-full text-start text-xs min-w-[850px]">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-4">Code</th>
                         <th className="py-3 px-4">Charge Description</th>
                         <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Applicability</th>
                         <th className="py-3 px-4">Amount (USD)</th>
-                        <th className="py-3 px-4">Mandatory</th>
-                        <th className="py-3 px-4">Subject to UAE VAT</th>
-                        <th className="py-3 px-4">Status</th>
-                        {canManagePricing && <th className="py-3 px-4 text-end">Action</th>}
+                        <th className="py-3 px-4 text-center">In CIF</th>
+                        <th className="py-3 px-4 text-center">In VAT Base</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {additionalCharges.map((rule) => (
+                      {additionalCharges.map((rule, idx) => (
                         <tr key={rule.id} className="hover:bg-slate-50/50">
-                          <td className="py-3.5 px-4 font-bold text-brand-navy-950">{rule.name}</td>
-                          <td className="py-3.5 px-4 font-mono text-slate-500">{rule.category}</td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-brand-navy-950 text-[11px]">
+                            {rule.code || '—'}
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-brand-navy-950">
+                            <div>{rule.name}</div>
+                            {rule.nameAr && <div className="text-[10px] font-normal text-slate-500 font-arabic">{rule.nameAr}</div>}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-slate-500 capitalize">
+                            {rule.category.replace('_', ' ')}
+                          </td>
+                          <td className="py-3.5 px-4 text-[11px] text-slate-600">
+                            {rule.destinationPortId ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] mr-1">
+                                Port: {ports.find((p) => p.id === rule.destinationPortId)?.name || rule.destinationPortId}
+                              </span>
+                            ) : null}
+                            {rule.shippingMethodId ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] mr-1">
+                                Method: {rule.shippingMethodId}
+                              </span>
+                            ) : null}
+                            {rule.vehicleCategoryId ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] mr-1">
+                                Cat: {rule.vehicleCategoryId}
+                              </span>
+                            ) : null}
+                            {!rule.destinationPortId && !rule.shippingMethodId && !rule.vehicleCategoryId && (
+                              <span className="text-slate-400 text-[10px] italic">Universal / All</span>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 font-bold text-brand-orange-600 text-sm">
                             {formatCurrency(rule.amount)}
                           </td>
-                          <td className="py-3.5 px-4">
-                            {rule.isMandatory ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">
-                                Mandatory
+                          <td className="py-3.5 px-4 text-center">
+                            {rule.isIncludedInCif ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                Yes
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-                                Optional
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">
+                                No
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 text-center">
                             {rule.isIncludedInVatBase ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700">
-                                In 5% VAT Base
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                Yes (5%)
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Separate / Non-VAT Base
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">
+                                No
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                              Active
-                            </span>
+                          <td className="py-3.5 px-4 text-center">
+                            {rule.isActive ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <XCircle className="w-3 h-3 text-rose-600" /> Inactive
+                              </span>
+                            )}
                           </td>
                           {canManagePricing && (
                             <td className="py-3.5 px-4 text-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenEditCharge(rule)}
-                                className="text-[11px] py-1 px-2.5 font-bold"
-                              >
-                                Edit Tariff
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMoveCharge(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-1 text-slate-400 hover:text-slate-700"
+                                  title="Move Up"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMoveCharge(idx, 'down')}
+                                  disabled={idx === additionalCharges.length - 1}
+                                  className="p-1 text-slate-400 hover:text-slate-700"
+                                  title="Move Down"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleToggleChargeStatus(rule)}
+                                  className="text-[10px] py-1 px-2 font-bold"
+                                >
+                                  {rule.isActive ? 'Deactivate' : 'Activate'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditCharge(rule)}
+                                  className="p-1 text-slate-600 hover:text-slate-900"
+                                  title="Edit Surcharge"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteChargeRule(rule.id)}
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                  title="Delete Surcharge"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -1157,7 +2162,7 @@ export const AdminTariffsPage: React.FC = () => {
                   <h4 className="text-sm font-bold text-brand-navy-950 mb-2">Configured Vehicle Categories</h4>
                   <p className="text-xs text-slate-500 mb-3">Live vehicle categories available in quotations:</p>
                   <div className="flex flex-wrap gap-2">
-                    {vehicleCategories.map((c) => (
+                    {categoryAttributes.map((c) => (
                       <Badge key={c.id} variant="navy">
                         {c.name}
                       </Badge>
@@ -1169,7 +2174,7 @@ export const AdminTariffsPage: React.FC = () => {
                   <h4 className="text-sm font-bold text-brand-navy-950 mb-2">Supported Powertrains</h4>
                   <p className="text-xs text-slate-500 mb-3">Powertrains and environmental classifications:</p>
                   <div className="flex flex-wrap gap-2">
-                    {powertrains.map((p) => (
+                    {powertrainAttributes.map((p) => (
                       <Badge key={p.id} variant="orange">
                         {p.name}
                       </Badge>
@@ -1752,55 +2757,317 @@ export const AdminTariffsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Charge Rule Edit Modal */}
+      {/* Surcharge Create/Edit Modal */}
       <Modal
         isOpen={isChargeModalOpen}
         onClose={() => setIsChargeModalOpen(false)}
-        title={editingChargeRule ? `Edit Tariff: ${editingChargeRule.name}` : 'Edit Charge Rule'}
+        size="xl"
+        title={
+          chargeModalMode === 'create'
+            ? 'Add Port / Additional Surcharge Rule'
+            : `Edit Surcharge: ${editingChargeRule?.name || ''}`
+        }
       >
         <form onSubmit={handleSaveChargeRule} className="space-y-4 pt-2 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Charge Name</label>
-            <Input type="text" value={editingChargeRule?.name || ''} disabled className="bg-slate-100" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Surcharge Code (Unique Identifier)
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. DXB_PORT_HANDLING"
+                value={chargeRuleCode}
+                onChange={(e) => setChargeRuleCode(e.target.value.toUpperCase())}
+              />
+              <p className="text-[10px] text-slate-400 mt-0.5">Uppercase identifier for tracking/audit.</p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Category <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={chargeRuleCategory}
+                onChange={(e) => setChargeRuleCategory(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                required
+              >
+                <option value="customs_clearance">Customs Clearance</option>
+                <option value="port_surcharge">Port Surcharge</option>
+                <option value="documentation">Documentation / BL</option>
+                <option value="inspection">Inspection / Security</option>
+                <option value="other">Other Surcharge</option>
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Charge Amount (USD) <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={chargeRuleAmount}
-              onChange={(e) => setChargeRuleAmount(e.target.value)}
-              required
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Fee Name (English) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Jebel Ali Port Handling & Terminal Service"
+                value={chargeRuleName}
+                onChange={(e) => setChargeRuleName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Fee Name (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="مثال: رسوم مناولة الميناء ومحطة الحاويات جبل علي"
+                value={chargeRuleNameAr}
+                onChange={(e) => setChargeRuleNameAr(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Customer Description (English)
+              </label>
+              <Input
+                type="text"
+                placeholder="Explanation displayed on customer quotation..."
+                value={chargeRuleDescEn}
+                onChange={(e) => setChargeRuleDescEn(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Customer Description (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="شرح يظهر للعميل في تفاصيل عرض الأسعار..."
+                value={chargeRuleDescAr}
+                onChange={(e) => setChargeRuleDescAr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Charge Amount (USD) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={chargeRuleAmount}
+                onChange={(e) => setChargeRuleAmount(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Charge Type</label>
+              <select
+                value={chargeRuleType}
+                onChange={(e) => setChargeRuleType(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+              >
+                <option value="fixed">Fixed Amount (USD)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Applicability Filters */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Applicability Conditions (Leave blank / all to apply universally)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Destination Port
+                </label>
+                <select
+                  value={chargeRuleDestinationPortId}
+                  onChange={(e) => setChargeRuleDestinationPortId(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs"
+                >
+                  <option value="">All Destination Ports</option>
+                  {ports
+                    .filter((p) => !p.isLoadingPort)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.code})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Shipping Method
+                </label>
+                <select
+                  value={chargeRuleShippingMethodId}
+                  onChange={(e) => setChargeRuleShippingMethodId(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs"
+                >
+                  <option value="">All Shipping Methods</option>
+                  {shippingMethods.map((sm) => (
+                    <option key={sm.id} value={sm.id}>
+                      {sm.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Vehicle Category
+                </label>
+                <select
+                  value={chargeRuleVehicleCategoryId}
+                  onChange={(e) => setChargeRuleVehicleCategoryId(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs"
+                >
+                  <option value="">All Vehicle Categories</option>
+                  {categoryAttributes.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Powertrain
+                </label>
+                <select
+                  value={chargeRulePowertrainId}
+                  onChange={(e) => setChargeRulePowertrainId(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs"
+                >
+                  <option value="">All Powertrains</option>
+                  {powertrainAttributes.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Operational Condition
+                </label>
+                <select
+                  value={chargeRuleConditionId}
+                  onChange={(e) => setChargeRuleConditionId(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs"
+                >
+                  <option value="">All Operational Conditions</option>
+                  {conditionAttributes.map((cond) => (
+                    <option key={cond.id} value={cond.id}>
+                      {cond.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Financial Flags */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="chargeRuleMandatory"
+                checked={chargeRuleMandatory}
+                onChange={(e) => setChargeRuleMandatory(e.target.checked)}
+                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+              />
+              <label htmlFor="chargeRuleMandatory" className="font-semibold text-slate-700">
+                Mandatory Surcharge
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="chargeRuleIncludedInCif"
+                checked={chargeRuleIncludedInCif}
+                onChange={(e) => setChargeRuleIncludedInCif(e.target.checked)}
+                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+              />
+              <label htmlFor="chargeRuleIncludedInCif" className="font-semibold text-slate-700">
+                Include in CIF Base
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="chargeRuleVatBase"
+                checked={chargeRuleVatBase}
+                onChange={(e) => setChargeRuleVatBase(e.target.checked)}
+                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+              />
+              <label htmlFor="chargeRuleVatBase" className="font-semibold text-slate-700">
+                Subject to UAE 5% VAT
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Display Order</label>
+              <Input
+                type="number"
+                min="1"
+                value={chargeRuleDisplayOrder}
+                onChange={(e) => setChargeRuleDisplayOrder(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
+              <Input
+                type="date"
+                value={chargeRuleEffectiveFrom}
+                onChange={(e) => setChargeRuleEffectiveFrom(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective To (Optional)</label>
+              <Input
+                type="date"
+                value={chargeRuleEffectiveTo}
+                onChange={(e) => setChargeRuleEffectiveTo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"
-              id="chargeRuleMandatory"
-              checked={chargeRuleMandatory}
-              onChange={(e) => setChargeRuleMandatory(e.target.checked)}
+              id="chargeRuleIsActive"
+              checked={chargeRuleIsActive}
+              onChange={(e) => setChargeRuleIsActive(e.target.checked)}
               className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
             />
-            <label htmlFor="chargeRuleMandatory" className="font-bold text-slate-700">
-              Mandatory Fee (Applied to all quotations)
-            </label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="chargeRuleVatBase"
-              checked={chargeRuleVatBase}
-              onChange={(e) => setChargeRuleVatBase(e.target.checked)}
-              className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
-            />
-            <label htmlFor="chargeRuleVatBase" className="font-bold text-slate-700">
-              Subject to UAE 5% Statutory Import VAT
+            <label htmlFor="chargeRuleIsActive" className="font-bold text-slate-700">
+              Active Surcharge Rule (Immediately eligible for new quotes)
             </label>
           </div>
 
@@ -1821,7 +3088,361 @@ export const AdminTariffsPage: React.FC = () => {
               disabled={isSavingCharge}
               className="font-bold"
             >
-              {isSavingCharge ? 'Saving...' : 'Apply Tariff Change'}
+              {isSavingCharge ? 'Saving...' : chargeModalMode === 'create' ? 'Create Surcharge' : 'Save Surcharge'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Vehicle Attribute Modal */}
+      <Modal
+        isOpen={isAttributeModalOpen}
+        onClose={() => setIsAttributeModalOpen(false)}
+        title={
+          attributeModalMode === 'create'
+            ? `Add Vehicle ${attributeModalType === 'category' ? 'Category' : attributeModalType === 'powertrain' ? 'Powertrain' : 'Condition'}`
+            : `Edit Vehicle ${attributeModalType === 'category' ? 'Category' : attributeModalType === 'powertrain' ? 'Powertrain' : 'Condition'}: ${attributeFormName}`
+        }
+      >
+        <form onSubmit={handleSaveAttribute} className="space-y-4 pt-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Identifier Code <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. suv or hybrid"
+                value={attributeFormId}
+                onChange={(e) => setAttributeFormId(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                disabled={attributeModalMode === 'edit'}
+                className={attributeModalMode === 'edit' ? 'bg-slate-100' : ''}
+                required
+              />
+              <p className="text-[10px] text-slate-400 mt-0.5">Unique slug (lowercase, underscores).</p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Icon / Emoji (Optional)
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. 🚗, ⚡, 🔧"
+                value={attributeFormIcon}
+                onChange={(e) => setAttributeFormIcon(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Display Name (English) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Sport Utility Vehicle (SUV)"
+                value={attributeFormName}
+                onChange={(e) => setAttributeFormName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Display Name (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="مثال: سيارة رياضية متعددة الاستخدامات"
+                value={attributeFormNameAr}
+                onChange={(e) => setAttributeFormNameAr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Description (English)
+              </label>
+              <Input
+                type="text"
+                placeholder="Operational definition..."
+                value={attributeFormDesc}
+                onChange={(e) => setAttributeFormDesc(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Description (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="الوصف بالعربية..."
+                value={attributeFormDescAr}
+                onChange={(e) => setAttributeFormDescAr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Display Order</label>
+              <Input
+                type="number"
+                min="1"
+                value={attributeFormOrder}
+                onChange={(e) => setAttributeFormOrder(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-6">
+              <input
+                type="checkbox"
+                id="attributeFormIsActive"
+                checked={attributeFormIsActive}
+                onChange={(e) => setAttributeFormIsActive(e.target.checked)}
+                className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+              />
+              <label htmlFor="attributeFormIsActive" className="font-bold text-slate-700">
+                Active in Public Calculator
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAttributeModalOpen(false)}
+              disabled={isSavingAttribute}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSavingAttribute}
+              className="font-bold"
+            >
+              {isSavingAttribute ? 'Saving...' : attributeModalMode === 'create' ? 'Create Attribute' : 'Save Attribute'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Attribute Price Adjustment Modal */}
+      <Modal
+        isOpen={isAdjustmentModalOpen}
+        onClose={() => setIsAdjustmentModalOpen(false)}
+        size="lg"
+        title={
+          adjustmentModalMode === 'create'
+            ? 'Add Attribute Price Adjustment'
+            : 'Edit Price Adjustment'
+        }
+      >
+        <form onSubmit={handleSaveAdjustment} className="space-y-4 pt-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Operational Context <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={adjFormContext}
+                onChange={(e) => setAdjFormContext(e.target.value as 'towing' | 'shipping')}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                required
+              >
+                <option value="towing">Inland Towing Adjustment</option>
+                <option value="shipping">Ocean Freight Adjustment</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Target Attribute Type <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={adjFormType}
+                onChange={(e) => {
+                  const newType = e.target.value as 'vehicle_category' | 'powertrain' | 'vehicle_condition';
+                  setAdjFormType(newType);
+                  if (newType === 'vehicle_category') {
+                    setAdjFormAttributeId(categoryAttributes[0]?.id || '');
+                  } else if (newType === 'powertrain') {
+                    setAdjFormAttributeId(powertrainAttributes[0]?.id || '');
+                  } else {
+                    setAdjFormAttributeId(conditionAttributes[0]?.id || '');
+                  }
+                }}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                required
+              >
+                <option value="vehicle_condition">Vehicle Condition</option>
+                <option value="powertrain">Powertrain</option>
+                <option value="vehicle_category">Vehicle Category</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Target Attribute <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={adjFormAttributeId}
+                onChange={(e) => setAdjFormAttributeId(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                required
+              >
+                {adjFormType === 'vehicle_category' &&
+                  categoryAttributes.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.id})
+                    </option>
+                  ))}
+                {adjFormType === 'powertrain' &&
+                  powertrainAttributes.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name} ({pt.id})
+                    </option>
+                  ))}
+                {adjFormType === 'vehicle_condition' &&
+                  conditionAttributes.map((cond) => (
+                    <option key={cond.id} value={cond.id}>
+                      {cond.name} ({cond.id})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Adjustment Amount (USD) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                value={adjFormAmount}
+                onChange={(e) => setAdjFormAmount(e.target.value)}
+                placeholder="e.g. 150.00"
+                required
+              />
+              <p className="text-[10px] text-slate-400 mt-0.5">Positive to add cost, negative for discount.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Customer Reason (English) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Non-Runner / Inoperable Winching Surcharge"
+                value={adjFormReasonEn}
+                onChange={(e) => setAdjFormReasonEn(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Customer Reason (Arabic)
+              </label>
+              <Input
+                type="text"
+                dir="rtl"
+                placeholder="مثال: رسوم سحب وونش للسيارات المعطلة"
+                value={adjFormReasonAr}
+                onChange={(e) => setAdjFormReasonAr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Internal Admin Notes (Optional)
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. Standard dispatch winch surcharge agreed with carriers"
+              value={adjFormAdminNotes}
+              onChange={(e) => setAdjFormAdminNotes(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Display Order</label>
+              <Input
+                type="number"
+                min="1"
+                value={adjFormDisplayOrder}
+                onChange={(e) => setAdjFormDisplayOrder(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
+              <Input
+                type="date"
+                value={adjFormEffectiveFrom}
+                onChange={(e) => setAdjFormEffectiveFrom(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Effective To (Optional)</label>
+              <Input
+                type="date"
+                value={adjFormEffectiveTo}
+                onChange={(e) => setAdjFormEffectiveTo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="adjFormIsActive"
+              checked={adjFormIsActive}
+              onChange={(e) => setAdjFormIsActive(e.target.checked)}
+              className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
+            />
+            <label htmlFor="adjFormIsActive" className="font-bold text-slate-700">
+              Active Adjustment (Automatically included in quotation calculations)
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAdjustmentModalOpen(false)}
+              disabled={isSavingAdjustment}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSavingAdjustment}
+              className="font-bold"
+            >
+              {isSavingAdjustment ? 'Saving...' : adjustmentModalMode === 'create' ? 'Create Adjustment' : 'Save Adjustment'}
             </Button>
           </div>
         </form>
@@ -1877,6 +3498,7 @@ export const AdminTariffsPage: React.FC = () => {
       <Modal
         isOpen={isRuleModalOpen}
         onClose={handleCloseRuleModal}
+        size="rule-editor"
         title={
           ruleModalMode === 'create'
             ? 'Add Quotation Rule'
@@ -1924,32 +3546,34 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <RichTextEditor
-              label="Official Rule Text (English)"
-              direction="ltr"
-              value={ruleFormContentEn}
-              onChange={(val) => {
-                setRuleFormContentEn(val);
-                setIsRuleFormDirty(true);
-              }}
-              placeholder="Full description and conditions in English to appear on customer quotations..."
-              minHeight="140px"
-            />
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <RichTextEditor
+                label="Official Rule Text (English)"
+                direction="ltr"
+                value={ruleFormContentEn}
+                onChange={(val) => {
+                  setRuleFormContentEn(val);
+                  setIsRuleFormDirty(true);
+                }}
+                placeholder="Full description and conditions in English to appear on customer quotations..."
+                minHeight="140px"
+              />
+            </div>
 
-          <div>
-            <RichTextEditor
-              label="Official Rule Text (Arabic)"
-              direction="rtl"
-              value={ruleFormContentAr}
-              onChange={(val) => {
-                setRuleFormContentAr(val);
-                setIsRuleFormDirty(true);
-              }}
-              placeholder="الشروط والأحكام باللغة العربية لعرضها في عروض الأسعار وملفات PDF..."
-              minHeight="140px"
-            />
+            <div>
+              <RichTextEditor
+                label="Official Rule Text (Arabic)"
+                direction="rtl"
+                value={ruleFormContentAr}
+                onChange={(val) => {
+                  setRuleFormContentAr(val);
+                  setIsRuleFormDirty(true);
+                }}
+                placeholder="الشروط والأحكام باللغة العربية لعرضها في عروض الأسعار وملفات PDF..."
+                minHeight="140px"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

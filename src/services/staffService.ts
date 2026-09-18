@@ -54,8 +54,8 @@ interface StaffDirectoryRow {
   role_id: string | null;
   role_name: string | null;
   role_description: string | null;
-  role_is_system: boolean | null;
-  role_is_active: boolean | null;
+  role_is_system?: boolean | null;
+  role_is_active?: boolean | null;
 }
 
 interface StaffInvitationQueryResult {
@@ -151,7 +151,7 @@ export const staffService = {
       .order('created_at', { ascending: true });
 
     if (!viewError && viewData && viewData.length > 0) {
-      const rows = viewData as StaffDirectoryRow[];
+      const rows = viewData as unknown as StaffDirectoryRow[];
       return rows.map((item) => ({
         id: item.id,
         email: item.email,

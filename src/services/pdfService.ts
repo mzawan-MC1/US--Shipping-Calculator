@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { BrandingSettings } from './adminService';
-import { QuotationRuleItem } from '../types/calculator';
+import { QuotationRuleItem, QuotationLineItem } from '../types/calculator';
 
 export interface PdfQuotationData {
   language?: 'en' | 'ar';
@@ -21,6 +21,7 @@ export interface PdfQuotationData {
   transitTime?: string;
   declaredValueUsd?: number;
   oceanFreightUsd: number;
+  oceanFreightBaseUsd?: number;
   towingFeeMin: number;
   towingFeeMax: number;
   isTowingRange: boolean;
@@ -38,6 +39,7 @@ export interface PdfQuotationData {
   exchangeRate: number;
   disclaimer?: string;
   rules?: QuotationRuleItem[];
+  lineItems?: QuotationLineItem[];
 }
 
 export async function generateQuotationPdf(
@@ -284,18 +286,40 @@ export async function generateQuotationPdf(
       : `$${oceanAndTowingSubtotalMax.toFixed(2)}`;
 
     const tableBodyAr: string[][] = [
-      ['$ ' + data.oceanFreightUsd.toFixed(2), ar('1. تعرفة الشحن البحري الدولي (من ميناء التصدير إلى ميناء الوصول)'), '1'],
-      [towingCellAr, ar('2. النقل الداخلي وسحب المركبة (إلى ميناء الشحن الأمريكي)'), '2'],
+      ['$ ' + (data.oceanFreightBaseUsd ?? data.oceanFreightUsd).toFixed(2), ar('1. تعرفة الشحن البحري الأساسية (من ميناء التصدير إلى ميناء الوصول)'), '1'],
+    ];
+
+    const shipAdjs = data.lineItems?.filter((i) => i.category === 'shipping_adjustment') || [];
+    shipAdjs.forEach((adj) => {
+      tableBodyAr.push(['$ ' + (adj.amount_usd || 0).toFixed(2), ar(`• ${adj.description || adj.reason || 'تعديل تعرفة الشحن البحري'}`), '•']);
+    });
+
+    tableBodyAr.push([towingCellAr, ar('2. النقل الداخلي وسحب المركبة (إلى ميناء الشحن الأمريكي)'), '2']);
+
+    const towAdjs = data.lineItems?.filter((i) => i.category === 'towing_adjustment') || [];
+    towAdjs.forEach((adj) => {
+      tableBodyAr.push(['$ ' + (adj.amount_usd || 0).toFixed(2), ar(`• ${adj.description || adj.reason || 'تعديل سحب ونقل داخلي'}`), '•']);
+    });
+
+    tableBodyAr.push(
       [oceanAndTowingSubtotalAr, ar(hasTowing ? '3. المجموع الفرعي للشحن البحري والنقل الداخلي' : '3. المجموع الفرعي للشحن البحري'), '3'],
       ['$ ' + clearanceFee.toFixed(2), ar('• التخليص الجمركي والمعاملات في موانئ دولة الإمارات'), '4a'],
-      ['$ ' + portHandlingFee.toFixed(2), ar('• رسوم مناولة الرصيف ومحطة الحاويات وإذن التسليم'), '4b'],
+      ['$ ' + portHandlingFee.toFixed(2), ar('• رسوم مناولة الرصيف ومحطة الحاويات وإذن التسليم'), '4b']
+    );
+
+    const addSurchargesAr = data.lineItems?.filter((i) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(i.category)) || [];
+    addSurchargesAr.forEach((surch) => {
+      tableBodyAr.push(['$ ' + (surch.amount_usd || 0).toFixed(2), ar(`• ${surch.description || 'رسوم إضافية'}`), '•']);
+    });
+
+    tableBodyAr.push(
       ['$ ' + clearanceSubtotal.toFixed(2), ar('4. المجموع الفرعي لرسوم التخليص والموانئ في الوجهة'), '4'],
       ['$ ' + data.customsDutyUsd.toFixed(2), ar('• الرسوم الجمركية النظامية (5% من القيمة التقديرية CIF)'), '5a'],
       ['$ ' + data.importVatUsd.toFixed(2), ar('• ضريبة القيمة المضافة للاستيراد (5% من وعاء الضريبة CIF + الرسوم)'), '5b'],
-      ['$ ' + uaeGovSubtotal.toFixed(2), ar('5. المجموع الفرعي للرسوم والضرائب الحكومية بدولة الإمارات'), '5'],
-    ];
+      ['$ ' + uaeGovSubtotal.toFixed(2), ar('5. المجموع الفرعي للرسوم والضرائب الحكومية بدولة الإمارات'), '5']
+    );
 
-    if (surcharges > 0) {
+    if (surcharges > 0 && addSurchargesAr.length === 0) {
       tableBodyAr.push(['$ ' + surcharges.toFixed(2), ar('• رسوم حالة المركبة وتعديل الوقود الإضافية'), '+']);
     }
 
@@ -340,19 +364,41 @@ export async function generateQuotationPdf(
       ? `$${oceanAndTowingSubtotalMin.toFixed(2)} - $${oceanAndTowingSubtotalMax.toFixed(2)}`
       : `$${oceanAndTowingSubtotalMax.toFixed(2)}`;
 
-    const tableBody = [
-      ['1', '1. Ocean Freight Tariff (Origin Port to UAE Port)', `$${data.oceanFreightUsd.toFixed(2)}`],
-      ['2', '2. Inland Towing to Origin Departure Port', towingCell],
+    const tableBody: string[][] = [
+      ['1', '1. Ocean Freight Base Tariff (Origin Port to UAE Port)', `$${(data.oceanFreightBaseUsd ?? data.oceanFreightUsd).toFixed(2)}`],
+    ];
+
+    const shipAdjsEn = data.lineItems?.filter((i) => i.category === 'shipping_adjustment') || [];
+    shipAdjsEn.forEach((adj) => {
+      tableBody.push(['•', `  • ${adj.description || adj.reason || 'Ocean Freight Adjustment'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
+    });
+
+    tableBody.push(['2', '2. Inland Towing to Origin Departure Port', towingCell]);
+
+    const towAdjsEn = data.lineItems?.filter((i) => i.category === 'towing_adjustment') || [];
+    towAdjsEn.forEach((adj) => {
+      tableBody.push(['•', `  • ${adj.description || adj.reason || 'Towing Winching / Condition Adjustment'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
+    });
+
+    tableBody.push(
       ['3', hasTowing ? '3. Ocean Freight & Inland Towing Subtotal' : '3. Ocean Freight Subtotal', oceanAndTowingSubtotal],
       ['4a', '  • Customs Clearance & Port Documentation', `$${clearanceFee.toFixed(2)}`],
-      ['4b', '  • Port & Terminal Handling Charges', `$${portHandlingFee.toFixed(2)}`],
+      ['4b', '  • Port & Terminal Handling Charges', `$${portHandlingFee.toFixed(2)}`]
+    );
+
+    const addSurchargesEn = data.lineItems?.filter((i) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(i.category)) || [];
+    addSurchargesEn.forEach((surch) => {
+      tableBody.push(['•', `  • ${surch.description || 'Additional Surcharge'}`, `$${(surch.amount_usd || 0).toFixed(2)}`]);
+    });
+
+    tableBody.push(
       ['4', '4. Destination Clearance Subtotal', `$${clearanceSubtotal.toFixed(2)}`],
       ['5a', '  • Statutory UAE Customs Duty (5% of CIF Valuation)', `$${data.customsDutyUsd.toFixed(2)}`],
       ['5b', '  • Statutory UAE Import VAT (5% of [CIF + Duty])', `$${data.importVatUsd.toFixed(2)}`],
-      ['5', '5. UAE Government Charges Subtotal', `$${uaeGovSubtotal.toFixed(2)}`],
-    ];
+      ['5', '5. UAE Government Charges Subtotal', `$${uaeGovSubtotal.toFixed(2)}`]
+    );
 
-    if (surcharges > 0) {
+    if (surcharges > 0 && addSurchargesEn.length === 0) {
       tableBody.push(['+', 'Vehicle Condition & Specialized Surcharges', `$${surcharges.toFixed(2)}`]);
     }
 

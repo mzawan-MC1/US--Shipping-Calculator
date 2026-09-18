@@ -19,43 +19,94 @@ export type Database = {
           amount: number
           category: string
           charge_type: string
+          code: string | null
+          condition_id: string | null
           country_code: string | null
           created_at: string
+          created_by: string | null
           currency: string
+          description_ar: string | null
+          description_en: string | null
           destination_port_id: string | null
+          display_order: number
+          effective_from: string
+          effective_to: string | null
           id: string
           is_active: boolean
+          is_archived: boolean
+          is_included_in_cif: boolean
           is_included_in_vat_base: boolean
           is_mandatory: boolean
+          is_separate_charge: boolean
           name: string
+          name_ar: string | null
+          powertrain_id: string | null
+          shipping_method_id: string | null
+          updated_at: string
+          updated_by: string | null
+          vehicle_category_id: string | null
         }
         Insert: {
           amount: number
           category: string
           charge_type: string
+          code?: string | null
+          condition_id?: string | null
           country_code?: string | null
           created_at?: string
+          created_by?: string | null
           currency?: string
+          description_ar?: string | null
+          description_en?: string | null
           destination_port_id?: string | null
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
+          is_included_in_cif?: boolean
           is_included_in_vat_base?: boolean
           is_mandatory?: boolean
+          is_separate_charge?: boolean
           name: string
+          name_ar?: string | null
+          powertrain_id?: string | null
+          shipping_method_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_category_id?: string | null
         }
         Update: {
           amount?: number
           category?: string
           charge_type?: string
+          code?: string | null
+          condition_id?: string | null
           country_code?: string | null
           created_at?: string
+          created_by?: string | null
           currency?: string
+          description_ar?: string | null
+          description_en?: string | null
           destination_port_id?: string | null
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
+          is_included_in_cif?: boolean
           is_included_in_vat_base?: boolean
           is_mandatory?: boolean
+          is_separate_charge?: boolean
           name?: string
+          name_ar?: string | null
+          powertrain_id?: string | null
+          shipping_method_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_category_id?: string | null
         }
         Relationships: [
           {
@@ -73,6 +124,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      attribute_price_adjustments: {
+        Row: {
+          admin_notes: string | null
+          amount_usd: number
+          attribute_id: string
+          attribute_type: string
+          context: string
+          created_at: string
+          created_by: string | null
+          display_order: number
+          effective_from: string
+          effective_to: string | null
+          id: string
+          is_active: boolean
+          reason_ar: string | null
+          reason_en: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount_usd?: number
+          attribute_id: string
+          attribute_type: string
+          context: string
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          is_active?: boolean
+          reason_ar?: string | null
+          reason_en: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          amount_usd?: number
+          attribute_id?: string
+          attribute_type?: string
+          context?: string
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          is_active?: boolean
+          reason_ar?: string | null
+          reason_en?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       audit_events: {
         Row: {
@@ -351,38 +459,50 @@ export type Database = {
       enquiries: {
         Row: {
           assigned_staff_id: string | null
+          consent_given_at: string | null
           created_at: string
           customer_id: string
           follow_up_date: string | null
           id: string
+          message: string | null
           notes: string | null
+          preferred_contact_method: string | null
           reference_number: string
           source: string
           status: string
+          subject: string | null
           updated_at: string
         }
         Insert: {
           assigned_staff_id?: string | null
+          consent_given_at?: string | null
           created_at?: string
           customer_id: string
           follow_up_date?: string | null
           id?: string
+          message?: string | null
           notes?: string | null
+          preferred_contact_method?: string | null
           reference_number: string
           source?: string
           status?: string
+          subject?: string | null
           updated_at?: string
         }
         Update: {
           assigned_staff_id?: string | null
+          consent_given_at?: string | null
           created_at?: string
           customer_id?: string
           follow_up_date?: string | null
           id?: string
+          message?: string | null
           notes?: string | null
+          preferred_contact_method?: string | null
           reference_number?: string
           source?: string
           status?: string
+          subject?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -577,78 +697,48 @@ export type Database = {
       powertrains: {
         Row: {
           created_at: string
+          created_by: string | null
+          description: string | null
+          description_ar: string | null
           display_order: number
-          id: string
-          is_active: boolean
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          display_order?: number
-          id: string
-          is_active?: boolean
-          name: string
-        }
-        Update: {
-          created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          name?: string
-        }
-        Relationships: []
-      }
-      quotation_rules: {
-        Row: {
-          content_ar: string | null
-          content_en: string
-          created_at: string
-          display_order: number
-          effective_from: string
-          effective_to: string | null
-          effective_until: string | null
+          icon: string | null
           id: string
           is_active: boolean
           is_archived: boolean
-          title_ar: string | null
-          title_en: string
+          name: string
+          name_ar: string | null
           updated_at: string
           updated_by: string | null
-          version: number
         }
         Insert: {
-          content_ar?: string | null
-          content_en: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
           display_order?: number
-          effective_from?: string
-          effective_to?: string | null
-          effective_until?: string | null
-          id?: string
+          icon?: string | null
+          id: string
           is_active?: boolean
           is_archived?: boolean
-          title_ar?: string | null
-          title_en: string
+          name: string
+          name_ar?: string | null
           updated_at?: string
           updated_by?: string | null
-          version?: number
         }
         Update: {
-          content_ar?: string | null
-          content_en?: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
           display_order?: number
-          effective_from?: string
-          effective_to?: string | null
-          effective_until?: string | null
+          icon?: string | null
           id?: string
           is_active?: boolean
           is_archived?: boolean
-          title_ar?: string | null
-          title_en?: string
+          name?: string
+          name_ar?: string | null
           updated_at?: string
           updated_by?: string | null
-          version?: number
         }
         Relationships: []
       }
@@ -767,6 +857,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      quotation_rules: {
+        Row: {
+          content_ar: string | null
+          content_en: string
+          created_at: string
+          display_order: number
+          effective_from: string
+          effective_to: string | null
+          effective_until: string | null
+          id: string
+          is_active: boolean
+          is_archived: boolean
+          rule_key: string
+          title_ar: string | null
+          title_en: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          content_ar?: string | null
+          content_en: string
+          created_at?: string
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          effective_until?: string | null
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          rule_key: string
+          title_ar?: string | null
+          title_en: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          content_ar?: string | null
+          content_en?: string
+          created_at?: string
+          display_order?: number
+          effective_from?: string
+          effective_to?: string | null
+          effective_until?: string | null
+          id?: string
+          is_active?: boolean
+          is_archived?: boolean
+          rule_key?: string
+          title_ar?: string | null
+          title_en?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
       }
       quotations: {
         Row: {
@@ -894,6 +1041,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory_view"
+            referencedColumns: ["role_id"]
           },
         ]
       }
@@ -1129,6 +1283,13 @@ export type Database = {
             referencedRelation: "roles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "staff_invitations_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory_view"
+            referencedColumns: ["role_id"]
+          },
         ]
       }
       staff_profiles: {
@@ -1210,6 +1371,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_role_assignments_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory_view"
+            referencedColumns: ["role_id"]
           },
           {
             foreignKeyName: "staff_role_assignments_staff_id_fkey"
@@ -1413,51 +1581,134 @@ export type Database = {
       vehicle_categories: {
         Row: {
           created_at: string
+          created_by: string | null
+          description: string | null
+          description_ar: string | null
           display_order: number
+          icon: string | null
           id: string
           is_active: boolean
+          is_archived: boolean
           name: string
+          name_ar: string | null
+          updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
           display_order?: number
+          icon?: string | null
           id: string
           is_active?: boolean
+          is_archived?: boolean
           name: string
+          name_ar?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
           display_order?: number
+          icon?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           name?: string
+          name_ar?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
+      }
+      vehicle_category_compatibilities: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          target_id: string
+          target_type: string
+          vehicle_category_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          target_id: string
+          target_type: string
+          vehicle_category_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          target_id?: string
+          target_type?: string
+          vehicle_category_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_category_compatibilities_vehicle_category_id_fkey"
+            columns: ["vehicle_category_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vehicle_conditions: {
         Row: {
           created_at: string
+          created_by: string | null
           description: string | null
+          description_ar: string | null
           display_order: number
+          icon: string | null
           id: string
           is_active: boolean
+          is_archived: boolean
           name: string
+          name_ar: string | null
+          updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           description?: string | null
+          description_ar?: string | null
           display_order?: number
+          icon?: string | null
           id: string
           is_active?: boolean
+          is_archived?: boolean
           name: string
+          name_ar?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           description?: string | null
+          description_ar?: string | null
           display_order?: number
+          icon?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           name?: string
+          name_ar?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -1465,27 +1716,21 @@ export type Database = {
     Views: {
       staff_directory_view: {
         Row: {
+          avatar_url: string | null
           created_at: string | null
           email: string | null
           full_name: string | null
           id: string | null
           is_active: boolean | null
+          notification_preferences: Json | null
+          phone: string | null
+          preferred_language: string | null
           role_description: string | null
           role_id: string | null
-          role_is_active: boolean | null
-          role_is_system: boolean | null
           role_name: string | null
           updated_at: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "staff_role_assignments_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
@@ -1556,28 +1801,20 @@ export type Database = {
       calculate_shipping_quote_v1: { Args: { input_json: Json }; Returns: Json }
       create_quotation_rule_v1: {
         Args: {
-          p_content_ar?: string | null
-          p_content_en: string
+          p_content_ar?: string
+          p_content_en?: string
           p_display_order?: number
-          p_effective_from?: string | null
-          p_effective_until?: string | null
-          p_rule_key?: string | null
-          p_title_ar?: string | null
+          p_effective_from?: string
+          p_effective_until?: string
+          p_rule_key?: string
+          p_title_ar?: string
           p_title_en: string
         }
         Returns: Json
       }
-      revise_quotation_rule_v1: {
-        Args: {
-          p_content_ar?: string | null
-          p_content_en: string
-          p_display_order?: number
-          p_effective_from?: string | null
-          p_effective_until?: string | null
-          p_rule_id: string
-          p_title_ar?: string | null
-          p_title_en: string
-        }
+      delete_additional_charge_rule: { Args: { p_id: string }; Returns: Json }
+      delete_vehicle_attribute: {
+        Args: { p_id: string; p_type: string }
         Returns: Json
       }
       get_calculator_availability_v1: {
@@ -1591,6 +1828,24 @@ export type Database = {
         }[]
       }
       has_permission: { Args: { required_perm: string }; Returns: boolean }
+      normalize_phone:
+        | { Args: { raw_phone: string }; Returns: string }
+        | { Args: { country_code: string; raw_phone: string }; Returns: string }
+      revise_quotation_rule_v1: {
+        Args: {
+          p_content_ar?: string
+          p_content_en?: string
+          p_display_order?: number
+          p_effective_from?: string
+          p_effective_until?: string
+          p_rule_id: string
+          p_title_ar?: string
+          p_title_en: string
+        }
+        Returns: Json
+      }
+      sanitize_rule_html: { Args: { p_input: string }; Returns: string }
+      submit_contact_enquiry: { Args: { input_json: Json }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

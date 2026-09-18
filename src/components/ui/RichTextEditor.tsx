@@ -114,7 +114,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-1.5 rounded text-sm transition-colors ${
+      className={`p-1 sm:p-1.5 rounded text-xs transition-colors flex-shrink-0 ${
         isActive
           ? 'bg-brand-navy-900 text-white shadow-sm'
           : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
@@ -134,7 +134,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       dir={direction}
     >
       {label && (
-        <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="px-3 sm:px-4 py-1.5 sm:py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
             {label} ({direction.toUpperCase()})
           </span>
@@ -146,9 +146,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </div>
       )}
 
-      {/* Toolbar */}
+      {/* Toolbar - Single row on desktop, horizontally scrollable on mobile */}
       <div
-        className="flex flex-wrap items-center gap-1 p-2 border-b border-slate-200 bg-slate-50"
+        className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 border-b border-slate-200 bg-slate-50 overflow-x-auto flex-nowrap"
         dir="ltr"
       >
         {/* Paragraph & Headings */}

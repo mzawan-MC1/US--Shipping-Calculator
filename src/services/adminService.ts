@@ -10,6 +10,25 @@ type FreightRateUpdate = Database['public']['Tables']['route_freight_rates']['Up
 type TowingRateUpdate = Database['public']['Tables']['towing_rates']['Update'];
 type ShippingMethodUpdate = Database['public']['Tables']['shipping_methods']['Update'];
 type AdditionalChargeRuleUpdate = Database['public']['Tables']['additional_charge_rules']['Update'];
+type AttributeAdjustmentRow = Database['public']['Tables']['attribute_price_adjustments']['Row'];
+type AttributeAdjustmentUpdate = Database['public']['Tables']['attribute_price_adjustments']['Update'];
+type VehicleCategoryUpdate = Database['public']['Tables']['vehicle_categories']['Update'];
+type PowertrainUpdate = Database['public']['Tables']['powertrains']['Update'];
+type VehicleConditionUpdate = Database['public']['Tables']['vehicle_conditions']['Update'];
+
+interface GenericAttributeRow {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  description: string | null;
+  description_ar: string | null;
+  icon: string | null;
+  display_order: number | null;
+  is_active: boolean | null;
+  is_archived: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface AdminQuotation {
   id: string;
@@ -201,16 +220,71 @@ export interface AdminPurchaseLocation {
 
 export interface AdminAdditionalChargeRule {
   id: string;
+  code?: string | null;
   name: string;
+  nameAr?: string | null;
+  descriptionEn?: string | null;
+  descriptionAr?: string | null;
   category: string;
   chargeType: string;
   amount: number;
   currency: string;
   isMandatory: boolean;
+  isIncludedInCif?: boolean;
   isIncludedInVatBase: boolean;
-  countryCode?: string;
-  destinationPortId?: string;
+  countryCode?: string | null;
+  destinationPortId?: string | null;
+  shippingMethodId?: string | null;
+  vehicleCategoryId?: string | null;
+  powertrainId?: string | null;
+  conditionId?: string | null;
+  displayOrder?: number;
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
   isActive: boolean;
+  isArchived?: boolean;
+}
+
+export interface AdminVehicleAttribute {
+  id: string;
+  type: 'category' | 'powertrain' | 'condition';
+  name: string;
+  nameAr?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  icon?: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VehicleCategoryCompatibility {
+  id: string;
+  vehicle_category_id: string;
+  target_type: 'powertrain' | 'vehicle_condition' | 'condition';
+  target_id: string;
+  is_active: boolean;
+  created_at?: string;
+  created_by?: string | null;
+}
+
+export interface AttributePriceAdjustment {
+  id: string;
+  attribute_type: 'vehicle_category' | 'powertrain' | 'vehicle_condition';
+  attribute_id: string;
+  context: 'towing' | 'shipping';
+  amount_usd: number;
+  reason_en: string;
+  reason_ar?: string | null;
+  display_order: number;
+  effective_from: string;
+  effective_to?: string | null;
+  is_active: boolean;
+  admin_notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface BrandingSettings {
@@ -1441,35 +1515,469 @@ export const adminService = {
     const { data, error } = await supabase
       .from('additional_charge_rules')
       .select('*')
+      .eq('is_archived', false)
+      .order('display_order', { ascending: true })
       .order('created_at', { ascending: true });
     if (error) throw new Error(error.message || 'Unable to load additional charge rules.');
     return (data || []).map((c) => ({
       id: c.id,
+      code: c.code,
       name: c.name,
+      nameAr: c.name_ar,
+      descriptionEn: c.description_en,
+      descriptionAr: c.description_ar,
       category: c.category,
       chargeType: c.charge_type,
       amount: Number(c.amount),
       currency: c.currency || 'USD',
       isMandatory: Boolean(c.is_mandatory),
+      isIncludedInCif: Boolean(c.is_included_in_cif),
       isIncludedInVatBase: Boolean(c.is_included_in_vat_base),
       countryCode: c.country_code || undefined,
       destinationPortId: c.destination_port_id || undefined,
+      shippingMethodId: c.shipping_method_id || undefined,
+      vehicleCategoryId: c.vehicle_category_id || undefined,
+      powertrainId: c.powertrain_id || undefined,
+      conditionId: c.condition_id || undefined,
+      displayOrder: c.display_order,
+      effectiveFrom: c.effective_from,
+      effectiveTo: c.effective_to,
       isActive: Boolean(c.is_active),
+      isArchived: Boolean(c.is_archived),
     }));
+  },
+
+  async createAdditionalChargeRule(
+    rule: Omit<AdminAdditionalChargeRule, 'id'>
+  ): Promise<AdminAdditionalChargeRule> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload = {
+      name: rule.name.trim(),
+      name_ar: rule.nameAr?.trim() || null,
+      code: rule.code?.trim().toUpperCase() || null,
+      description_en: rule.descriptionEn?.trim() || null,
+      description_ar: rule.descriptionAr?.trim() || null,
+      category: rule.category,
+      charge_type: rule.chargeType || 'fixed',
+      amount: rule.amount,
+      currency: rule.currency || 'USD',
+      is_mandatory: Boolean(rule.isMandatory),
+      is_included_in_cif: Boolean(rule.isIncludedInCif),
+      is_included_in_vat_base: Boolean(rule.isIncludedInVatBase),
+      country_code: rule.countryCode || null,
+      destination_port_id: rule.destinationPortId || null,
+      shipping_method_id: rule.shippingMethodId || null,
+      vehicle_category_id: rule.vehicleCategoryId || null,
+      powertrain_id: rule.powertrainId || null,
+      condition_id: rule.conditionId || null,
+      display_order: rule.displayOrder || 0,
+      effective_from: rule.effectiveFrom || new Date().toISOString().split('T')[0],
+      effective_to: rule.effectiveTo || null,
+      is_active: rule.isActive !== undefined ? rule.isActive : true,
+      is_archived: false,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const { data, error } = await supabase
+      .from('additional_charge_rules')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) throw new Error(error.message || 'Failed to create additional charge rule.');
+    return {
+      id: data.id,
+      code: data.code,
+      name: data.name,
+      nameAr: data.name_ar,
+      descriptionEn: data.description_en,
+      descriptionAr: data.description_ar,
+      category: data.category,
+      chargeType: data.charge_type,
+      amount: Number(data.amount),
+      currency: data.currency,
+      isMandatory: Boolean(data.is_mandatory),
+      isIncludedInCif: Boolean(data.is_included_in_cif),
+      isIncludedInVatBase: Boolean(data.is_included_in_vat_base),
+      countryCode: data.country_code || undefined,
+      destinationPortId: data.destination_port_id || undefined,
+      shippingMethodId: data.shipping_method_id || undefined,
+      vehicleCategoryId: data.vehicle_category_id || undefined,
+      powertrainId: data.powertrain_id || undefined,
+      conditionId: data.condition_id || undefined,
+      displayOrder: data.display_order,
+      effectiveFrom: data.effective_from,
+      effectiveTo: data.effective_to,
+      isActive: Boolean(data.is_active),
+      isArchived: Boolean(data.is_archived),
+    };
   },
 
   async updateAdditionalChargeRule(
     id: string,
-    updates: Partial<{ amount: number; isMandatory: boolean; isIncludedInVatBase: boolean; isActive: boolean }>
+    updates: Partial<AdminAdditionalChargeRule>
   ): Promise<boolean> {
-    const payload: AdditionalChargeRuleUpdate = {};
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload: AdditionalChargeRuleUpdate = {
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.nameAr !== undefined) payload.name_ar = updates.nameAr;
+    if (updates.code !== undefined) payload.code = updates.code ? updates.code.trim().toUpperCase() : null;
+    if (updates.descriptionEn !== undefined) payload.description_en = updates.descriptionEn;
+    if (updates.descriptionAr !== undefined) payload.description_ar = updates.descriptionAr;
+    if (updates.category !== undefined) payload.category = updates.category;
+    if (updates.chargeType !== undefined) payload.charge_type = updates.chargeType;
     if (updates.amount !== undefined) payload.amount = updates.amount;
+    if (updates.currency !== undefined) payload.currency = updates.currency;
     if (updates.isMandatory !== undefined) payload.is_mandatory = updates.isMandatory;
+    if (updates.isIncludedInCif !== undefined) payload.is_included_in_cif = updates.isIncludedInCif;
     if (updates.isIncludedInVatBase !== undefined) payload.is_included_in_vat_base = updates.isIncludedInVatBase;
+    if (updates.countryCode !== undefined) payload.country_code = updates.countryCode || null;
+    if (updates.destinationPortId !== undefined) payload.destination_port_id = updates.destinationPortId || null;
+    if (updates.shippingMethodId !== undefined) payload.shipping_method_id = updates.shippingMethodId || null;
+    if (updates.vehicleCategoryId !== undefined) payload.vehicle_category_id = updates.vehicleCategoryId || null;
+    if (updates.powertrainId !== undefined) payload.powertrain_id = updates.powertrainId || null;
+    if (updates.conditionId !== undefined) payload.condition_id = updates.conditionId || null;
+    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
+    if (updates.effectiveFrom !== undefined) payload.effective_from = updates.effectiveFrom;
+    if (updates.effectiveTo !== undefined) payload.effective_to = updates.effectiveTo || null;
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    if (updates.isArchived !== undefined) payload.is_archived = updates.isArchived;
 
     const { error } = await supabase.from('additional_charge_rules').update(payload).eq('id', id);
     if (error) throw new Error(error.message || 'Unable to update charge rule.');
+    return true;
+  },
+
+  async deleteAdditionalChargeRule(id: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('delete_additional_charge_rule', { p_id: id });
+    if (error) throw new Error(error.message || 'Unable to delete charge rule.');
+    return Boolean(data);
+  },
+
+  async reorderAdditionalChargeRules(orders: { id: string; displayOrder: number }[]): Promise<boolean> {
+    for (const item of orders) {
+      const { error } = await supabase
+        .from('additional_charge_rules')
+        .update({ display_order: item.displayOrder, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+      if (error) throw new Error(error.message || 'Failed to reorder surcharge rules.');
+    }
+    return true;
+  },
+
+  // -------------------------------------------------------------
+  // Vehicle Attributes (Categories, Powertrains, Conditions)
+  // -------------------------------------------------------------
+  async getVehicleAttributes(type: 'category' | 'powertrain' | 'condition'): Promise<AdminVehicleAttribute[]> {
+    const query =
+      type === 'category'
+        ? supabase.from('vehicle_categories').select('*')
+        : type === 'powertrain'
+        ? supabase.from('powertrains').select('*')
+        : supabase.from('vehicle_conditions').select('*');
+
+    const { data, error } = await query
+      .eq('is_archived', false)
+      .order('display_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) throw new Error(error.message || `Unable to load ${type} attributes.`);
+    const rows = (data || []) as unknown as GenericAttributeRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      type,
+      name: row.name,
+      nameAr: row.name_ar,
+      description: row.description,
+      descriptionAr: row.description_ar,
+      icon: row.icon,
+      displayOrder: row.display_order ?? 0,
+      isActive: Boolean(row.is_active),
+      isArchived: Boolean(row.is_archived),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  async createVehicleAttribute(
+    type: 'category' | 'powertrain' | 'condition',
+    attr: {
+      id: string;
+      name: string;
+      nameAr?: string | null;
+      description?: string | null;
+      descriptionAr?: string | null;
+      icon?: string | null;
+      displayOrder: number;
+      isActive?: boolean;
+    }
+  ): Promise<AdminVehicleAttribute> {
+    const cleanId = attr.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload = {
+      id: cleanId,
+      name: attr.name.trim(),
+      name_ar: attr.nameAr?.trim() || null,
+      description: attr.description?.trim() || null,
+      description_ar: attr.descriptionAr?.trim() || null,
+      icon: attr.icon?.trim() || null,
+      display_order: attr.displayOrder,
+      is_active: attr.isActive !== undefined ? attr.isActive : true,
+      is_archived: false,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const query =
+      type === 'category'
+        ? supabase.from('vehicle_categories').insert(payload).select('*').single()
+        : type === 'powertrain'
+        ? supabase.from('powertrains').insert(payload).select('*').single()
+        : supabase.from('vehicle_conditions').insert(payload).select('*').single();
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message || `Unable to create ${type} attribute.`);
+    const row = data as unknown as GenericAttributeRow;
+    return {
+      id: row.id,
+      type,
+      name: row.name,
+      nameAr: row.name_ar,
+      description: row.description,
+      descriptionAr: row.description_ar,
+      icon: row.icon,
+      displayOrder: row.display_order ?? 0,
+      isActive: Boolean(row.is_active),
+      isArchived: Boolean(row.is_archived),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  async updateVehicleAttribute(
+    type: 'category' | 'powertrain' | 'condition',
+    id: string,
+    updates: Partial<{
+      name: string;
+      nameAr: string | null;
+      description: string | null;
+      descriptionAr: string | null;
+      icon: string | null;
+      displayOrder: number;
+      isActive: boolean;
+      isArchived: boolean;
+    }>
+  ): Promise<boolean> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload: VehicleCategoryUpdate = {
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.nameAr !== undefined) payload.name_ar = updates.nameAr?.trim() || null;
+    if (updates.description !== undefined) payload.description = updates.description?.trim() || null;
+    if (updates.descriptionAr !== undefined) payload.description_ar = updates.descriptionAr?.trim() || null;
+    if (updates.icon !== undefined) payload.icon = updates.icon?.trim() || null;
+    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    if (updates.isArchived !== undefined) payload.is_archived = updates.isArchived;
+
+    const query =
+      type === 'category'
+        ? supabase.from('vehicle_categories').update(payload).eq('id', id)
+        : type === 'powertrain'
+        ? supabase.from('powertrains').update(payload as PowertrainUpdate).eq('id', id)
+        : supabase.from('vehicle_conditions').update(payload as VehicleConditionUpdate).eq('id', id);
+
+    const { error } = await query;
+    if (error) throw new Error(error.message || `Unable to update ${type} attribute.`);
+    return true;
+  },
+
+  async deleteVehicleAttribute(type: 'category' | 'powertrain' | 'condition', id: string): Promise<boolean> {
+    const typeKey = type === 'category' ? 'category' : type === 'powertrain' ? 'powertrain' : 'condition';
+    const { data, error } = await supabase.rpc('delete_vehicle_attribute', {
+      p_type: typeKey,
+      p_id: id,
+    });
+    if (error) throw new Error(error.message || `Unable to delete ${type} attribute.`);
+    return Boolean(data);
+  },
+
+  // -------------------------------------------------------------
+  // Vehicle Category Compatibilities
+  // -------------------------------------------------------------
+  async getCategoryCompatibilities(categoryId?: string): Promise<VehicleCategoryCompatibility[]> {
+    let query = supabase.from('vehicle_category_compatibilities').select('*');
+    if (categoryId) {
+      query = query.eq('vehicle_category_id', categoryId);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message || 'Unable to load category compatibilities.');
+    return (data || []).map((c) => ({
+      id: c.id,
+      vehicle_category_id: c.vehicle_category_id,
+      target_type: c.target_type as 'powertrain' | 'vehicle_condition' | 'condition',
+      target_id: c.target_id,
+      is_active: Boolean(c.is_active),
+      created_at: c.created_at,
+      created_by: c.created_by,
+    }));
+  },
+
+  async setCategoryCompatibilities(
+    categoryId: string,
+    targetType: 'powertrain' | 'vehicle_condition' | 'condition',
+    targetIds: string[]
+  ): Promise<boolean> {
+    const { error: delError } = await supabase
+      .from('vehicle_category_compatibilities')
+      .delete()
+      .eq('vehicle_category_id', categoryId)
+      .eq('target_type', targetType);
+    if (delError) throw new Error(delError.message || 'Unable to clear existing compatibilities.');
+
+    if (targetIds.length === 0) return true;
+
+    const inserts = targetIds.map((tid) => ({
+      vehicle_category_id: categoryId,
+      target_type: targetType,
+      target_id: tid,
+      is_active: true,
+    }));
+
+    const { error: insError } = await supabase.from('vehicle_category_compatibilities').insert(inserts);
+    if (insError) throw new Error(insError.message || 'Unable to save category compatibilities.');
+    return true;
+  },
+
+  // -------------------------------------------------------------
+  // Attribute Price Adjustments (Towing & Shipping)
+  // -------------------------------------------------------------
+  async getAttributePriceAdjustments(context?: 'towing' | 'shipping'): Promise<AttributePriceAdjustment[]> {
+    let query = supabase
+      .from('attribute_price_adjustments')
+      .select('*')
+      .order('context', { ascending: true })
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (context) {
+      query = query.eq('context', context);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message || 'Unable to load price adjustments.');
+    const rows = (data || []) as AttributeAdjustmentRow[];
+    return rows.map((adj) => ({
+      id: adj.id,
+      attribute_type: adj.attribute_type as AttributePriceAdjustment['attribute_type'],
+      attribute_id: adj.attribute_id,
+      context: adj.context as AttributePriceAdjustment['context'],
+      amount_usd: Number(adj.amount_usd),
+      reason_en: adj.reason_en,
+      reason_ar: adj.reason_ar,
+      display_order: adj.display_order,
+      effective_from: adj.effective_from,
+      effective_to: adj.effective_to,
+      is_active: Boolean(adj.is_active),
+      admin_notes: adj.admin_notes,
+      created_at: adj.created_at,
+      updated_at: adj.updated_at,
+    }));
+  },
+
+  async createAttributePriceAdjustment(
+    adj: Omit<AttributePriceAdjustment, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<AttributePriceAdjustment> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload = {
+      attribute_type: adj.attribute_type,
+      attribute_id: adj.attribute_id,
+      context: adj.context,
+      amount_usd: adj.amount_usd,
+      reason_en: adj.reason_en.trim(),
+      reason_ar: adj.reason_ar?.trim() || null,
+      display_order: adj.display_order ?? 0,
+      effective_from: adj.effective_from || new Date().toISOString().split('T')[0],
+      effective_to: adj.effective_to || null,
+      is_active: adj.is_active !== undefined ? adj.is_active : true,
+      admin_notes: adj.admin_notes?.trim() || null,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const { data, error } = await supabase
+      .from('attribute_price_adjustments')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create price adjustment.');
+    const res = data as AttributeAdjustmentRow;
+    return {
+      id: res.id,
+      attribute_type: res.attribute_type as AttributePriceAdjustment['attribute_type'],
+      attribute_id: res.attribute_id,
+      context: res.context as AttributePriceAdjustment['context'],
+      amount_usd: Number(res.amount_usd),
+      reason_en: res.reason_en,
+      reason_ar: res.reason_ar,
+      display_order: res.display_order,
+      effective_from: res.effective_from,
+      effective_to: res.effective_to,
+      is_active: Boolean(res.is_active),
+      admin_notes: res.admin_notes,
+      created_at: res.created_at,
+      updated_at: res.updated_at,
+    };
+  },
+
+  async updateAttributePriceAdjustment(
+    id: string,
+    updates: Partial<AttributePriceAdjustment>
+  ): Promise<boolean> {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    const payload: AttributeAdjustmentUpdate = {
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+    if (updates.attribute_type !== undefined) payload.attribute_type = updates.attribute_type;
+    if (updates.attribute_id !== undefined) payload.attribute_id = updates.attribute_id;
+    if (updates.context !== undefined) payload.context = updates.context;
+    if (updates.amount_usd !== undefined) payload.amount_usd = updates.amount_usd;
+    if (updates.reason_en !== undefined) payload.reason_en = updates.reason_en.trim();
+    if (updates.reason_ar !== undefined) payload.reason_ar = updates.reason_ar?.trim() || null;
+    if (updates.display_order !== undefined) payload.display_order = updates.display_order;
+    if (updates.effective_from !== undefined) payload.effective_from = updates.effective_from;
+    if (updates.effective_to !== undefined) payload.effective_to = updates.effective_to || null;
+    if (updates.is_active !== undefined) payload.is_active = updates.is_active;
+    if (updates.admin_notes !== undefined) payload.admin_notes = updates.admin_notes?.trim() || null;
+
+    const { error } = await supabase.from('attribute_price_adjustments').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update price adjustment.');
+    return true;
+  },
+
+  async deleteAttributePriceAdjustment(id: string): Promise<boolean> {
+    const { error } = await supabase.from('attribute_price_adjustments').delete().eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to delete price adjustment.');
     return true;
   },
 
@@ -1868,13 +2376,13 @@ export const adminService = {
     // Use atomic database RPC
     const { data, error } = await supabase.rpc('create_quotation_rule_v1', {
       p_title_en: rule.titleEn.trim(),
-      p_title_ar: rule.titleAr?.trim() || null,
+      p_title_ar: rule.titleAr?.trim() || undefined,
       p_content_en: cleanContentEn,
-      p_content_ar: cleanContentAr,
+      p_content_ar: cleanContentAr || undefined,
       p_display_order: rule.displayOrder,
       p_effective_from: effFrom,
-      p_effective_until: effUntil,
-      p_rule_key: rule.ruleKey || null,
+      p_effective_until: effUntil || undefined,
+      p_rule_key: rule.ruleKey || undefined,
     });
 
     if (error) throw error;
@@ -1947,12 +2455,12 @@ export const adminService = {
     const { error: rpcError } = await supabase.rpc('revise_quotation_rule_v1', {
       p_rule_id: id,
       p_title_en: titleEn,
-      p_title_ar: titleAr,
+      p_title_ar: titleAr || undefined,
       p_content_en: contentEn,
-      p_content_ar: contentAr,
+      p_content_ar: contentAr || undefined,
       p_display_order: displayOrder,
       p_effective_from: effFrom,
-      p_effective_until: effUntil,
+      p_effective_until: effUntil || undefined,
     });
 
     if (rpcError) throw rpcError;

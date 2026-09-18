@@ -122,8 +122,13 @@ export const quotationService = {
           calculation_timestamp: string;
           financials: {
             subtotal_ocean_freight: number;
+            ocean_freight_base?: number;
+            ocean_freight_adjustments?: number;
             towing_fee_min: number;
             towing_fee_max: number;
+            towing_fee_base_min?: number;
+            towing_fee_base_max?: number;
+            towing_adjustments?: number;
             is_towing_range: boolean;
             include_inland_towing?: boolean;
             surcharges_total: number;
@@ -201,9 +206,12 @@ export const quotationService = {
         estimatedTransitDaysMin: res.snapshot.route.transit_days_min,
         estimatedTransitDaysMax: res.snapshot.route.transit_days_max,
         oceanFreight: fin.subtotal_ocean_freight,
+        oceanFreightBase: fin.ocean_freight_base ?? fin.subtotal_ocean_freight,
+        oceanFreightAdjustments: fin.ocean_freight_adjustments ?? 0,
         powertrainSurcharge: fin.surcharges_total,
         vehicleTypeSurcharge: 0,
         oceanFreightTotal: fin.subtotal_ocean_freight + fin.surcharges_total,
+        surchargesTotal: fin.surcharges_total,
         customsClearance: fin.customs_clearance_fee,
         destinationCharges: fin.port_additional_charges,
         customsDuty: fin.customs_duty_max,
@@ -216,6 +224,9 @@ export const quotationService = {
         cifMax: fin.cif_value_max,
         towingFeeMin: fin.towing_fee_min,
         towingFeeMax: fin.towing_fee_max,
+        towingFeeBaseMin: fin.towing_fee_base_min ?? fin.towing_fee_min,
+        towingFeeBaseMax: fin.towing_fee_base_max ?? fin.towing_fee_max,
+        towingAdjustments: fin.towing_adjustments ?? 0,
         isTowingRange: isRange,
         includeInlandTowing: towingRequested,
         towingLocationName: res.snapshot.towing?.location_name,

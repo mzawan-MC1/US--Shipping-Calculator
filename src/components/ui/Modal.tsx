@@ -8,9 +8,19 @@ export interface ModalProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'rule-editor';
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, className }) => {
+const SIZE_CLASSES = {
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+  '2xl': 'max-w-6xl',
+  'rule-editor': 'max-w-[min(92vw,1200px)] w-full',
+};
+
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, className, size = 'md' }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -31,7 +41,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-200">
       <div
         className={cn(
-          'w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-all transform max-h-[90vh] overflow-y-auto',
+          'w-full bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-all transform max-h-[90vh] overflow-y-auto',
+          SIZE_CLASSES[size] || 'max-w-lg',
           className
         )}
       >

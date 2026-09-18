@@ -18,7 +18,6 @@ import {
   Ship,
   Truck,
   FileText,
-  AlertCircle,
   Printer,
   Download,
   Car,
@@ -292,6 +291,7 @@ export const AdminQuotationsPage: React.FC = () => {
         const validUntilDate = new Date(createdDate.getTime() + 14 * 24 * 60 * 60 * 1000);
         const originPort = (snap.origin_port_name as string) || (snap.originPort as string) || selectedQuote.route.split('→')[0]?.trim() || 'USA Port';
         const destinationPort = (snap.destination_port_name as string) || (snap.destinationPort as string) || selectedQuote.route.split('→')[1]?.trim() || 'UAE Port (Jebel Ali / Khorfakkan)';
+        const lineItems = (snap.line_items as Array<{ category: string; description?: string; amount_usd?: number; reason?: string }>) || [];
 
         return (
           <Modal
@@ -516,12 +516,27 @@ export const AdminQuotationsPage: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 text-slate-700">
                       <tr>
                         <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                          <Ship className="w-3.5 h-3.5 text-blue-500" /> 1. Ocean Freight Tariff ({originPort} → {destinationPort})
+                          <Ship className="w-3.5 h-3.5 text-blue-500" /> 1. Ocean Freight Base Tariff ({originPort} → {destinationPort})
                         </td>
                         <td className="py-2 px-3 text-[11px] text-slate-500">Scheduled Ocean Carrier</td>
                         <td className="py-2 px-3 text-end font-semibold">{formatCurrency(oceanFreight)}</td>
                         <td className="py-2 px-3 text-end text-slate-500">{formatAED(oceanFreight * rate)}</td>
                       </tr>
+
+                      {/* Granular Ocean Freight Adjustments */}
+                      {lineItems
+                        .filter((item) => item.category === 'shipping_adjustment')
+                        .map((adj, idx) => (
+                          <tr key={`ship-adj-${idx}`} className="text-slate-600">
+                            <td className="py-1.5 px-3 pl-8 text-[11px] text-slate-700">
+                              • {adj.description || adj.reason || 'Ocean Freight Adjustment'}
+                            </td>
+                            <td className="py-1.5 px-3 text-[10px] text-slate-400">Attribute Adjustment</td>
+                            <td className="py-1.5 px-3 text-end font-medium">{formatCurrency(adj.amount_usd || 0)}</td>
+                            <td className="py-1.5 px-3 text-end text-slate-500">{formatAED((adj.amount_usd || 0) * rate)}</td>
+                          </tr>
+                        ))}
+
                       <tr>
                         <td className="py-2 px-3 font-medium flex items-center gap-1.5">
                           <Truck className="w-3.5 h-3.5 text-brand-orange-500" /> 2. Inland Towing ({includeInlandTowing ? `${towingLocationName} → ${originPort}` : 'Inland Towing: Not requested ($0.00)'})
@@ -548,6 +563,20 @@ export const AdminQuotationsPage: React.FC = () => {
                             : 'AED 0.00'}
                         </td>
                       </tr>
+
+                      {/* Granular Towing Adjustments */}
+                      {includeInlandTowing && lineItems
+                        .filter((item) => item.category === 'towing_adjustment')
+                        .map((adj, idx) => (
+                          <tr key={`tow-adj-${idx}`} className="text-slate-600">
+                            <td className="py-1.5 px-3 pl-8 text-[11px] text-slate-700">
+                              • {adj.description || adj.reason || 'Towing Winching / Condition Adjustment'}
+                            </td>
+                            <td className="py-1.5 px-3 text-[10px] text-slate-400">Attribute Adjustment</td>
+                            <td className="py-1.5 px-3 text-end font-medium">{formatCurrency(adj.amount_usd || 0)}</td>
+                            <td className="py-1.5 px-3 text-end text-slate-500">{formatAED((adj.amount_usd || 0) * rate)}</td>
+                          </tr>
+                        ))}
 
                       {/* 3. Ocean Freight & Inland Towing Subtotal */}
                       <tr className="bg-slate-50/70 font-semibold text-slate-900">
@@ -583,6 +612,21 @@ export const AdminQuotationsPage: React.FC = () => {
                         <td className="py-2 px-3 text-end font-semibold">{formatCurrency(portHandling)}</td>
                         <td className="py-2 px-3 text-end text-slate-500">{formatAED(portHandling * rate)}</td>
                       </tr>
+
+                      {/* Additional Surcharges from line items */}
+                      {lineItems
+                        .filter((item) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(item.category))
+                        .map((surch, idx) => (
+                          <tr key={`add-surch-${idx}`} className="text-slate-600">
+                            <td className="py-1.5 px-3 pl-8 text-[11px] text-slate-700">
+                              • {surch.description || surch.category}
+                            </td>
+                            <td className="py-1.5 px-3 text-[10px] text-slate-400">Additional Surcharge</td>
+                            <td className="py-1.5 px-3 text-end font-medium">{formatCurrency(surch.amount_usd || 0)}</td>
+                            <td className="py-1.5 px-3 text-end text-slate-500">{formatAED((surch.amount_usd || 0) * rate)}</td>
+                          </tr>
+                        ))}
+
                       <tr className="bg-slate-50/50 font-semibold text-slate-800">
                         <td colSpan={2} className="py-1.5 px-3 pl-6 text-[11px]">
                           4. Destination Clearance Subtotal
@@ -594,17 +638,6 @@ export const AdminQuotationsPage: React.FC = () => {
                           {formatAED(destinationClearanceSubtotal * rate)}
                         </td>
                       </tr>
-
-                      {surcharges > 0 && (
-                        <tr>
-                          <td className="py-2 px-3 font-medium flex items-center gap-1.5 text-amber-800">
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Condition / Fuel Surcharges
-                          </td>
-                          <td className="py-2 px-3 text-[11px] text-amber-600">Non-runner or specialized handling</td>
-                          <td className="py-2 px-3 text-end font-semibold text-amber-800">{formatCurrency(surcharges)}</td>
-                          <td className="py-2 px-3 text-end text-slate-500">{formatAED(surcharges * rate)}</td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
