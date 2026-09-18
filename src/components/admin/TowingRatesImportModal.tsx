@@ -282,7 +282,16 @@ export const TowingRatesImportModal: React.FC<TowingRatesImportModalProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="p-2 text-slate-600">{row.portCode}</td>
+                        <td className="p-2 text-slate-700">
+                          <span className="font-semibold text-slate-800 block">
+                            {row.portName || row.portCode}
+                          </span>
+                          {row.portName && row.portCode && (
+                            <span className="font-mono text-[10px] text-slate-500 font-normal">
+                              {row.portCode}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-2">
                           <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium capitalize">
                             {row.rateType}
@@ -290,8 +299,8 @@ export const TowingRatesImportModal: React.FC<TowingRatesImportModalProps> = ({
                         </td>
                         <td className="p-2 font-bold text-brand-navy-950">
                           {row.rateType === 'fixed'
-                            ? `$${row.fixedAmount || 0}`
-                            : `$${row.minAmount || 0}-$${row.maxAmount || 0}`}
+                            ? (row.fixedAmount !== undefined ? `$${row.fixedAmount}` : '—')
+                            : (row.minAmount !== undefined || row.maxAmount !== undefined ? `$${row.minAmount || 0} – $${row.maxAmount || 0}` : '—')}
                         </td>
                         <td className="p-2 text-[11px] text-slate-500">
                           {row.errors.length > 0 ? (

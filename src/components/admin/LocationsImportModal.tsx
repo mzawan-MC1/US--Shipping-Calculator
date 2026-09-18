@@ -92,7 +92,7 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
           <div>
             <span className="font-bold text-slate-800 block">Download Template</span>
             <span className="text-[11px] text-slate-500">
-              Upload a CSV or Excel file with State_Code and Name. New pickup locations are created as active.
+              Upload a CSV or Excel file with State_Code and Location_Name. New pickup locations are created as active.
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -145,7 +145,7 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
                 {isAnalyzing ? 'Analyzing file...' : 'Choose a CSV or Excel file'}
               </span>
               <span className="text-slate-500 text-[11px]">
-                Upload a CSV or Excel file with State_Code and Name. New pickup locations are created as active.
+                Upload a CSV or Excel file with State_Code and Location_Name. New pickup locations are created as active.
               </span>
             </label>
           </div>

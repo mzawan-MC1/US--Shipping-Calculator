@@ -58,6 +58,93 @@ export interface LocationImportSummary {
 }
 
 // ==========================================
+// Helper functions for CSV/Excel cleaning
+// ==========================================
+
+/**
+ * Strips UTF-8 BOM, zero-width spaces, non-breaking spaces, and surrounding whitespace.
+ */
+export function cleanImportText(val: unknown): string {
+  if (val === undefined || val === null) return '';
+  return String(val)
+    .replace(/^[\uFEFF\u200B\u200C\u200D\u00A0\s]+/, '')
+    .replace(/[\uFEFF\u200B\u200C\u200D\u00A0\s]+$/, '')
+    .trim();
+}
+
+/**
+ * Normalizes a header or key: removes BOM, non-breaking/zero-width chars, lowercase, strips non-alphanumeric.
+ */
+export function normalizeImportKey(key: string): string {
+  return cleanImportText(key)
+    .toLowerCase()
+    .replace(/[\uFEFF\u200B\u200C\u200D\u00A0]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Robust numeric parser for both Excel numbers and text representations:
+ * Handles numbers, currency symbols ($), commas (1,200), extra spaces, and text.
+ */
+export function parseNumericImportValue(val: unknown): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === 'number') {
+    return isNaN(val) ? undefined : val;
+  }
+  const clean = cleanImportText(val)
+    .replace(/[$€£¥,]/g, '')
+    .replace(/[^0-9.-]/g, '');
+  if (!clean) return undefined;
+  const num = parseFloat(clean);
+  return isNaN(num) ? undefined : num;
+}
+
+/**
+ * Builds case-insensitive, BOM-stripped field extractors for an imported row.
+ */
+export function buildRowExtractors(row: Record<string, unknown>) {
+  const fieldMap = new Map<string, unknown[]>();
+  for (const [k, v] of Object.entries(row)) {
+    const norm = normalizeImportKey(k);
+    if (!norm) continue;
+    if (!fieldMap.has(norm)) {
+      fieldMap.set(norm, []);
+    }
+    fieldMap.get(norm)!.push(v);
+  }
+
+  const getString = (candidateKeys: string[]): string => {
+    for (const ck of candidateKeys) {
+      const norm = normalizeImportKey(ck);
+      const values = fieldMap.get(norm);
+      if (values) {
+        for (const val of values) {
+          const cleaned = cleanImportText(val);
+          if (cleaned !== '') return cleaned;
+        }
+      }
+    }
+    return '';
+  };
+
+  const getNumber = (candidateKeys: string[]): number | undefined => {
+    for (const ck of candidateKeys) {
+      const norm = normalizeImportKey(ck);
+      const values = fieldMap.get(norm);
+      if (values) {
+        for (const val of values) {
+          const num = parseNumericImportValue(val);
+          if (num !== undefined) return num;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  return { getString, getNumber };
+}
+
+// ==========================================
 // Towing Rates Bulk Service
 // ==========================================
 
@@ -141,12 +228,25 @@ export const towingRatesBulkService = {
     const ws = wb.Sheets[firstSheetName];
     const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
 
-    const stateMap = new Map(states.map((s) => [s.code.toUpperCase(), s]));
+    const stateMap = new Map(states.map((s) => [cleanImportText(s.code).toUpperCase(), s]));
     const locByNameState = new Map(
-      locations.map((l) => [`${l.stateCode.toUpperCase()}|${l.name.trim().toUpperCase()}`, l])
+      locations.map((l) => [`${cleanImportText(l.stateCode).toUpperCase()}|${cleanImportText(l.name).toUpperCase()}`, l])
     );
-    const portByCode = new Map(ports.map((p) => [p.code.toUpperCase(), p]));
-    const portByName = new Map(ports.map((p) => [p.name.toUpperCase(), p]));
+
+    const portByCode = new Map<string, { id: string; name: string; code: string }>();
+    const portByName = new Map<string, { id: string; name: string; code: string }>();
+    ports.forEach((p) => {
+      const c = cleanImportText(p.code).toUpperCase();
+      const n = cleanImportText(p.name).toUpperCase();
+      if (c) {
+        portByCode.set(c, p);
+        portByCode.set(normalizeImportKey(c).toUpperCase(), p);
+      }
+      if (n) {
+        portByName.set(n, p);
+        portByName.set(normalizeImportKey(n).toUpperCase(), p);
+      }
+    });
 
     const existingRateKeyMap = new Map(
       existingRates.map((r) => [`${r.purchaseLocationId}|${r.loadingPortId}`, r])
@@ -159,32 +259,23 @@ export const towingRatesBulkService = {
       const rowNumber = idx + 2; // header is row 1
       const errors: string[] = [];
 
-      // Extract raw properties (case-insensitive keys)
-      const getVal = (patterns: string[]): string => {
-        for (const p of patterns) {
-          const key = Object.keys(row).find((k) => k.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === p);
-          if (key && row[key] !== undefined && row[key] !== null) {
-            return String(row[key]).trim();
-          }
-        }
-        return '';
-      };
+      const { getString, getNumber } = buildRowExtractors(row);
 
-      const stateCode = getVal(['statecode', 'state']).toUpperCase();
-      const locationName = getVal(['locationname', 'location', 'originlocation', 'name']);
-      const portInput = getVal(['portcode', 'port', 'loadingport']).toUpperCase();
-      const pricingModeInput = getVal(['pricingmode', 'ratetype', 'mode']).toLowerCase();
+      const stateCode = cleanImportText(getString(['State_Code', 'StateCode', 'State'])).toUpperCase();
+      const locationName = cleanImportText(getString(['Location_Name', 'LocationName', 'Location', 'Name']));
+      const portInput = cleanImportText(
+        getString(['Port_Code', 'PortCode', 'Port', 'Loading_Port', 'LoadingPort', 'Loading_Port_Code', 'LoadingPortCode', 'UNLOCODE'])
+      ).toUpperCase();
+      const pricingModeInput = cleanImportText(
+        getString(['Pricing_Mode', 'PricingMode', 'Rate_Type', 'RateType', 'Mode'])
+      ).toLowerCase();
       const rateType: 'fixed' | 'range' = pricingModeInput === 'range' ? 'range' : 'fixed';
 
-      const fixedPriceStr = getVal(['fixedprice', 'fixedamount', 'price', 'rate']);
-      const minPriceStr = getVal(['minprice', 'minamount']);
-      const maxPriceStr = getVal(['maxprice', 'maxamount']);
+      const fixedAmount = getNumber(['Fixed_Price', 'FixedPrice', 'Fixed_Amount', 'FixedAmount', 'Price', 'Rate', 'Amount']);
+      const minAmount = getNumber(['Min_Price', 'MinPrice', 'Min_Amount', 'MinAmount']);
+      const maxAmount = getNumber(['Max_Price', 'MaxPrice', 'Max_Amount', 'MaxAmount']);
 
-      const fixedAmount = fixedPriceStr ? parseFloat(fixedPriceStr) : undefined;
-      const minAmount = minPriceStr ? parseFloat(minPriceStr) : undefined;
-      const maxAmount = maxPriceStr ? parseFloat(maxPriceStr) : undefined;
-
-      const activeStr = getVal(['active', 'isactive']).toLowerCase();
+      const activeStr = cleanImportText(getString(['Active', 'IsActive', 'Is_Active', 'Status'])).toLowerCase();
       const isActive = activeStr === 'false' || activeStr === '0' || activeStr === 'no' ? false : true;
 
       // Validations
@@ -208,13 +299,18 @@ export const towingRatesBulkService = {
         }
       }
 
-      // Match Port
+      // Match Port (by port code / UNLOCODE or name fallback)
       let matchedPort: { id: string; name: string; code: string } | undefined;
       if (portInput) {
-        matchedPort = portByCode.get(portInput) || portByName.get(portInput);
+        const normInput = normalizeImportKey(portInput).toUpperCase();
+        matchedPort =
+          portByCode.get(portInput) ||
+          portByCode.get(normInput) ||
+          portByName.get(portInput) ||
+          portByName.get(normInput);
       }
       if (!matchedPort) {
-        errors.push(`Loading port "${portInput}" does not match any known loading port.`);
+        errors.push(`Loading port "${portInput}" does not match any known loading port (e.g. USNWK, USSAV).`);
       }
 
       // Price validations
@@ -421,19 +517,19 @@ export const locationsBulkService = {
     return [
       {
         State_Code: 'NJ',
-        Name: 'Copart Northgate',
+        Location_Name: 'Copart Northgate',
       },
       {
         State_Code: 'NJ',
-        Name: 'IAA Trenton',
+        Location_Name: 'IAA Trenton',
       },
       {
         State_Code: 'GA',
-        Name: 'Copart Atlanta South',
+        Location_Name: 'Copart Atlanta South',
       },
       {
         State_Code: 'TX',
-        Name: 'Copart Dallas South',
+        Location_Name: 'Copart Dallas South',
       },
     ];
   },
@@ -451,7 +547,7 @@ export const locationsBulkService = {
   exportLocations(locations: AdminPurchaseLocation[], format: 'csv' | 'xlsx'): void {
     const data = locations.map((l) => ({
       State_Code: l.stateCode,
-      Name: l.name,
+      Location_Name: l.name,
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -474,9 +570,9 @@ export const locationsBulkService = {
     const ws = wb.Sheets[firstSheetName];
     const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
 
-    const stateMap = new Map(states.map((s) => [s.code.toUpperCase(), s]));
+    const stateMap = new Map(states.map((s) => [cleanImportText(s.code).toUpperCase(), s]));
     const locByNameState = new Map(
-      existingLocations.map((l) => [`${l.stateCode.toUpperCase()}|${l.name.trim().toUpperCase()}`, l])
+      existingLocations.map((l) => [`${cleanImportText(l.stateCode).toUpperCase()}|${cleanImportText(l.name).toUpperCase()}`, l])
     );
 
     const seenInFile = new Set<string>();
@@ -486,18 +582,10 @@ export const locationsBulkService = {
       const rowNumber = idx + 2;
       const errors: string[] = [];
 
-      const getVal = (patterns: string[]): string => {
-        for (const p of patterns) {
-          const key = Object.keys(row).find((k) => k.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === p);
-          if (key && row[key] !== undefined && row[key] !== null) {
-            return String(row[key]).trim();
-          }
-        }
-        return '';
-      };
+      const { getString } = buildRowExtractors(row);
 
-      const name = getVal(['name', 'locationname', 'location']);
-      const stateCode = getVal(['statecode', 'state']).toUpperCase();
+      const name = cleanImportText(getString(['Location_Name', 'LocationName', 'Location', 'Name']));
+      const stateCode = cleanImportText(getString(['State_Code', 'StateCode', 'State'])).toUpperCase();
 
       if (!name) {
         errors.push('Location Name is required.');
@@ -556,7 +644,7 @@ export const locationsBulkService = {
     const data = rejectedRows.map((r) => ({
       Row: r.rowNumber,
       State_Code: r.stateCode,
-      Name: r.name,
+      Location_Name: r.name,
       Errors: r.errors.join(' | '),
     }));
 
