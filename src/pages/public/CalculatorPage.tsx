@@ -55,6 +55,7 @@ import {
   Search,
   Check,
   MapPin,
+  Sparkles,
 } from 'lucide-react';
 import {
   CalculatorFormData,
@@ -202,26 +203,25 @@ export const CalculatorPage: React.FC = () => {
     year?: number;
     make?: string;
     model?: string;
-    suggestedCategoryId?: string;
-    suggestedPowertrainId?: string;
+  } | null>(null);
+  const [vinSuggestion, setVinSuggestion] = useState<{
+    categoryId?: string;
+    categoryName?: string;
+    powertrainId?: string;
+    powertrainName?: string;
   } | null>(null);
 
-  const applyDecodedVin = (decoded: {
+  const vinAbortRef = useRef<AbortController | null>(null);
+  const activeDecodingVinRef = useRef<string>('');
+
+  const applyDecodedVehicleDetails = (decoded: {
     year?: number;
     make?: string;
     model?: string;
-    suggestedCategoryId?: string;
-    suggestedPowertrainId?: string;
   }) => {
     if (decoded.year) setValue('year', decoded.year, { shouldValidate: true });
     if (decoded.make) setValue('make', decoded.make, { shouldValidate: true });
     if (decoded.model) setValue('model', decoded.model, { shouldValidate: true });
-    if (decoded.suggestedCategoryId) {
-      setValue('vehicleType', decoded.suggestedCategoryId, { shouldValidate: true });
-    }
-    if (decoded.suggestedPowertrainId) {
-      setValue('powertrain', decoded.suggestedPowertrainId, { shouldValidate: true });
-    }
 
     const summary = [decoded.year, decoded.make, decoded.model].filter(Boolean).join(' ');
     setVinDecodeSuccess(
@@ -238,20 +238,35 @@ export const CalculatorPage: React.FC = () => {
     if (!cleanVin || cleanVin.length !== 17) {
       setVinDecodeError(
         isAr
-          ? 'يرجى إدخال رقم شاصي (VIN) صحيح مكون من 17 حرفاً ورقم.'
+          ? 'يرجى إدخال رقم شاصي (VIN) صحيح مكون من 17 حرفاً ورقم (بدون أحرف I, O, Q).'
           : 'Please enter a valid 17-character VIN (excluding I, O, Q).'
       );
       setVinDecodeSuccess(null);
       return;
     }
 
+    // Cancel any in-flight decode request
+    if (vinAbortRef.current) {
+      vinAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    vinAbortRef.current = controller;
+    activeDecodingVinRef.current = cleanVin;
+
     setIsDecodingVin(true);
     setVinDecodeError(null);
     setVinDecodeSuccess(null);
 
     try {
-      const res = await vinService.decodeVin(cleanVin);
+      const res = await vinService.decodeVin(cleanVin, controller.signal);
+
+      // Discard stale responses if active VIN has changed or request was aborted
+      if (controller.signal.aborted || activeDecodingVinRef.current !== cleanVin) {
+        return;
+      }
+
       if (res.success && (res.year || res.make || res.model)) {
+        // Check if user already manually entered year, make, or model
         const hasExisting = Boolean(formData.year || formData.make || formData.model);
         if (hasExisting) {
           const isDifferent =
@@ -264,14 +279,41 @@ export const CalculatorPage: React.FC = () => {
               year: res.year,
               make: res.make,
               model: res.model,
-              suggestedCategoryId: res.suggestedCategoryId,
-              suggestedPowertrainId: res.suggestedPowertrainId,
             });
-            return;
+          } else {
+            applyDecodedVehicleDetails(res);
           }
+        } else {
+          applyDecodedVehicleDetails(res);
         }
 
-        applyDecodedVin(res);
+        // Handle category & powertrain strictly as suggestions requiring confirmation
+        // Verify against active database records; if no active match, leave current selection unchanged
+        const matchedCategory = res.suggestedCategoryId
+          ? vehicleCategories.find(
+              (c) => c.id === res.suggestedCategoryId && c.isActive
+            )
+          : undefined;
+
+        const matchedPowertrain = res.suggestedPowertrainId
+          ? powertrains.find(
+              (p) => p.id === res.suggestedPowertrainId && p.isActive
+            )
+          : undefined;
+
+        const catNeedsSuggestion = Boolean(matchedCategory && matchedCategory.id !== formData.vehicleType);
+        const ptNeedsSuggestion = Boolean(matchedPowertrain && matchedPowertrain.id !== formData.powertrain);
+
+        if (catNeedsSuggestion || ptNeedsSuggestion) {
+          setVinSuggestion({
+            categoryId: catNeedsSuggestion && matchedCategory ? matchedCategory.id : undefined,
+            categoryName: catNeedsSuggestion && matchedCategory ? matchedCategory.name : undefined,
+            powertrainId: ptNeedsSuggestion && matchedPowertrain ? matchedPowertrain.id : undefined,
+            powertrainName: ptNeedsSuggestion && matchedPowertrain ? matchedPowertrain.name : undefined,
+          });
+        } else {
+          setVinSuggestion(null);
+        }
       } else {
         setVinDecodeError(
           res.errorMessage ||
@@ -281,25 +323,44 @@ export const CalculatorPage: React.FC = () => {
         );
       }
     } catch {
+      if (controller.signal.aborted || activeDecodingVinRef.current !== cleanVin) {
+        return;
+      }
       setVinDecodeError(
         isAr
           ? 'تعذر الاتصال بقاعدة بيانات VIN. يرجى إدخال البيانات يدوياً.'
           : 'Unable to connect to VIN database. Please enter details manually.'
       );
     } finally {
-      setIsDecodingVin(false);
+      if (activeDecodingVinRef.current === cleanVin) {
+        setIsDecodingVin(false);
+      }
     }
   };
 
-  // Debounced auto-decode when 17 valid characters are typed
+  // Debounced auto-decode when 17 valid characters are typed, with cancellation of stale inputs
   const vinValue = formData.vin;
   useEffect(() => {
+    const clean = vinService.sanitizeVin(vinValue || '');
+    if (activeDecodingVinRef.current && clean !== activeDecodingVinRef.current) {
+      if (vinAbortRef.current) {
+        vinAbortRef.current.abort();
+        vinAbortRef.current = null;
+      }
+      activeDecodingVinRef.current = '';
+      setIsDecodingVin(false);
+      setVinDecodeSuccess(null);
+      setVinDecodeError(null);
+    }
+
     if (!vinValue) {
       setVinDecodeSuccess(null);
       setVinDecodeError(null);
+      setPendingVinOverwrite(null);
+      setVinSuggestion(null);
       return;
     }
-    const clean = vinService.sanitizeVin(vinValue);
+
     if (clean.length === 17 && vinService.isValidVin(clean)) {
       const timer = setTimeout(() => {
         handleDecodeVin(clean);
@@ -936,6 +997,62 @@ export const CalculatorPage: React.FC = () => {
           {/* ======================================================== */}
           {currentStep === 1 && (
             <div className="space-y-6">
+              {/* VIN Attribute Suggestions Banner (Explicit Confirmation Required) */}
+              {vinSuggestion && (vinSuggestion.categoryId || vinSuggestion.powertrainId) && (
+                <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl text-xs space-y-2.5 shadow-sm">
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-teal-950 text-sm">
+                        {isAr ? 'اقتراح مستند إلى رقم الشاصي (VIN)' : 'VIN Specification Suggestion'}
+                      </h4>
+                      <p className="text-teal-800 text-xs mt-1">
+                        {isAr
+                          ? `بناءً على رقم الشاصي المدخل، هل ترغب في تطبيق: ${[
+                              vinSuggestion.categoryName && `الفئة: ${vinSuggestion.categoryName}`,
+                              vinSuggestion.powertrainName && `المحرك: ${vinSuggestion.powertrainName}`,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}؟`
+                          : `Based on your decoded VIN, would you like to update: ${[
+                              vinSuggestion.categoryName && `Category: ${vinSuggestion.categoryName}`,
+                              vinSuggestion.powertrainName && `Fuel: ${vinSuggestion.powertrainName}`,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}?`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        if (vinSuggestion.categoryId) {
+                          setValue('vehicleType', vinSuggestion.categoryId, { shouldValidate: true });
+                        }
+                        if (vinSuggestion.powertrainId) {
+                          setValue('powertrain', vinSuggestion.powertrainId, { shouldValidate: true });
+                        }
+                        setVinSuggestion(null);
+                      }}
+                      className="bg-teal-700 hover:bg-teal-800 text-white"
+                    >
+                      {isAr ? 'تطبيق الاقتراح' : 'Apply Suggestion'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVinSuggestion(null)}
+                    >
+                      {isAr ? 'تجاهل والاحتفاظ باختياري' : 'Keep Current Selection'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Vehicle Category */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
@@ -1078,7 +1195,7 @@ export const CalculatorPage: React.FC = () => {
                         type="button"
                         variant="primary"
                         size="sm"
-                        onClick={() => applyDecodedVin(pendingVinOverwrite)}
+                        onClick={() => applyDecodedVehicleDetails(pendingVinOverwrite)}
                       >
                         {isAr ? 'نعم، استبدل البيانات' : 'Yes, Overwrite'}
                       </Button>

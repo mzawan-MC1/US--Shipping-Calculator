@@ -313,4 +313,190 @@ describe('Vehicle Attributes, Adjustments, and VIN Decoder Suite', () => {
       expect(towAdj?.reason).toBe('Required winch and rollback equipment for inoperable vehicle');
     });
   });
+
+  // =========================================================================
+  // 5. VIN Race-Condition Cancellation & Payload Privacy
+  // =========================================================================
+  describe('VIN Race-Condition Cancellation & Payload Privacy', () => {
+    it('gracefully handles AbortSignal cancellation when VIN input changes rapidly', async () => {
+      const abortController = new AbortController();
+
+      vi.spyOn(global, 'fetch').mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            const error = new Error('The user aborted a request.');
+            error.name = 'AbortError';
+            setTimeout(() => reject(error), 20);
+          })
+      );
+
+      // Abort immediately
+      abortController.abort();
+
+      const result = await vinService.decodeVin('1HGCR2F83HA123456', abortController.signal);
+
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe('VIN lookup cancelled.');
+    });
+
+    it('does not store or leak raw NHTSA API payload in VinDecodeResult', async () => {
+      const mockNhtsaResponse = {
+        Results: [
+          {
+            Make: 'TOYOTA',
+            Model: 'Camry',
+            ModelYear: '2022',
+            VehicleType: 'PASSENGER CAR',
+            BodyClass: 'Sedan/Saloon',
+            FuelTypePrimary: 'Gasoline',
+            ErrorCode: '0',
+            InternalDiagnostic1: 'secret_leak_check',
+            InternalDiagnostic2: 'internal_nhtsa_dump',
+          },
+        ],
+      };
+
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockNhtsaResponse,
+      } as Response);
+
+      const result = await vinService.decodeVin('4T1B11HK5NU123456');
+
+      expect(result.success).toBe(true);
+      expect(result.make).toBe('TOYOTA');
+      expect(result.model).toBe('Camry');
+      expect((result as unknown as Record<string, unknown>)['rawDetails']).toBeUndefined();
+      expect((result as unknown as Record<string, unknown>)['InternalDiagnostic1']).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
+  // 6. Granular Surcharges & Financial Integrity
+  // =========================================================================
+  describe('Granular Surcharges & Financial Integrity', () => {
+    it('correctly maps CIF-included, VAT-taxable base, and separate line items', async () => {
+      const mockQuoteWithSurcharges = {
+        success: true,
+        quotation_id: 'quote-surcharge-uuid',
+        quotation_reference: 'MC1-2026-SUR01',
+        enquiry_reference: 'ENQ-2026-SUR01',
+        snapshot: {
+          quotation_reference: 'MC1-2026-SUR01',
+          enquiry_reference: 'ENQ-2026-SUR01',
+          route: {
+            origin_port_name: 'Newark',
+            destination_port_name: 'Jebel Ali',
+            transit_days_min: 25,
+            transit_days_max: 32,
+          },
+          financials: {
+            ocean_freight_base: 1100,
+            ocean_freight_adjustments: 0,
+            subtotal_ocean_freight: 1100,
+            towing_fee_base_min: 350,
+            towing_fee_base_max: 350,
+            towing_adjustments: 0,
+            towing_fee_min: 350,
+            towing_fee_max: 350,
+            is_towing_range: false,
+            include_inland_towing: true,
+            surcharges_total: 175,
+            ocean_and_towing_subtotal_min: 1625,
+            ocean_and_towing_subtotal_max: 1625,
+            customs_clearance_fee: 150,
+            port_additional_charges: 200,
+            destination_clearance_subtotal: 350,
+            cif_value_min: 7625,
+            cif_value_max: 7625,
+            customs_duty_min: 381.25,
+            customs_duty_max: 381.25,
+            vat_taxable_value_min: 8006.25,
+            vat_taxable_value_max: 8006.25,
+            import_vat_min: 400.31,
+            import_vat_max: 400.31,
+            uae_government_charges_subtotal_min: 781.56,
+            uae_government_charges_subtotal_max: 781.56,
+            total_charges_usd_min: 2756.56,
+            total_charges_usd_max: 2756.56,
+            total_charges_aed_min: 10123.95,
+            total_charges_aed_max: 10123.95,
+          },
+          line_items: [
+            { category: 'base_ocean_freight', description: 'Base Ocean Freight', amount_usd: 1100 },
+            { category: 'base_inland_towing', description: 'Inland Towing', amount_usd: 350 },
+            { category: 'surcharge', description: 'Security Surcharge (ISPS)', amount_usd: 50 },
+            { category: 'surcharge', description: 'Bunker Adjustment Factor (BAF)', amount_usd: 125 },
+            { category: 'customs_clearance_fee', description: 'Customs Clearance', amount_usd: 150 },
+            { category: 'port_handling_fee', description: 'Port Handling Fee', amount_usd: 200 },
+          ],
+        },
+      };
+
+      vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+        data: mockQuoteWithSurcharges,
+        error: null,
+        count: null,
+        status: 200,
+        statusText: 'OK',
+      } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+
+      const quote = await quotationService.calculateQuote({
+        vehicleType: 'sedan',
+        powertrain: 'petrol',
+        conditionId: 'operable',
+        purchaseSource: 'copart',
+        loadingPort: '10000000-0000-0000-0000-000000000001',
+        destinationPort: '20000000-0000-0000-0000-000000000001',
+        shippingMethod: 'consolidated_container',
+        buyingPrice: 6000,
+        includeInlandTowing: true,
+        towFromLocation: 'Copart Newark',
+        customerName: 'Fatima Al Zarooni',
+        customerPhone: '+971509876543',
+      });
+
+      expect(quote.surchargesTotal).toBe(175);
+      expect(quote.cifMin).toBe(7625); // 6000 (vehicle) + 1100 (ocean) + 350 (tow) + 175 (surcharges)
+      expect(quote.dutyMin).toBe(381.25); // 5% of 7625
+      expect((quote.snapshot as { financials: { vat_taxable_value_min: number } }).financials.vat_taxable_value_min).toBe(8006.25); // 7625 + 381.25
+      expect(quote.vatMin).toBe(400.31); // 5% of 8006.25
+      expect(quote.totalChargesUsdMin).toBe(2756.56);
+      expect(quote.lineItems?.filter((l) => l.category === 'surcharge')).toHaveLength(2);
+    });
+
+    it('returns controlled error when tariff is unconfigured for newly added deactivated categories', async () => {
+      vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+        data: null,
+        error: {
+          message: 'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.',
+          details: '',
+          hint: '',
+          code: 'P0001',
+          name: 'PostgrestError',
+        },
+        count: null,
+        status: 400,
+        statusText: 'Bad Request',
+      } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+
+      await expect(
+        quotationService.calculateQuote({
+          vehicleType: 'large_suv',
+          powertrain: 'petrol',
+          conditionId: 'operable',
+          purchaseSource: 'copart',
+          loadingPort: '10000000-0000-0000-0000-000000000001',
+          destinationPort: '20000000-0000-0000-0000-000000000001',
+          shippingMethod: 'consolidated_container',
+          buyingPrice: 15000,
+          includeInlandTowing: false,
+          customerName: 'Test Customer',
+          customerPhone: '+971500000000',
+        })
+      ).rejects.toThrow(
+        'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.'
+      );
+    });
+  });
 });

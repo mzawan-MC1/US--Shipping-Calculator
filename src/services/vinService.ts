@@ -23,30 +23,22 @@ export const vinService = {
   /**
    * Decodes a 17-character VIN using the official NHTSA vPIC API
    */
-  async decodeVin(rawVin: string): Promise<VinDecodeResult> {
-    const vin = rawVin.trim().toUpperCase();
+  async decodeVin(rawVin: string, externalSignal?: AbortSignal): Promise<VinDecodeResult> {
+    const vin = this.sanitizeVin(rawVin);
 
-    if (!vin) {
+    if (externalSignal?.aborted) {
       return {
         success: false,
         vin,
-        errorMessage: 'VIN is required.',
+        errorMessage: 'VIN lookup cancelled.',
       };
     }
 
-    if (vin.length !== 17) {
+    if (!vin || vin.length !== 17) {
       return {
         success: false,
         vin,
-        errorMessage: `VIN must be exactly 17 characters (currently ${vin.length}).`,
-      };
-    }
-
-    if (/[IOQ]/.test(vin)) {
-      return {
-        success: false,
-        vin,
-        errorMessage: 'VIN contains invalid letters (I, O, and Q are never used in standard 17-digit VINs).',
+        errorMessage: 'VIN must be exactly 17 characters (ISO 3779 standard, letters I, O, and Q are not allowed).',
       };
     }
 
@@ -60,6 +52,10 @@ export const vinService = {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     try {
       const url = `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/${encodeURIComponent(vin)}?format=json`;
@@ -71,6 +67,9 @@ export const vinService = {
       });
 
       clearTimeout(timeoutId);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
 
       if (!response.ok) {
         return {
@@ -154,7 +153,6 @@ export const vinService = {
           vin,
           errorCode,
           errorMessage: errorText || 'Unable to decode vehicle details from this VIN. Please enter details manually.',
-          rawDetails: results,
         };
       }
 
@@ -171,12 +169,21 @@ export const vinService = {
         suggestedPowertrainId,
         errorCode,
         errorMessage: errorCode && errorCode !== '0' ? errorText : undefined,
-        rawDetails: results,
       };
     } catch (err: unknown) {
       clearTimeout(timeoutId);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
       const error = err instanceof Error ? err : new Error(String(err));
-      if (error.name === 'AbortError') {
+      if (externalSignal?.aborted || error.name === 'AbortError') {
+        if (externalSignal?.aborted) {
+          return {
+            success: false,
+            vin,
+            errorMessage: 'VIN lookup cancelled.',
+          };
+        }
         return {
           success: false,
           vin,

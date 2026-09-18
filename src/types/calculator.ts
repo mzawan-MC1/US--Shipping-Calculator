@@ -307,7 +307,6 @@ export interface VinDecodeResult {
   suggestedPowertrainId?: string;
   errorCode?: string;
   errorMessage?: string;
-  rawDetails?: Record<string, string | null>;
 }
 
 export interface CalculatorAvailabilityResponse {
