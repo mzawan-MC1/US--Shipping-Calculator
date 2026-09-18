@@ -33,6 +33,11 @@ export interface ShippingMethodOption {
 export interface VehicleCategoryOption {
   id: string;
   name: string;
+  nameAr?: string | null;
+  extraTowingCharge?: number;
+  extraShippingCharge?: number;
+  chargeReasonEn?: string | null;
+  chargeReasonAr?: string | null;
   isActive: boolean;
 }
 
@@ -224,9 +229,9 @@ export const referenceDataService = {
   async getVehicleCategories(): Promise<VehicleCategoryOption[]> {
     const { data, error } = await supabase
       .from('vehicle_categories')
-      .select('id, name, is_active')
+      .select('id, name, name_ar, extra_towing_charge, extra_shipping_charge, charge_reason_en, charge_reason_ar, is_active')
       .eq('is_active', true)
-      .order('name');
+      .order('display_order', { ascending: true });
 
     if (error) {
       console.error('[ReferenceDataService] Failed to load vehicle categories:', error);
@@ -236,6 +241,11 @@ export const referenceDataService = {
     return (data || []).map((v) => ({
       id: v.id,
       name: v.name,
+      nameAr: v.name_ar,
+      extraTowingCharge: Number(v.extra_towing_charge || 0),
+      extraShippingCharge: Number(v.extra_shipping_charge || 0),
+      chargeReasonEn: v.charge_reason_en,
+      chargeReasonAr: v.charge_reason_ar,
       isActive: v.is_active,
     }));
   },

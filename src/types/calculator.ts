@@ -58,12 +58,14 @@ export interface CalculatorFormData {
 export interface QuotationLineItem {
   category: string;
   description: string;
+  description_ar?: string;
   amount_usd?: number;
   amount_usd_min?: number;
   amount_usd_max?: number;
   is_range?: boolean;
   is_requested?: boolean;
   reason?: string;
+  reason_ar?: string;
   is_included_in_cif?: boolean;
   is_included_in_vat_base?: boolean;
 }
@@ -268,6 +270,10 @@ export interface AdminVehicleAttribute {
   descriptionAr?: string | null;
   icon?: string | null;
   displayOrder: number;
+  extraTowingCharge?: number;
+  extraShippingCharge?: number;
+  chargeReasonEn?: string | null;
+  chargeReasonAr?: string | null;
   isActive: boolean;
   isArchived: boolean;
   createdAt?: string;

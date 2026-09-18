@@ -497,7 +497,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                   ?.filter((item) => item.category === 'shipping_adjustment')
                   .map((adj, idx) => (
                     <div key={`ship-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
-                      <span className="break-words">• {adj.description || adj.reason || 'Ocean Freight Adjustment'}</span>
+                      <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || adj.reason || (isAr ? 'تعديل الشحن البحري' : 'Ocean Freight Adjustment'))}</span>
                       <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
                     </div>
                   ))}
@@ -521,7 +521,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                   ?.filter((item) => item.category === 'towing_adjustment')
                   .map((adj, idx) => (
                     <div key={`tow-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
-                      <span className="break-words">• {adj.description || adj.reason || 'Towing Winching / Condition Adjustment'}</span>
+                      <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || adj.reason || (isAr ? 'تعديل النقل الداخلي' : 'Towing Adjustment'))}</span>
                       <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
                     </div>
                   ))}

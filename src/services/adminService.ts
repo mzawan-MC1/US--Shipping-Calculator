@@ -2124,7 +2124,7 @@ export const adminService = {
       .order('id', { ascending: true });
 
     if (error) throw new Error(error.message || `Unable to load ${type} attributes.`);
-    const rows = (data || []) as unknown as GenericAttributeRow[];
+    const rows = (data || []) as unknown as any[];
     return rows.map((row) => ({
       id: row.id,
       type,
@@ -2134,6 +2134,10 @@ export const adminService = {
       descriptionAr: row.description_ar,
       icon: row.icon,
       displayOrder: row.display_order ?? 0,
+      extraTowingCharge: row.extra_towing_charge !== undefined && row.extra_towing_charge !== null ? Number(row.extra_towing_charge) : undefined,
+      extraShippingCharge: row.extra_shipping_charge !== undefined && row.extra_shipping_charge !== null ? Number(row.extra_shipping_charge) : undefined,
+      chargeReasonEn: row.charge_reason_en || null,
+      chargeReasonAr: row.charge_reason_ar || null,
       isActive: Boolean(row.is_active),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,
@@ -2151,6 +2155,10 @@ export const adminService = {
       descriptionAr?: string | null;
       icon?: string | null;
       displayOrder: number;
+      extraTowingCharge?: number;
+      extraShippingCharge?: number;
+      chargeReasonEn?: string | null;
+      chargeReasonAr?: string | null;
       isActive?: boolean;
     }
   ): Promise<AdminVehicleAttribute> {
@@ -2158,7 +2166,7 @@ export const adminService = {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id || null;
 
-    const payload = {
+    const payload: any = {
       id: cleanId,
       name: attr.name.trim(),
       name_ar: attr.nameAr?.trim() || null,
@@ -2172,6 +2180,13 @@ export const adminService = {
       updated_by: userId,
     };
 
+    if (type === 'category') {
+      payload.extra_towing_charge = Math.max(0, Number(attr.extraTowingCharge || 0));
+      payload.extra_shipping_charge = Math.max(0, Number(attr.extraShippingCharge || 0));
+      payload.charge_reason_en = attr.chargeReasonEn?.trim() || null;
+      payload.charge_reason_ar = attr.chargeReasonAr?.trim() || null;
+    }
+
     const query =
       type === 'category'
         ? supabase.from('vehicle_categories').insert(payload).select('*').single()
@@ -2181,7 +2196,7 @@ export const adminService = {
 
     const { data, error } = await query;
     if (error) throw new Error(error.message || `Unable to create ${type} attribute.`);
-    const row = data as unknown as GenericAttributeRow;
+    const row = data as unknown as any;
     return {
       id: row.id,
       type,
@@ -2191,6 +2206,10 @@ export const adminService = {
       descriptionAr: row.description_ar,
       icon: row.icon,
       displayOrder: row.display_order ?? 0,
+      extraTowingCharge: row.extra_towing_charge !== undefined && row.extra_towing_charge !== null ? Number(row.extra_towing_charge) : undefined,
+      extraShippingCharge: row.extra_shipping_charge !== undefined && row.extra_shipping_charge !== null ? Number(row.extra_shipping_charge) : undefined,
+      chargeReasonEn: row.charge_reason_en || null,
+      chargeReasonAr: row.charge_reason_ar || null,
       isActive: Boolean(row.is_active),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,
@@ -2208,6 +2227,10 @@ export const adminService = {
       descriptionAr: string | null;
       icon: string | null;
       displayOrder: number;
+      extraTowingCharge: number;
+      extraShippingCharge: number;
+      chargeReasonEn: string | null;
+      chargeReasonAr: string | null;
       isActive: boolean;
       isArchived: boolean;
     }>
@@ -2215,7 +2238,7 @@ export const adminService = {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id || null;
 
-    const payload: VehicleCategoryUpdate = {
+    const payload: any = {
       updated_at: new Date().toISOString(),
       updated_by: userId,
     };
@@ -2227,6 +2250,13 @@ export const adminService = {
     if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
     if (updates.isArchived !== undefined) payload.is_archived = updates.isArchived;
+
+    if (type === 'category') {
+      if (updates.extraTowingCharge !== undefined) payload.extra_towing_charge = Math.max(0, Number(updates.extraTowingCharge));
+      if (updates.extraShippingCharge !== undefined) payload.extra_shipping_charge = Math.max(0, Number(updates.extraShippingCharge));
+      if (updates.chargeReasonEn !== undefined) payload.charge_reason_en = updates.chargeReasonEn?.trim() || null;
+      if (updates.chargeReasonAr !== undefined) payload.charge_reason_ar = updates.chargeReasonAr?.trim() || null;
+    }
 
     const query =
       type === 'category'

@@ -114,6 +114,10 @@ export const AdminTariffsPage: React.FC = () => {
   const [attributeFormIcon, setAttributeFormIcon] = useState('');
   const [attributeFormOrder, setAttributeFormOrder] = useState('1');
   const [attributeFormIsActive, setAttributeFormIsActive] = useState(true);
+  const [attributeFormExtraTowing, setAttributeFormExtraTowing] = useState('0');
+  const [attributeFormExtraShipping, setAttributeFormExtraShipping] = useState('0');
+  const [attributeFormReasonEn, setAttributeFormReasonEn] = useState('');
+  const [attributeFormReasonAr, setAttributeFormReasonAr] = useState('');
   const [isSavingAttribute, setIsSavingAttribute] = useState(false);
 
   // Adjustment Modal State
@@ -670,6 +674,10 @@ export const AdminTariffsPage: React.FC = () => {
     setAttributeFormIcon('');
     setAttributeFormOrder('1');
     setAttributeFormIsActive(true);
+    setAttributeFormExtraTowing('0');
+    setAttributeFormExtraShipping('0');
+    setAttributeFormReasonEn('');
+    setAttributeFormReasonAr('');
     setIsAttributeModalOpen(true);
   };
 
@@ -685,6 +693,10 @@ export const AdminTariffsPage: React.FC = () => {
     setAttributeFormIcon(attr.icon || '');
     setAttributeFormOrder((attr.displayOrder || 1).toString());
     setAttributeFormIsActive(attr.isActive);
+    setAttributeFormExtraTowing((attr.extraTowingCharge ?? 0).toString());
+    setAttributeFormExtraShipping((attr.extraShippingCharge ?? 0).toString());
+    setAttributeFormReasonEn(attr.chargeReasonEn || '');
+    setAttributeFormReasonAr(attr.chargeReasonAr || '');
     setIsAttributeModalOpen(true);
   };
 
@@ -699,6 +711,21 @@ export const AdminTariffsPage: React.FC = () => {
       return;
     }
 
+    let extraTow = 0;
+    let extraShip = 0;
+    if (attributeModalType === 'category') {
+      extraTow = parseFloat(attributeFormExtraTowing || '0');
+      extraShip = parseFloat(attributeFormExtraShipping || '0');
+      if (isNaN(extraTow) || extraTow < 0) {
+        setActionError('Extra Towing Charge must be a non-negative USD amount.');
+        return;
+      }
+      if (isNaN(extraShip) || extraShip < 0) {
+        setActionError('Extra Shipping Charge must be a non-negative USD amount.');
+        return;
+      }
+    }
+
     setIsSavingAttribute(true);
     setActionError(null);
     try {
@@ -711,6 +738,10 @@ export const AdminTariffsPage: React.FC = () => {
           descriptionAr: attributeFormDescAr || null,
           icon: attributeFormIcon || null,
           displayOrder: parseInt(attributeFormOrder, 10) || 1,
+          extraTowingCharge: extraTow,
+          extraShippingCharge: extraShip,
+          chargeReasonEn: attributeFormReasonEn.trim() || null,
+          chargeReasonAr: attributeFormReasonAr.trim() || null,
           isActive: attributeFormIsActive,
         });
         setActionSuccess(`Created ${attributeModalType}: ${attributeFormName}.`);
@@ -722,6 +753,10 @@ export const AdminTariffsPage: React.FC = () => {
           descriptionAr: attributeFormDescAr || null,
           icon: attributeFormIcon || null,
           displayOrder: parseInt(attributeFormOrder, 10) || 1,
+          extraTowingCharge: extraTow,
+          extraShippingCharge: extraShip,
+          chargeReasonEn: attributeFormReasonEn.trim() || null,
+          chargeReasonAr: attributeFormReasonAr.trim() || null,
           isActive: attributeFormIsActive,
         });
         setActionSuccess(`Updated ${attributeModalType}: ${attributeFormName}.`);
@@ -1825,6 +1860,12 @@ export const AdminTariffsPage: React.FC = () => {
                           <th className="py-3 px-4">Name (English)</th>
                           <th className="py-3 px-4">Name (Arabic)</th>
                           <th className="py-3 px-4">Description</th>
+                          {attributeSubTab === 'categories' && (
+                            <>
+                              <th className="py-3 px-4 text-center">Extra Towing</th>
+                              <th className="py-3 px-4 text-center">Extra Shipping</th>
+                            </>
+                          )}
                           <th className="py-3 px-4 text-center">Display Order</th>
                           <th className="py-3 px-4 text-center">Status</th>
                           {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
@@ -1847,6 +1888,24 @@ export const AdminTariffsPage: React.FC = () => {
                             <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">
                               {attr.description || '—'}
                             </td>
+                            {attributeSubTab === 'categories' && (
+                              <>
+                                <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                                  {attr.extraTowingCharge ? (
+                                    <span className="text-amber-700 font-semibold">+${attr.extraTowingCharge}</span>
+                                  ) : (
+                                    <span className="text-slate-400 font-normal">$0</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                                  {attr.extraShippingCharge ? (
+                                    <span className="text-blue-700 font-semibold">+${attr.extraShippingCharge}</span>
+                                  ) : (
+                                    <span className="text-slate-400 font-normal">$0</span>
+                                  )}
+                                </td>
+                              </>
+                            )}
                             <td className="py-3.5 px-4 text-center font-bold text-slate-600">
                               {attr.displayOrder}
                             </td>
@@ -3223,6 +3282,82 @@ export const AdminTariffsPage: React.FC = () => {
               />
             </div>
           </div>
+
+          {attributeModalType === 'category' && (
+            <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-950 uppercase tracking-wider text-[11px]">
+                  Category Pricing Adjustments (Optional)
+                </span>
+                <span className="text-[10px] text-amber-700 font-medium">
+                  Default $0 (No extra charge)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Extra Towing Charge (USD)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                    value={attributeFormExtraTowing}
+                    onChange={(e) => setAttributeFormExtraTowing(e.target.value)}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Added to inland towing only (e.g. $30 for Caravan).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Extra Shipping Charge (USD)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                    value={attributeFormExtraShipping}
+                    onChange={(e) => setAttributeFormExtraShipping(e.target.value)}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Added to ocean freight only (e.g. $40 for Caravan, $50 for Jet Ski).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Charge Reason / Description (English)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Caravan / RV oversized handling"
+                    value={attributeFormReasonEn}
+                    onChange={(e) => setAttributeFormReasonEn(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Charge Reason / Description (Arabic, optional)
+                  </label>
+                  <Input
+                    type="text"
+                    dir="rtl"
+                    placeholder="مثال: مناولة كرفان / مركبة ذات حجم خاص"
+                    value={attributeFormReasonAr}
+                    onChange={(e) => setAttributeFormReasonAr(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

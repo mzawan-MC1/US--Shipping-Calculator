@@ -725,6 +725,38 @@ export const CalculatorPage: React.FC = () => {
       : selectedDestPort.name
     : formData.destinationPort;
 
+  // Vehicle Category Extra Charge Notice Helper
+  const selectedCategoryObj = useMemo(() => {
+    return vehicleCategories.find((c) => c.id === formData.vehicleType);
+  }, [vehicleCategories, formData.vehicleType]);
+
+  const categoryNotice = useMemo(() => {
+    if (!selectedCategoryObj) return null;
+    const tow = selectedCategoryObj.extraTowingCharge || 0;
+    const ship = selectedCategoryObj.extraShippingCharge || 0;
+    if (tow <= 0 && ship <= 0) return null;
+
+    const catName = isAr && selectedCategoryObj.nameAr ? selectedCategoryObj.nameAr : selectedCategoryObj.name;
+
+    if (isAr) {
+      if (tow > 0 && ship > 0) {
+        return `مناولة ${catName}: +$${tow} للنقل البري و +$${ship} للشحن البحري.`;
+      } else if (tow > 0) {
+        return `مناولة ${catName}: +$${tow} للنقل البري.`;
+      } else {
+        return `مناولة ${catName}: +$${ship} للشحن البحري.`;
+      }
+    } else {
+      if (tow > 0 && ship > 0) {
+        return `${catName} handling: +$${tow} towing and +$${ship} shipping.`;
+      } else if (tow > 0) {
+        return `${catName} handling: +$${tow} towing.`;
+      } else {
+        return `${catName} handling: +$${ship} shipping.`;
+      }
+    }
+  }, [selectedCategoryObj, isAr]);
+
   // Dynamically eligible Powertrains and Conditions based on Category compatibility
   const displayPowertrains = useMemo(() => {
     if (availability.eligible_powertrains && availability.eligible_powertrains.length > 0) {
@@ -1129,6 +1161,13 @@ export const CalculatorPage: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {categoryNotice && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="font-semibold">{categoryNotice}</span>
+                  </div>
+                )}
               </div>
 
               {/* Powertrain / Fuel Type */}
@@ -2181,6 +2220,12 @@ export const CalculatorPage: React.FC = () => {
                         <strong>
                           {[formData.year, formData.make, formData.model].filter(Boolean).join(' ')}
                         </strong>
+                      </div>
+                    )}
+                    {categoryNotice && (
+                      <div className="col-span-2 sm:col-span-3 mt-1.5 p-2.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center gap-2 text-xs text-amber-900 shadow-sm">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span className="font-semibold">{categoryNotice}</span>
                       </div>
                     )}
                   </div>
