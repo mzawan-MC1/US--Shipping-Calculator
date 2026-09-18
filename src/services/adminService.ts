@@ -12,23 +12,8 @@ type ShippingMethodUpdate = Database['public']['Tables']['shipping_methods']['Up
 type AdditionalChargeRuleUpdate = Database['public']['Tables']['additional_charge_rules']['Update'];
 type AttributeAdjustmentRow = Database['public']['Tables']['attribute_price_adjustments']['Row'];
 type AttributeAdjustmentUpdate = Database['public']['Tables']['attribute_price_adjustments']['Update'];
-type VehicleCategoryUpdate = Database['public']['Tables']['vehicle_categories']['Update'];
 type PowertrainUpdate = Database['public']['Tables']['powertrains']['Update'];
 type VehicleConditionUpdate = Database['public']['Tables']['vehicle_conditions']['Update'];
-
-interface GenericAttributeRow {
-  id: string;
-  name: string;
-  name_ar: string | null;
-  description: string | null;
-  description_ar: string | null;
-  icon: string | null;
-  display_order: number | null;
-  is_active: boolean | null;
-  is_archived: boolean | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface AdminQuotation {
   id: string;
@@ -312,6 +297,10 @@ export interface AdminVehicleAttribute {
   descriptionAr?: string | null;
   icon?: string | null;
   displayOrder: number;
+  extraTowingCharge?: number;
+  extraShippingCharge?: number;
+  chargeReasonEn?: string;
+  chargeReasonAr?: string;
   isActive: boolean;
   isArchived: boolean;
   createdAt?: string;
@@ -2136,8 +2125,8 @@ export const adminService = {
       displayOrder: row.display_order ?? 0,
       extraTowingCharge: row.extra_towing_charge !== undefined && row.extra_towing_charge !== null ? Number(row.extra_towing_charge) : undefined,
       extraShippingCharge: row.extra_shipping_charge !== undefined && row.extra_shipping_charge !== null ? Number(row.extra_shipping_charge) : undefined,
-      chargeReasonEn: row.charge_reason_en || null,
-      chargeReasonAr: row.charge_reason_ar || null,
+      chargeReasonEn: row.charge_reason_en || undefined,
+      chargeReasonAr: row.charge_reason_ar || undefined,
       isActive: Boolean(row.is_active),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,
@@ -2208,8 +2197,8 @@ export const adminService = {
       displayOrder: row.display_order ?? 0,
       extraTowingCharge: row.extra_towing_charge !== undefined && row.extra_towing_charge !== null ? Number(row.extra_towing_charge) : undefined,
       extraShippingCharge: row.extra_shipping_charge !== undefined && row.extra_shipping_charge !== null ? Number(row.extra_shipping_charge) : undefined,
-      chargeReasonEn: row.charge_reason_en || null,
-      chargeReasonAr: row.charge_reason_ar || null,
+      chargeReasonEn: row.charge_reason_en || undefined,
+      chargeReasonAr: row.charge_reason_ar || undefined,
       isActive: Boolean(row.is_active),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,

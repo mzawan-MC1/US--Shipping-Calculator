@@ -272,8 +272,8 @@ export interface AdminVehicleAttribute {
   displayOrder: number;
   extraTowingCharge?: number;
   extraShippingCharge?: number;
-  chargeReasonEn?: string | null;
-  chargeReasonAr?: string | null;
+  chargeReasonEn?: string;
+  chargeReasonAr?: string;
   isActive: boolean;
   isArchived: boolean;
   createdAt?: string;
