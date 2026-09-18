@@ -2169,12 +2169,10 @@ export const adminService = {
       updated_by: userId,
     };
 
-    if (type === 'category') {
-      payload.extra_towing_charge = Math.max(0, Number(attr.extraTowingCharge || 0));
-      payload.extra_shipping_charge = Math.max(0, Number(attr.extraShippingCharge || 0));
-      payload.charge_reason_en = attr.chargeReasonEn?.trim() || null;
-      payload.charge_reason_ar = attr.chargeReasonAr?.trim() || null;
-    }
+    payload.extra_towing_charge = Math.max(0, Number(attr.extraTowingCharge || 0));
+    payload.extra_shipping_charge = Math.max(0, Number(attr.extraShippingCharge || 0));
+    payload.charge_reason_en = attr.chargeReasonEn?.trim() || null;
+    payload.charge_reason_ar = attr.chargeReasonAr?.trim() || null;
 
     const query =
       type === 'category'
@@ -2240,12 +2238,10 @@ export const adminService = {
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
     if (updates.isArchived !== undefined) payload.is_archived = updates.isArchived;
 
-    if (type === 'category') {
-      if (updates.extraTowingCharge !== undefined) payload.extra_towing_charge = Math.max(0, Number(updates.extraTowingCharge));
-      if (updates.extraShippingCharge !== undefined) payload.extra_shipping_charge = Math.max(0, Number(updates.extraShippingCharge));
-      if (updates.chargeReasonEn !== undefined) payload.charge_reason_en = updates.chargeReasonEn?.trim() || null;
-      if (updates.chargeReasonAr !== undefined) payload.charge_reason_ar = updates.chargeReasonAr?.trim() || null;
-    }
+    if (updates.extraTowingCharge !== undefined) payload.extra_towing_charge = Math.max(0, Number(updates.extraTowingCharge));
+    if (updates.extraShippingCharge !== undefined) payload.extra_shipping_charge = Math.max(0, Number(updates.extraShippingCharge));
+    if (updates.chargeReasonEn !== undefined) payload.charge_reason_en = updates.chargeReasonEn?.trim() || null;
+    if (updates.chargeReasonAr !== undefined) payload.charge_reason_ar = updates.chargeReasonAr?.trim() || null;
 
     const query =
       type === 'category'

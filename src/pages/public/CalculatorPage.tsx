@@ -757,6 +757,70 @@ export const CalculatorPage: React.FC = () => {
     }
   }, [selectedCategoryObj, isAr]);
 
+  // Powertrain Extra Charge Notice Helper
+  const selectedPowertrainObj = useMemo(() => {
+    return powertrains.find((p) => p.id === formData.powertrain);
+  }, [powertrains, formData.powertrain]);
+
+  const powertrainNotice = useMemo(() => {
+    if (!selectedPowertrainObj) return null;
+    const tow = selectedPowertrainObj.extraTowingCharge || 0;
+    const ship = selectedPowertrainObj.extraShippingCharge || 0;
+    if (tow <= 0 && ship <= 0) return null;
+
+    const ptName = isAr && selectedPowertrainObj.nameAr ? selectedPowertrainObj.nameAr : selectedPowertrainObj.name;
+
+    if (isAr) {
+      if (tow > 0 && ship > 0) {
+        return `مناولة ${ptName}: +$${tow} للنقل البري و +$${ship} للشحن البحري.`;
+      } else if (tow > 0) {
+        return `مناولة ${ptName}: +$${tow} للنقل البري.`;
+      } else {
+        return `مناولة ${ptName}: +$${ship} للشحن البحري.`;
+      }
+    } else {
+      if (tow > 0 && ship > 0) {
+        return `${ptName} handling: +$${tow} towing and +$${ship} shipping.`;
+      } else if (tow > 0) {
+        return `${ptName} handling: +$${tow} towing.`;
+      } else {
+        return `${ptName} handling: +$${ship} shipping.`;
+      }
+    }
+  }, [selectedPowertrainObj, isAr]);
+
+  // Vehicle Condition Extra Charge Notice Helper
+  const selectedConditionObj = useMemo(() => {
+    return vehicleConditions.find((c) => c.id === formData.conditionId);
+  }, [vehicleConditions, formData.conditionId]);
+
+  const conditionNotice = useMemo(() => {
+    if (!selectedConditionObj) return null;
+    const tow = selectedConditionObj.extraTowingCharge || 0;
+    const ship = selectedConditionObj.extraShippingCharge || 0;
+    if (tow <= 0 && ship <= 0) return null;
+
+    const condName = isAr && selectedConditionObj.nameAr ? selectedConditionObj.nameAr : selectedConditionObj.name;
+
+    if (isAr) {
+      if (tow > 0 && ship > 0) {
+        return `حالة المركبة (${condName}): +$${tow} للنقل البري و +$${ship} للشحن البحري.`;
+      } else if (tow > 0) {
+        return `حالة المركبة (${condName}): +$${tow} للنقل البري.`;
+      } else {
+        return `حالة المركبة (${condName}): +$${ship} للشحن البحري.`;
+      }
+    } else {
+      if (tow > 0 && ship > 0) {
+        return `${condName} condition: +$${tow} towing and +$${ship} shipping.`;
+      } else if (tow > 0) {
+        return `${condName} condition: +$${tow} towing.`;
+      } else {
+        return `${condName} condition: +$${ship} shipping.`;
+      }
+    }
+  }, [selectedConditionObj, isAr]);
+
   // Dynamically eligible Powertrains and Conditions based on Category compatibility
   const displayPowertrains = useMemo(() => {
     if (availability.eligible_powertrains && availability.eligible_powertrains.length > 0) {
@@ -1201,6 +1265,13 @@ export const CalculatorPage: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {powertrainNotice && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="font-semibold">{powertrainNotice}</span>
+                  </div>
+                )}
               </div>
 
               {/* Vehicle Operational Condition */}
@@ -1247,6 +1318,13 @@ export const CalculatorPage: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {conditionNotice && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="font-semibold">{conditionNotice}</span>
+                  </div>
+                )}
               </div>
 
               {/* Optional Vehicle Details with VIN-First Decoder */}

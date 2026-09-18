@@ -19,7 +19,6 @@ import {
   AdminQuotationRule,
   AdminVehicleAttribute,
   VehicleCategoryCompatibility,
-  AttributePriceAdjustment,
   AdminState,
 } from '../../services/adminService';
 import { PickupLocationsTable } from '../../components/admin/PickupLocationsTable';
@@ -89,12 +88,11 @@ export const AdminTariffsPage: React.FC = () => {
 
   const [towingFormStateCode, setTowingFormStateCode] = useState('NJ');
 
-  // Vehicle Attributes & Adjustments State
-  const [attributeSubTab, setAttributeSubTab] = useState<'categories' | 'powertrains' | 'conditions' | 'adjustments' | 'compatibilities'>('categories');
+  // Vehicle Attributes & Allowed Customer Selections State
+  const [attributeSubTab, setAttributeSubTab] = useState<'categories' | 'powertrains' | 'conditions' | 'compatibilities'>('categories');
   const [categoryAttributes, setCategoryAttributes] = useState<AdminVehicleAttribute[]>([]);
   const [powertrainAttributes, setPowertrainAttributes] = useState<AdminVehicleAttribute[]>([]);
   const [conditionAttributes, setConditionAttributes] = useState<AdminVehicleAttribute[]>([]);
-  const [priceAdjustments, setPriceAdjustments] = useState<AttributePriceAdjustment[]>([]);
   const [compatibilities, setCompatibilities] = useState<VehicleCategoryCompatibility[]>([]);
   const [selectedCategoryForCompat, setSelectedCategoryForCompat] = useState<string>('sedan');
   const [compatPowertrains, setCompatPowertrains] = useState<string[]>([]);
@@ -119,23 +117,6 @@ export const AdminTariffsPage: React.FC = () => {
   const [attributeFormReasonEn, setAttributeFormReasonEn] = useState('');
   const [attributeFormReasonAr, setAttributeFormReasonAr] = useState('');
   const [isSavingAttribute, setIsSavingAttribute] = useState(false);
-
-  // Adjustment Modal State
-  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
-  const [adjustmentModalMode, setAdjustmentModalMode] = useState<'create' | 'edit'>('create');
-  const [editingAdjustmentId, setEditingAdjustmentId] = useState<string | null>(null);
-  const [adjFormContext, setAdjFormContext] = useState<'towing' | 'shipping'>('towing');
-  const [adjFormType, setAdjFormType] = useState<'vehicle_category' | 'powertrain' | 'vehicle_condition'>('vehicle_condition');
-  const [adjFormAttributeId, setAdjFormAttributeId] = useState('non_runner');
-  const [adjFormAmount, setAdjFormAmount] = useState('150');
-  const [adjFormReasonEn, setAdjFormReasonEn] = useState('');
-  const [adjFormReasonAr, setAdjFormReasonAr] = useState('');
-  const [adjFormDisplayOrder, setAdjFormDisplayOrder] = useState('1');
-  const [adjFormEffectiveFrom, setAdjFormEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
-  const [adjFormEffectiveTo, setAdjFormEffectiveTo] = useState('');
-  const [adjFormIsActive, setAdjFormIsActive] = useState(true);
-  const [adjFormAdminNotes, setAdjFormAdminNotes] = useState('');
-  const [isSavingAdjustment, setIsSavingAdjustment] = useState(false);
 
   const [exchangeRate, setExchangeRate] = useState<{ rate: number; updatedAt: string }>({
     rate: 3.6725,
@@ -219,7 +200,7 @@ export const AdminTariffsPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [f, t, e, r, p, vc, sm, pl, ac, qr, cats, pts, conds, adjs, comps, stList] = await Promise.all([
+      const [f, t, e, r, p, vc, sm, pl, ac, qr, cats, pts, conds, comps, stList] = await Promise.all([
         adminService.getFreightRates(),
         adminService.getTowingRates(),
         adminService.getExchangeRate(),
@@ -233,7 +214,6 @@ export const AdminTariffsPage: React.FC = () => {
         adminService.getVehicleAttributes('category'),
         adminService.getVehicleAttributes('powertrain'),
         adminService.getVehicleAttributes('condition'),
-        adminService.getAttributePriceAdjustments(),
         adminService.getCategoryCompatibilities(),
         adminService.getStates(),
       ]);
@@ -251,7 +231,6 @@ export const AdminTariffsPage: React.FC = () => {
       setCategoryAttributes(cats);
       setPowertrainAttributes(pts);
       setConditionAttributes(conds);
-      setPriceAdjustments(adjs);
       setCompatibilities(comps);
       setStates(stList);
 
@@ -711,19 +690,15 @@ export const AdminTariffsPage: React.FC = () => {
       return;
     }
 
-    let extraTow = 0;
-    let extraShip = 0;
-    if (attributeModalType === 'category') {
-      extraTow = parseFloat(attributeFormExtraTowing || '0');
-      extraShip = parseFloat(attributeFormExtraShipping || '0');
-      if (isNaN(extraTow) || extraTow < 0) {
-        setActionError('Extra Towing Charge must be a non-negative USD amount.');
-        return;
-      }
-      if (isNaN(extraShip) || extraShip < 0) {
-        setActionError('Extra Shipping Charge must be a non-negative USD amount.');
-        return;
-      }
+    const extraTow = parseFloat(attributeFormExtraTowing || '0');
+    const extraShip = parseFloat(attributeFormExtraShipping || '0');
+    if (isNaN(extraTow) || extraTow < 0) {
+      setActionError('Extra Towing Charge must be a non-negative USD amount.');
+      return;
+    }
+    if (isNaN(extraShip) || extraShip < 0) {
+      setActionError('Extra Shipping Charge must be a non-negative USD amount.');
+      return;
     }
 
     setIsSavingAttribute(true);
@@ -793,112 +768,7 @@ export const AdminTariffsPage: React.FC = () => {
     }
   };
 
-  // -----------------------------------------------------------
-  // Price Adjustments Handlers
-  // -----------------------------------------------------------
-  const handleOpenCreateAdjustment = () => {
-    setAdjustmentModalMode('create');
-    setEditingAdjustmentId(null);
-    setAdjFormContext('towing');
-    setAdjFormType('vehicle_condition');
-    setAdjFormAttributeId(conditionAttributes[0]?.id || 'non_runner');
-    setAdjFormAmount('150');
-    setAdjFormReasonEn('Non-Runner / Inoperable Winching Surcharge');
-    setAdjFormReasonAr('رسوم ونش للسيارات المعطلة');
-    setAdjFormDisplayOrder((priceAdjustments.length + 1).toString());
-    setAdjFormEffectiveFrom(new Date().toISOString().split('T')[0]);
-    setAdjFormEffectiveTo('');
-    setAdjFormIsActive(true);
-    setAdjFormAdminNotes('');
-    setIsAdjustmentModalOpen(true);
-  };
-
-  const handleOpenEditAdjustment = (adj: AttributePriceAdjustment) => {
-    setAdjustmentModalMode('edit');
-    setEditingAdjustmentId(adj.id);
-    setAdjFormContext(adj.context);
-    setAdjFormType(adj.attribute_type);
-    setAdjFormAttributeId(adj.attribute_id);
-    setAdjFormAmount(adj.amount_usd.toString());
-    setAdjFormReasonEn(adj.reason_en);
-    setAdjFormReasonAr(adj.reason_ar || '');
-    setAdjFormDisplayOrder(adj.display_order.toString());
-    setAdjFormEffectiveFrom(adj.effective_from);
-    setAdjFormEffectiveTo(adj.effective_to || '');
-    setAdjFormIsActive(adj.is_active);
-    setAdjFormAdminNotes(adj.admin_notes || '');
-    setIsAdjustmentModalOpen(true);
-  };
-
-  const handleSaveAdjustment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(adjFormAmount);
-    if (isNaN(amt)) {
-      setActionError('Adjustment amount must be a number.');
-      return;
-    }
-    if (!adjFormReasonEn.trim()) {
-      setActionError('Customer-facing reason in English is required.');
-      return;
-    }
-
-    setIsSavingAdjustment(true);
-    setActionError(null);
-    try {
-      const payload = {
-        attribute_type: adjFormType,
-        attribute_id: adjFormAttributeId,
-        context: adjFormContext,
-        amount_usd: amt,
-        reason_en: adjFormReasonEn.trim(),
-        reason_ar: adjFormReasonAr.trim() || null,
-        display_order: parseInt(adjFormDisplayOrder, 10) || 1,
-        effective_from: adjFormEffectiveFrom || new Date().toISOString().split('T')[0],
-        effective_to: adjFormEffectiveTo || null,
-        is_active: adjFormIsActive,
-        admin_notes: adjFormAdminNotes.trim() || null,
-      };
-
-      if (adjustmentModalMode === 'create') {
-        await adminService.createAttributePriceAdjustment(payload);
-        setActionSuccess('Price adjustment created successfully.');
-      } else if (editingAdjustmentId) {
-        await adminService.updateAttributePriceAdjustment(editingAdjustmentId, payload);
-        setActionSuccess('Price adjustment updated successfully.');
-      }
-      setIsAdjustmentModalOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to save price adjustment.');
-    } finally {
-      setIsSavingAdjustment(false);
-    }
-  };
-
-  const handleDeleteAdjustment = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this price adjustment?')) return;
-    setActionError(null);
-    try {
-      await adminService.deleteAttributePriceAdjustment(id);
-      setActionSuccess('Price adjustment deleted.');
-      await loadData();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to delete price adjustment.');
-    }
-  };
-
-  const handleToggleAdjustmentStatus = async (adj: AttributePriceAdjustment) => {
-    setActionError(null);
-    try {
-      await adminService.updateAttributePriceAdjustment(adj.id, { is_active: !adj.is_active });
-      setActionSuccess(`Price adjustment ${!adj.is_active ? 'activated' : 'deactivated'}.`);
-      await loadData();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to toggle adjustment status.');
-    }
-  };
-
-  // Compatibility helper
+  // Compatibility helper - default to all active if none configured
   useEffect(() => {
     const pIds = compatibilities
       .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && c.target_type === 'powertrain')
@@ -906,9 +776,9 @@ export const AdminTariffsPage: React.FC = () => {
     const cIds = compatibilities
       .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && c.target_type === 'condition')
       .map((c) => c.target_id);
-    setCompatPowertrains(pIds);
-    setCompatConditions(cIds);
-  }, [selectedCategoryForCompat, compatibilities]);
+    setCompatPowertrains(pIds.length > 0 ? pIds : powertrainAttributes.filter((p) => p.isActive).map((p) => p.id));
+    setCompatConditions(cIds.length > 0 ? cIds : conditionAttributes.filter((c) => c.isActive).map((c) => c.id));
+  }, [selectedCategoryForCompat, compatibilities, powertrainAttributes, conditionAttributes]);
 
   const handleSaveCompatibilities = async () => {
     setIsSavingCompat(true);
@@ -1145,34 +1015,23 @@ export const AdminTariffsPage: React.FC = () => {
           )}
 
           {canManagePricing && activeTab === 'attributes' && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  handleOpenCreateAttribute(
-                    attributeSubTab === 'conditions'
-                      ? 'condition'
-                      : attributeSubTab === 'powertrains'
-                      ? 'powertrain'
-                      : 'category'
-                  )
-                }
-                className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Attribute
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleOpenCreateAdjustment}
-                className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Price Adjustment
-              </Button>
-            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                handleOpenCreateAttribute(
+                  attributeSubTab === 'conditions'
+                    ? 'condition'
+                    : attributeSubTab === 'powertrains'
+                    ? 'powertrain'
+                    : 'category'
+                )
+              }
+              className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Attribute
+            </Button>
           )}
 
           {canManagePricing && activeTab === 'surcharges' && (
@@ -1786,16 +1645,6 @@ export const AdminTariffsPage: React.FC = () => {
                     Operational Conditions ({conditionAttributes.length})
                   </button>
                   <button
-                    onClick={() => setAttributeSubTab('adjustments')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      attributeSubTab === 'adjustments'
-                        ? 'bg-brand-orange-500 text-white shadow-sm'
-                        : 'bg-orange-50 text-brand-orange-700 hover:bg-orange-100'
-                    }`}
-                  >
-                    Price Adjustments ({priceAdjustments.length})
-                  </button>
-                  <button
                     onClick={() => setAttributeSubTab('compatibilities')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       attributeSubTab === 'compatibilities'
@@ -1803,7 +1652,7 @@ export const AdminTariffsPage: React.FC = () => {
                         : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                     }`}
                   >
-                    Compatibility Rules
+                    Allowed Customer Selections
                   </button>
                 </div>
 
@@ -1812,22 +1661,18 @@ export const AdminTariffsPage: React.FC = () => {
                     variant="primary"
                     size="sm"
                     onClick={() => {
-                      if (attributeSubTab === 'adjustments') {
-                        handleOpenCreateAdjustment();
-                      } else {
-                        handleOpenCreateAttribute(
-                          attributeSubTab === 'conditions'
-                            ? 'condition'
-                            : attributeSubTab === 'powertrains'
-                            ? 'powertrain'
-                            : 'category'
-                        );
-                      }
+                      handleOpenCreateAttribute(
+                        attributeSubTab === 'conditions'
+                          ? 'condition'
+                          : attributeSubTab === 'powertrains'
+                          ? 'powertrain'
+                          : 'category'
+                      );
                     }}
                     className="text-xs font-bold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    {attributeSubTab === 'adjustments' ? 'Add Adjustment' : 'Add Attribute'}
+                    Add Attribute
                   </Button>
                 )}
               </div>
@@ -1860,12 +1705,8 @@ export const AdminTariffsPage: React.FC = () => {
                           <th className="py-3 px-4">Name (English)</th>
                           <th className="py-3 px-4">Name (Arabic)</th>
                           <th className="py-3 px-4">Description</th>
-                          {attributeSubTab === 'categories' && (
-                            <>
-                              <th className="py-3 px-4 text-center">Extra Towing</th>
-                              <th className="py-3 px-4 text-center">Extra Shipping</th>
-                            </>
-                          )}
+                          <th className="py-3 px-4 text-center">Extra Towing</th>
+                          <th className="py-3 px-4 text-center">Extra Shipping</th>
                           <th className="py-3 px-4 text-center">Display Order</th>
                           <th className="py-3 px-4 text-center">Status</th>
                           {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
@@ -1888,24 +1729,20 @@ export const AdminTariffsPage: React.FC = () => {
                             <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">
                               {attr.description || '—'}
                             </td>
-                            {attributeSubTab === 'categories' && (
-                              <>
-                                <td className="py-3.5 px-4 text-center font-bold text-slate-700">
-                                  {attr.extraTowingCharge ? (
-                                    <span className="text-amber-700 font-semibold">+${attr.extraTowingCharge}</span>
-                                  ) : (
-                                    <span className="text-slate-400 font-normal">$0</span>
-                                  )}
-                                </td>
-                                <td className="py-3.5 px-4 text-center font-bold text-slate-700">
-                                  {attr.extraShippingCharge ? (
-                                    <span className="text-blue-700 font-semibold">+${attr.extraShippingCharge}</span>
-                                  ) : (
-                                    <span className="text-slate-400 font-normal">$0</span>
-                                  )}
-                                </td>
-                              </>
-                            )}
+                            <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                              {attr.extraTowingCharge ? (
+                                <span className="text-amber-700 font-semibold">+${attr.extraTowingCharge}</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">$0</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                              {attr.extraShippingCharge ? (
+                                <span className="text-blue-700 font-semibold">+${attr.extraShippingCharge}</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">$0</span>
+                              )}
+                            </td>
                             <td className="py-3.5 px-4 text-center font-bold text-slate-600">
                               {attr.displayOrder}
                             </td>
@@ -1960,130 +1797,16 @@ export const AdminTariffsPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* Sub-tab 2: Price Adjustments Table */}
-              {attributeSubTab === 'adjustments' && (
-                <Card className="bg-white border border-slate-200 overflow-hidden">
-                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-brand-navy-950">
-                        Granular Towing & Ocean Freight Price Adjustments
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Configurable surcharges and discounts applied based on vehicle attributes with bilingual customer explanations.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-start text-xs min-w-[750px]">
-                      <thead>
-                        <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                          <th className="py-3 px-4">Context</th>
-                          <th className="py-3 px-4">Trigger Attribute</th>
-                          <th className="py-3 px-4">Adjustment Amount</th>
-                          <th className="py-3 px-4">Customer Reason (EN)</th>
-                          <th className="py-3 px-4">Customer Reason (AR)</th>
-                          <th className="py-3 px-4 text-center">Status</th>
-                          {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {priceAdjustments.length === 0 ? (
-                          <tr>
-                            <td colSpan={canManagePricing ? 7 : 6} className="py-8 text-center text-slate-400 text-xs">
-                              No price adjustments configured. Click "Add Price Adjustment" to create one.
-                            </td>
-                          </tr>
-                        ) : (
-                          priceAdjustments.map((adj) => (
-                            <tr key={adj.id} className="hover:bg-slate-50/50">
-                              <td className="py-3.5 px-4">
-                                {adj.context === 'towing' ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                    <Truck className="w-3 h-3" /> Inland Towing
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                                    <Ship className="w-3 h-3" /> Ocean Shipping
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className="font-mono font-bold text-slate-700 capitalize">
-                                  {adj.attribute_type.replace('_', ' ')}: {adj.attribute_id}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 font-bold text-brand-orange-600 text-sm">
-                                {adj.amount_usd >= 0 ? `+${formatCurrency(adj.amount_usd)}` : `-${formatCurrency(Math.abs(adj.amount_usd))}`}
-                              </td>
-                              <td className="py-3.5 px-4 font-medium text-slate-800 max-w-xs truncate">
-                                {adj.reason_en}
-                              </td>
-                              <td className="py-3.5 px-4 font-arabic text-slate-700 max-w-xs truncate">
-                                {adj.reason_ar || '—'}
-                              </td>
-                              <td className="py-3.5 px-4 text-center">
-                                {adj.is_active ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    <XCircle className="w-3 h-3 text-rose-600" /> Inactive
-                                  </span>
-                                )}
-                              </td>
-                              {canManagePricing && (
-                                <td className="py-3.5 px-4 text-end">
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleToggleAdjustmentStatus(adj)}
-                                      className="text-[10px] py-1 px-2 font-bold"
-                                    >
-                                      {adj.is_active ? 'Deactivate' : 'Activate'}
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleOpenEditAdjustment(adj)}
-                                      className="p-1 text-slate-600 hover:text-slate-900"
-                                      title="Edit Adjustment"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteAdjustment(adj.id)}
-                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                                      title="Delete Adjustment"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )}
-
-              {/* Sub-tab 3: Category Compatibility Rules */}
+              {/* Sub-tab 2: Allowed Customer Selections */}
               {attributeSubTab === 'compatibilities' && (
                 <Card className="p-5 bg-white border border-slate-200 space-y-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                     <div>
                       <h3 className="text-base font-bold text-brand-navy-950">
-                        Vehicle Category Attribute Compatibility Rules
+                        Allowed Customer Selections
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Restrict which powertrains and operational conditions are selectable for each vehicle category in the calculator.
+                        Choose which powertrains and operational conditions customers can select for each vehicle category.
                       </p>
                     </div>
                     {canManagePricing && (
@@ -2094,7 +1817,7 @@ export const AdminTariffsPage: React.FC = () => {
                         disabled={isSavingCompat}
                         className="text-xs font-bold"
                       >
-                        {isSavingCompat ? 'Saving Rules...' : 'Save Compatibility Rules'}
+                        {isSavingCompat ? 'Saving Rules...' : 'Save Allowed Selections'}
                       </Button>
                     )}
                   </div>
@@ -3283,11 +3006,10 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
-          {attributeModalType === 'category' && (
             <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-amber-950 uppercase tracking-wider text-[11px]">
-                  Category Pricing Adjustments (Optional)
+                  Extra Towing & Shipping Charges (Optional)
                 </span>
                 <span className="text-[10px] text-amber-700 font-medium">
                   Default $0 (No extra charge)
@@ -3308,7 +3030,7 @@ export const AdminTariffsPage: React.FC = () => {
                     onChange={(e) => setAttributeFormExtraTowing(e.target.value)}
                   />
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    Added to inland towing only (e.g. $30 for Caravan).
+                    Added to inland towing fee when this attribute is selected.
                   </p>
                 </div>
 
@@ -3325,7 +3047,7 @@ export const AdminTariffsPage: React.FC = () => {
                     onChange={(e) => setAttributeFormExtraShipping(e.target.value)}
                   />
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    Added to ocean freight only (e.g. $40 for Caravan, $50 for Jet Ski).
+                    Added to ocean freight rate when this attribute is selected.
                   </p>
                 </div>
               </div>
@@ -3337,7 +3059,7 @@ export const AdminTariffsPage: React.FC = () => {
                   </label>
                   <Input
                     type="text"
-                    placeholder="e.g. Caravan / RV oversized handling"
+                    placeholder="e.g. Specialized handling, battery or winch fee"
                     value={attributeFormReasonEn}
                     onChange={(e) => setAttributeFormReasonEn(e.target.value)}
                   />
@@ -3350,14 +3072,13 @@ export const AdminTariffsPage: React.FC = () => {
                   <Input
                     type="text"
                     dir="rtl"
-                    placeholder="مثال: مناولة كرفان / مركبة ذات حجم خاص"
+                    placeholder="مثال: رسوم مناولة خاصة أو بطارية أو ونش"
                     value={attributeFormReasonAr}
                     onChange={(e) => setAttributeFormReasonAr(e.target.value)}
                   />
                 </div>
               </div>
             </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -3408,214 +3129,7 @@ export const AdminTariffsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Attribute Price Adjustment Modal */}
-      <Modal
-        isOpen={isAdjustmentModalOpen}
-        onClose={() => setIsAdjustmentModalOpen(false)}
-        size="lg"
-        title={
-          adjustmentModalMode === 'create'
-            ? 'Add Attribute Price Adjustment'
-            : 'Edit Price Adjustment'
-        }
-      >
-        <form onSubmit={handleSaveAdjustment} className="space-y-4 pt-2 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Operational Context <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={adjFormContext}
-                onChange={(e) => setAdjFormContext(e.target.value as 'towing' | 'shipping')}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                <option value="towing">Inland Towing Adjustment</option>
-                <option value="shipping">Ocean Freight Adjustment</option>
-              </select>
-            </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Target Attribute Type <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={adjFormType}
-                onChange={(e) => {
-                  const newType = e.target.value as 'vehicle_category' | 'powertrain' | 'vehicle_condition';
-                  setAdjFormType(newType);
-                  if (newType === 'vehicle_category') {
-                    setAdjFormAttributeId(categoryAttributes[0]?.id || '');
-                  } else if (newType === 'powertrain') {
-                    setAdjFormAttributeId(powertrainAttributes[0]?.id || '');
-                  } else {
-                    setAdjFormAttributeId(conditionAttributes[0]?.id || '');
-                  }
-                }}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                <option value="vehicle_condition">Vehicle Condition</option>
-                <option value="powertrain">Powertrain</option>
-                <option value="vehicle_category">Vehicle Category</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Target Attribute <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={adjFormAttributeId}
-                onChange={(e) => setAdjFormAttributeId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                {adjFormType === 'vehicle_category' &&
-                  categoryAttributes.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name} ({cat.id})
-                    </option>
-                  ))}
-                {adjFormType === 'powertrain' &&
-                  powertrainAttributes.map((pt) => (
-                    <option key={pt.id} value={pt.id}>
-                      {pt.name} ({pt.id})
-                    </option>
-                  ))}
-                {adjFormType === 'vehicle_condition' &&
-                  conditionAttributes.map((cond) => (
-                    <option key={cond.id} value={cond.id}>
-                      {cond.name} ({cond.id})
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Adjustment Amount (USD) <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                value={adjFormAmount}
-                onChange={(e) => setAdjFormAmount(e.target.value)}
-                placeholder="e.g. 150.00"
-                required
-              />
-              <p className="text-[10px] text-slate-400 mt-0.5">Positive to add cost, negative for discount.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Customer Reason (English) <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="text"
-                placeholder="e.g. Non-Runner / Inoperable Winching Surcharge"
-                value={adjFormReasonEn}
-                onChange={(e) => setAdjFormReasonEn(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Customer Reason (Arabic)
-              </label>
-              <Input
-                type="text"
-                dir="rtl"
-                placeholder="مثال: رسوم سحب وونش للسيارات المعطلة"
-                value={adjFormReasonAr}
-                onChange={(e) => setAdjFormReasonAr(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Internal Admin Notes (Optional)
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. Standard dispatch winch surcharge agreed with carriers"
-              value={adjFormAdminNotes}
-              onChange={(e) => setAdjFormAdminNotes(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Display Order</label>
-              <Input
-                type="number"
-                min="1"
-                value={adjFormDisplayOrder}
-                onChange={(e) => setAdjFormDisplayOrder(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
-              <Input
-                type="date"
-                value={adjFormEffectiveFrom}
-                onChange={(e) => setAdjFormEffectiveFrom(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective To (Optional)</label>
-              <Input
-                type="date"
-                value={adjFormEffectiveTo}
-                onChange={(e) => setAdjFormEffectiveTo(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="adjFormIsActive"
-              checked={adjFormIsActive}
-              onChange={(e) => setAdjFormIsActive(e.target.checked)}
-              className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
-            />
-            <label htmlFor="adjFormIsActive" className="font-bold text-slate-700">
-              Active Adjustment (Automatically included in quotation calculations)
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAdjustmentModalOpen(false)}
-              disabled={isSavingAdjustment}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={isSavingAdjustment}
-              className="font-bold"
-            >
-              {isSavingAdjustment ? 'Saving...' : adjustmentModalMode === 'create' ? 'Create Adjustment' : 'Save Adjustment'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       {/* Update Exchange Rate Modal */}
       <Modal

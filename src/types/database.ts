@@ -701,6 +701,10 @@ export type Database = {
           description: string | null
           description_ar: string | null
           display_order: number
+          extra_towing_charge: number
+          extra_shipping_charge: number
+          charge_reason_en: string | null
+          charge_reason_ar: string | null
           icon: string | null
           id: string
           is_active: boolean
@@ -716,6 +720,10 @@ export type Database = {
           description?: string | null
           description_ar?: string | null
           display_order?: number
+          extra_towing_charge?: number
+          extra_shipping_charge?: number
+          charge_reason_en?: string | null
+          charge_reason_ar?: string | null
           icon?: string | null
           id: string
           is_active?: boolean
@@ -731,6 +739,10 @@ export type Database = {
           description?: string | null
           description_ar?: string | null
           display_order?: number
+          extra_towing_charge?: number
+          extra_shipping_charge?: number
+          charge_reason_en?: string | null
+          charge_reason_ar?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
@@ -1758,6 +1770,10 @@ export type Database = {
           description: string | null
           description_ar: string | null
           display_order: number
+          extra_towing_charge: number
+          extra_shipping_charge: number
+          charge_reason_en: string | null
+          charge_reason_ar: string | null
           icon: string | null
           id: string
           is_active: boolean
@@ -1773,6 +1789,10 @@ export type Database = {
           description?: string | null
           description_ar?: string | null
           display_order?: number
+          extra_towing_charge?: number
+          extra_shipping_charge?: number
+          charge_reason_en?: string | null
+          charge_reason_ar?: string | null
           icon?: string | null
           id: string
           is_active?: boolean
@@ -1788,6 +1808,10 @@ export type Database = {
           description?: string | null
           description_ar?: string | null
           display_order?: number
+          extra_towing_charge?: number
+          extra_shipping_charge?: number
+          charge_reason_en?: string | null
+          charge_reason_ar?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean

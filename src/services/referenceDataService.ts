@@ -44,13 +44,23 @@ export interface VehicleCategoryOption {
 export interface PowertrainOption {
   id: string;
   name: string;
+  nameAr?: string | null;
+  extraTowingCharge?: number;
+  extraShippingCharge?: number;
+  chargeReasonEn?: string | null;
+  chargeReasonAr?: string | null;
   isActive: boolean;
 }
 
 export interface VehicleConditionOption {
   id: string;
   name: string;
+  nameAr?: string | null;
   description?: string;
+  extraTowingCharge?: number;
+  extraShippingCharge?: number;
+  chargeReasonEn?: string | null;
+  chargeReasonAr?: string | null;
   isActive: boolean;
 }
 
@@ -253,7 +263,7 @@ export const referenceDataService = {
   async getPowertrains(): Promise<PowertrainOption[]> {
     const { data, error } = await supabase
       .from('powertrains')
-      .select('id, name, is_active')
+      .select('id, name, name_ar, extra_towing_charge, extra_shipping_charge, charge_reason_en, charge_reason_ar, is_active')
       .eq('is_active', true)
       .order('name');
 
@@ -265,6 +275,11 @@ export const referenceDataService = {
     return (data || []).map((p) => ({
       id: p.id,
       name: p.name,
+      nameAr: p.name_ar,
+      extraTowingCharge: Number(p.extra_towing_charge || 0),
+      extraShippingCharge: Number(p.extra_shipping_charge || 0),
+      chargeReasonEn: p.charge_reason_en,
+      chargeReasonAr: p.charge_reason_ar,
       isActive: p.is_active,
     }));
   },
@@ -272,7 +287,7 @@ export const referenceDataService = {
   async getVehicleConditions(): Promise<VehicleConditionOption[]> {
     const { data, error } = await supabase
       .from('vehicle_conditions')
-      .select('id, name, description, is_active')
+      .select('id, name, name_ar, description, extra_towing_charge, extra_shipping_charge, charge_reason_en, charge_reason_ar, is_active')
       .eq('is_active', true)
       .order('id');
 
@@ -284,7 +299,12 @@ export const referenceDataService = {
     return (data || []).map((c) => ({
       id: c.id,
       name: c.name,
+      nameAr: c.name_ar,
       description: c.description || undefined,
+      extraTowingCharge: Number(c.extra_towing_charge || 0),
+      extraShippingCharge: Number(c.extra_shipping_charge || 0),
+      chargeReasonEn: c.charge_reason_en,
+      chargeReasonAr: c.charge_reason_ar,
       isActive: c.is_active,
     }));
   },
