@@ -144,7 +144,7 @@ export const CalculatorPage: React.FC = () => {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [vehicleCategories, setVehicleCategories] = useState<VehicleCategoryOption[]>([]);
   const [powertrains, setPowertrains] = useState<PowertrainOption[]>([]);
-  const [, setVehicleConditions] = useState<VehicleConditionOption[]>([]);
+  const [vehicleConditions, setVehicleConditions] = useState<VehicleConditionOption[]>([]);
   const [purchaseSources, setPurchaseSources] = useState<PurchaseSourceOption[]>([]);
   const [states, setStates] = useState<StateOption[]>([]);
 
