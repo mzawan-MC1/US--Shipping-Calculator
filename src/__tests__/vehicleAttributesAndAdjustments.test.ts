@@ -469,7 +469,7 @@ describe('Vehicle Attributes, Adjustments, and VIN Decoder Suite', () => {
       vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
         data: null,
         error: {
-          message: 'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.',
+          message: 'No active ocean freight tariff is configured for this route and shipping method. Please contact us for assistance.',
           details: '',
           hint: '',
           code: 'P0001',
@@ -495,7 +495,7 @@ describe('Vehicle Attributes, Adjustments, and VIN Decoder Suite', () => {
           customerPhone: '+971500000000',
         })
       ).rejects.toThrow(
-        'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.'
+        'No active ocean freight tariff is configured for this route and shipping method. Please contact us for assistance.'
       );
     });
   });

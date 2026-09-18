@@ -152,10 +152,10 @@ export interface AdminFreightRate {
   originPortCode: string;
   destinationPortName: string;
   destinationPortCode: string;
-  vehicleCategoryId: string;
-  category: string;
-  powertrainId: string;
-  powertrain: string;
+  vehicleCategoryId?: string | null;
+  category?: string;
+  powertrainId?: string | null;
+  powertrain?: string;
   shippingMethodId: string;
   shippingMethod: string;
   amountUsd: number;
@@ -1132,6 +1132,10 @@ export const adminService = {
           id,
           origin_port:ports!shipping_routes_origin_port_id_fkey ( name, code ),
           dest_port:ports!shipping_routes_destination_port_id_fkey ( name, code )
+        ),
+        shipping_methods!route_freight_rates_shipping_method_id_fkey (
+          id,
+          name
         )
       `
       )
@@ -1144,8 +1148,8 @@ export const adminService = {
     interface RawFreight {
       id: string;
       route_id: string;
-      vehicle_category_id: string;
-      powertrain_id: string;
+      vehicle_category_id: string | null;
+      powertrain_id: string | null;
       shipping_method_id: string;
       base_amount: number;
       currency: string;
@@ -1157,6 +1161,10 @@ export const adminService = {
         origin_port: { name: string; code: string } | null;
         dest_port: { name: string; code: string } | null;
       } | null;
+      shipping_methods: {
+        id: string;
+        name: string;
+      } | null;
     }
 
     const rows = (data || []) as unknown as RawFreight[];
@@ -1165,6 +1173,7 @@ export const adminService = {
       const originCode = r.shipping_routes?.origin_port?.code || 'ORIGIN';
       const destName = r.shipping_routes?.dest_port?.name || 'UAE Port';
       const destCode = r.shipping_routes?.dest_port?.code || 'DEST';
+      const methodName = r.shipping_methods?.name || r.shipping_method_id.replace(/_/g, ' ').toUpperCase();
       return {
         id: r.id,
         routeId: r.route_id,
@@ -1173,12 +1182,12 @@ export const adminService = {
         originPortCode: originCode,
         destinationPortName: destName,
         destinationPortCode: destCode,
-        vehicleCategoryId: r.vehicle_category_id,
-        category: r.vehicle_category_id.toUpperCase(),
-        powertrainId: r.powertrain_id,
-        powertrain: r.powertrain_id.toUpperCase(),
+        vehicleCategoryId: r.vehicle_category_id || undefined,
+        category: r.vehicle_category_id ? r.vehicle_category_id.toUpperCase() : undefined,
+        powertrainId: r.powertrain_id || undefined,
+        powertrain: r.powertrain_id ? r.powertrain_id.toUpperCase() : undefined,
         shippingMethodId: r.shipping_method_id,
-        shippingMethod: r.shipping_method_id.replace(/_/g, ' ').toUpperCase(),
+        shippingMethod: methodName,
         amountUsd: Number(r.base_amount),
         currency: r.currency || 'USD',
         effectiveFrom: r.effective_from,
@@ -1188,21 +1197,112 @@ export const adminService = {
     });
   },
 
+  async saveRouteFreightRates(
+    routeId: string,
+    configs: Array<{ shippingMethodId: string; isEnabled: boolean; baseAmount: number }>
+  ): Promise<boolean> {
+    if (!routeId) {
+      throw new Error('Route ID is required.');
+    }
+
+    for (const item of configs) {
+      const { data: existingRates, error: fetchErr } = await supabase
+        .from('route_freight_rates')
+        .select('id, is_active')
+        .eq('route_id', routeId)
+        .eq('shipping_method_id', item.shippingMethodId)
+        .order('created_at', { ascending: false });
+
+      if (fetchErr) throw new Error(fetchErr.message);
+
+      const activeRecord = existingRates?.find((r) => r.is_active);
+      const anyRecord = existingRates?.[0];
+
+      if (item.isEnabled) {
+        if (item.baseAmount <= 0) {
+          throw new Error('Base rate amount must be greater than zero for enabled methods.');
+        }
+
+        if (activeRecord) {
+          const { error: updErr } = await supabase
+            .from('route_freight_rates')
+            .update({
+              base_amount: item.baseAmount,
+              currency: 'USD',
+              vehicle_category_id: null,
+              powertrain_id: null,
+              effective_to: null,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', activeRecord.id);
+
+          if (updErr) throw new Error(updErr.message);
+        } else if (anyRecord) {
+          const { error: updErr } = await supabase
+            .from('route_freight_rates')
+            .update({
+              base_amount: item.baseAmount,
+              currency: 'USD',
+              vehicle_category_id: null,
+              powertrain_id: null,
+              effective_to: null,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', anyRecord.id);
+
+          if (updErr) throw new Error(updErr.message);
+        } else {
+          const { error: insErr } = await supabase
+            .from('route_freight_rates')
+            .insert({
+              route_id: routeId,
+              shipping_method_id: item.shippingMethodId,
+              base_amount: item.baseAmount,
+              currency: 'USD',
+              vehicle_category_id: null,
+              powertrain_id: null,
+              effective_from: new Date().toISOString().split('T')[0],
+              effective_to: null,
+              is_active: true,
+            });
+
+          if (insErr) throw new Error(insErr.message);
+        }
+      } else {
+        if (activeRecord) {
+          const { error: deactErr } = await supabase
+            .from('route_freight_rates')
+            .update({
+              is_active: false,
+              effective_to: new Date().toISOString().split('T')[0],
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', activeRecord.id);
+
+          if (deactErr) throw new Error(deactErr.message);
+        }
+      }
+    }
+
+    return true;
+  },
+
   async createFreightRate(rate: {
     routeId: string;
-    vehicleCategoryId: string;
-    powertrainId?: string;
+    vehicleCategoryId?: string | null;
+    powertrainId?: string | null;
     shippingMethodId: string;
     baseAmount: number;
     currency?: string;
     effectiveFrom?: string;
-    effectiveTo?: string;
+    effectiveTo?: string | null;
     isActive?: boolean;
   }): Promise<{ success: boolean; id?: string }> {
     if (rate.baseAmount <= 0) {
       throw new Error('Freight rate amount must be a positive number.');
     }
-    const ptId = rate.powertrainId || 'petrol';
 
     // Prevent duplicate active rates
     const { data: existing } = await supabase
@@ -1210,22 +1310,20 @@ export const adminService = {
       .select('id')
       .eq('route_id', rate.routeId)
       .eq('shipping_method_id', rate.shippingMethodId)
-      .eq('vehicle_category_id', rate.vehicleCategoryId)
-      .eq('powertrain_id', ptId)
       .eq('is_active', true)
       .is('effective_to', null)
       .maybeSingle();
 
     if (existing) {
-      throw new Error('An active freight rate already exists for this Route, Method, Category, and Powertrain combination.');
+      throw new Error('An active freight rate already exists for this Route and Shipping Method.');
     }
 
     const { data, error } = await supabase
       .from('route_freight_rates')
       .insert({
         route_id: rate.routeId,
-        vehicle_category_id: rate.vehicleCategoryId,
-        powertrain_id: ptId,
+        vehicle_category_id: rate.vehicleCategoryId || null,
+        powertrain_id: rate.powertrainId || null,
         shipping_method_id: rate.shippingMethodId,
         base_amount: rate.baseAmount,
         currency: rate.currency || 'USD',

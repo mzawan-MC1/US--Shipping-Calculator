@@ -28,6 +28,7 @@ import { AddEditLocationModal } from '../../components/admin/AddEditLocationModa
 import { BulkTowingAdjustmentModal } from '../../components/admin/BulkTowingAdjustmentModal';
 import { TowingRatesImportModal } from '../../components/admin/TowingRatesImportModal';
 import { LocationsImportModal } from '../../components/admin/LocationsImportModal';
+import { ConfigureFreightRatesModal } from '../../components/admin/ConfigureFreightRatesModal';
 import { towingRatesBulkService } from '../../services/towingBulkService';
 import { RichTextEditor } from '../../components/ui/RichTextEditor';
 import { formatCurrency } from '../../lib/utils';
@@ -146,7 +147,6 @@ export const AdminTariffsPage: React.FC = () => {
 
   // Search & Filters
   const [freightSearch, setFreightSearch] = useState('');
-  const [freightCategoryFilter, setFreightCategoryFilter] = useState('ALL');
   const [towingSearch, setTowingSearch] = useState('');
 
   // Exchange rate modal
@@ -156,19 +156,7 @@ export const AdminTariffsPage: React.FC = () => {
 
   // Freight Rate Modal
   const [isFreightModalOpen, setIsFreightModalOpen] = useState(false);
-  const [freightModalMode, setFreightModalMode] = useState<'create' | 'edit'>('create');
-  const [editingFreightId, setEditingFreightId] = useState<string | null>(null);
   const [freightFormRouteId, setFreightFormRouteId] = useState('');
-  const [freightFormCategoryId, setFreightFormCategoryId] = useState('sedan');
-  const [freightFormMethodId, setFreightFormMethodId] = useState('consolidated_container');
-  const [freightFormPowertrainId, setFreightFormPowertrainId] = useState('petrol');
-  const [freightFormAmount, setFreightFormAmount] = useState('1250');
-  const [freightFormEffectiveFrom, setFreightFormEffectiveFrom] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [freightFormEffectiveTo, setFreightFormEffectiveTo] = useState('');
-  const [freightFormIsActive, setFreightFormIsActive] = useState(true);
-  const [isSavingFreight, setIsSavingFreight] = useState(false);
 
   // Towing Rate Modal
   const [isTowingModalOpen, setIsTowingModalOpen] = useState(false);
@@ -304,15 +292,16 @@ export const AdminTariffsPage: React.FC = () => {
   // Filtered freight rates
   const filteredFreightRates = useMemo(() => {
     return freightRates.filter((f) => {
-      const matchesSearch =
-        f.routeDesc.toLowerCase().includes(freightSearch.toLowerCase()) ||
-        f.shippingMethod.toLowerCase().includes(freightSearch.toLowerCase()) ||
-        f.category.toLowerCase().includes(freightSearch.toLowerCase());
-      const matchesCategory =
-        freightCategoryFilter === 'ALL' || f.vehicleCategoryId === freightCategoryFilter.toLowerCase();
-      return matchesSearch && matchesCategory;
+      const q = freightSearch.toLowerCase();
+      return (
+        !freightSearch ||
+        f.routeDesc.toLowerCase().includes(q) ||
+        f.shippingMethod.toLowerCase().includes(q) ||
+        f.originPortName.toLowerCase().includes(q) ||
+        f.destinationPortName.toLowerCase().includes(q)
+      );
     });
-  }, [freightRates, freightSearch, freightCategoryFilter]);
+  }, [freightRates, freightSearch]);
 
   // Filtered towing rates
   const filteredTowingRates = useMemo(() => {
@@ -352,80 +341,19 @@ export const AdminTariffsPage: React.FC = () => {
     towingStatusFilter,
   ]);
 
-  // Freight Rate CRUD Handlers
-  const handleOpenCreateFreight = () => {
-    setFreightModalMode('create');
-    setEditingFreightId(null);
-    if (routes.length > 0) setFreightFormRouteId(routes[0].id);
-    if (vehicleCategories.length > 0) setFreightFormCategoryId(vehicleCategories[0].id);
-    if (shippingMethods.length > 0) setFreightFormMethodId(shippingMethods[0].id);
-    if (powertrains.length > 0) setFreightFormPowertrainId(powertrains[0].id);
-    setFreightFormAmount('1250');
-    setFreightFormEffectiveFrom(new Date().toISOString().split('T')[0]);
-    setFreightFormEffectiveTo('');
-    setFreightFormIsActive(true);
+  // Freight Rate Handlers
+  const handleOpenCreateFreight = (routeId?: string) => {
+    if (typeof routeId === 'string' && routeId) {
+      setFreightFormRouteId(routeId);
+    } else if (routes.length > 0) {
+      setFreightFormRouteId(routes[0].id);
+    }
     setIsFreightModalOpen(true);
   };
 
   const handleOpenEditFreight = (f: AdminFreightRate) => {
-    setFreightModalMode('edit');
-    setEditingFreightId(f.id);
     setFreightFormRouteId(f.routeId);
-    setFreightFormCategoryId(f.vehicleCategoryId);
-    setFreightFormMethodId(f.shippingMethodId);
-    setFreightFormPowertrainId(f.powertrainId);
-    setFreightFormAmount(f.amountUsd.toString());
-    setFreightFormEffectiveFrom(f.effectiveFrom);
-    setFreightFormEffectiveTo(f.effectiveTo || '');
-    setFreightFormIsActive(f.isActive);
     setIsFreightModalOpen(true);
-  };
-
-  const handleSaveFreight = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(freightFormAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setActionError('Freight rate amount must be a positive number.');
-      return;
-    }
-
-    setIsSavingFreight(true);
-    setActionError(null);
-    setActionSuccess(null);
-
-    try {
-      if (freightModalMode === 'create') {
-        await adminService.createFreightRate({
-          routeId: freightFormRouteId,
-          vehicleCategoryId: freightFormCategoryId,
-          powertrainId: freightFormPowertrainId,
-          shippingMethodId: freightFormMethodId,
-          baseAmount: amount,
-          effectiveFrom: freightFormEffectiveFrom,
-          effectiveTo: freightFormEffectiveTo || undefined,
-          isActive: freightFormIsActive,
-        });
-        setActionSuccess('Ocean freight tariff created successfully.');
-      } else if (editingFreightId) {
-        await adminService.updateFreightRate(editingFreightId, {
-          baseAmount: amount,
-          shippingMethodId: freightFormMethodId,
-          vehicleCategoryId: freightFormCategoryId,
-          powertrainId: freightFormPowertrainId,
-          effectiveFrom: freightFormEffectiveFrom,
-          effectiveTo: freightFormEffectiveTo || null,
-          isActive: freightFormIsActive,
-        });
-        setActionSuccess('Ocean freight tariff updated successfully.');
-      }
-      setIsFreightModalOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save freight tariff';
-      setActionError(msg);
-    } finally {
-      setIsSavingFreight(false);
-    }
   };
 
   const handleToggleFreightStatus = async (id: string, currentStatus: boolean) => {
@@ -1166,11 +1094,11 @@ export const AdminTariffsPage: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={handleOpenCreateFreight}
+              onClick={() => handleOpenCreateFreight()}
               className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add Ocean Freight Rate
+              Configure Ocean Freight Rates
             </Button>
           )}
 
@@ -1340,48 +1268,28 @@ export const AdminTariffsPage: React.FC = () => {
           {/* TAB 1: OCEAN FREIGHT RATES */}
           {activeTab === 'freight' && (
             <div className="space-y-4">
-              {/* Search & Filter Bar */}
+              {/* Search Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <Input
                     type="text"
-                    placeholder="Search route, port, or method..."
+                    placeholder="Search route, port, or shipping method..."
                     value={freightSearch}
                     onChange={(e) => setFreightSearch(e.target.value)}
                     className="pl-9 text-xs"
                   />
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs font-bold text-slate-600">Category:</span>
-                  <select
-                    value={freightCategoryFilter}
-                    onChange={(e) => setFreightCategoryFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-brand-orange-500"
-                  >
-                    <option value="ALL">All Vehicle Categories</option>
-                    {vehicleCategories.map((c) => (
-                      <option key={c.id} value={c.id.toUpperCase()}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <Card className="bg-white border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-start text-xs min-w-[760px]">
+                  <table className="w-full text-start text-xs min-w-[700px]">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="py-3 px-4">Route</th>
-                        <th className="py-3 px-4">Vehicle Category</th>
+                        <th className="py-3 px-4">Shipping Route</th>
                         <th className="py-3 px-4">Shipping Method</th>
-                        <th className="py-3 px-4">Powertrain</th>
                         <th className="py-3 px-4">Base Rate (USD)</th>
-                        <th className="py-3 px-4">Effective Dates</th>
                         <th className="py-3 px-4">Status</th>
                         {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
                       </tr>
@@ -1389,7 +1297,7 @@ export const AdminTariffsPage: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 text-slate-700">
                       {filteredFreightRates.length === 0 ? (
                         <tr>
-                          <td colSpan={canManagePricing ? 8 : 7} className="py-8 text-center text-slate-400 text-xs">
+                          <td colSpan={canManagePricing ? 5 : 4} className="py-8 text-center text-slate-400 text-xs">
                             No ocean freight tariffs found matching your criteria.
                           </td>
                         </tr>
@@ -1399,23 +1307,11 @@ export const AdminTariffsPage: React.FC = () => {
                             <td className="py-3.5 px-4 font-bold text-brand-navy-950">
                               {f.routeDesc}
                             </td>
-                            <td className="py-3.5 px-4">
-                              <Badge variant="navy">{f.category}</Badge>
-                            </td>
                             <td className="py-3.5 px-4 font-medium text-slate-700">
                               {f.shippingMethod}
                             </td>
-                            <td className="py-3.5 px-4">
-                              <span className="text-slate-600 uppercase font-mono text-[11px]">{f.powertrain}</span>
-                            </td>
                             <td className="py-3.5 px-4 font-black text-brand-orange-600 text-sm">
                               {formatCurrency(f.amountUsd)}
-                            </td>
-                            <td className="py-3.5 px-4 text-slate-500">
-                              {new Date(f.effectiveFrom).toLocaleDateString()}
-                              {f.effectiveTo
-                                ? ` – ${new Date(f.effectiveTo).toLocaleDateString()}`
-                                : ' (Ongoing)'}
                             </td>
                             <td className="py-3.5 px-4">
                               {f.isActive ? (
@@ -1444,7 +1340,7 @@ export const AdminTariffsPage: React.FC = () => {
                                     size="sm"
                                     onClick={() => handleOpenEditFreight(f)}
                                     className="p-1 text-slate-600 hover:text-slate-900"
-                                    title="Edit Tariff"
+                                    title="Configure Route Rates"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                   </Button>
@@ -2677,158 +2573,19 @@ export const AdminTariffsPage: React.FC = () => {
         </>
       )}
 
-      {/* Ocean Freight Rate Modal */}
-      <Modal
+      {/* Ocean Freight Rate Configuration Modal */}
+      <ConfigureFreightRatesModal
         isOpen={isFreightModalOpen}
         onClose={() => setIsFreightModalOpen(false)}
-        title={freightModalMode === 'create' ? 'Add Ocean Freight Rate' : 'Edit Ocean Freight Rate'}
-      >
-        <form onSubmit={handleSaveFreight} className="space-y-4 pt-2 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Shipping Route <span className="text-rose-500">*</span>
-            </label>
-            <select
-              value={freightFormRouteId}
-              onChange={(e) => setFreightFormRouteId(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-              required
-            >
-              {routes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.originPortName} ({r.originPortCode}) -&gt; {r.destinationPortName} ({r.destinationPortCode})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Vehicle Category <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={freightFormCategoryId}
-                onChange={(e) => setFreightFormCategoryId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                {vehicleCategories.map((vc) => (
-                  <option key={vc.id} value={vc.id}>
-                    {vc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Shipping Method <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={freightFormMethodId}
-                onChange={(e) => setFreightFormMethodId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                {shippingMethods.map((sm) => (
-                  <option key={sm.id} value={sm.id}>
-                    {sm.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Powertrain <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={freightFormPowertrainId}
-                onChange={(e) => setFreightFormPowertrainId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
-                required
-              >
-                {powertrains.map((pt) => (
-                  <option key={pt.id} value={pt.id}>
-                    {pt.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Base Freight (USD) <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="1"
-                value={freightFormAmount}
-                onChange={(e) => setFreightFormAmount(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
-              <Input
-                type="date"
-                value={freightFormEffectiveFrom}
-                onChange={(e) => setFreightFormEffectiveFrom(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective To (Optional)</label>
-              <Input
-                type="date"
-                value={freightFormEffectiveTo}
-                onChange={(e) => setFreightFormEffectiveTo(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="freightFormIsActive"
-              checked={freightFormIsActive}
-              onChange={(e) => setFreightFormIsActive(e.target.checked)}
-              className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
-            />
-            <label htmlFor="freightFormIsActive" className="font-bold text-slate-700">
-              Active Tariff
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsFreightModalOpen(false)}
-              disabled={isSavingFreight}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={isSavingFreight}
-              className="font-bold"
-            >
-              {isSavingFreight ? 'Saving...' : 'Save Ocean Freight Tariff'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onSuccess={() => {
+          setActionSuccess('Ocean freight rates updated successfully.');
+          loadData();
+        }}
+        routes={routes}
+        shippingMethods={shippingMethods}
+        existingRates={freightRates}
+        initialRouteId={freightFormRouteId}
+      />
 
       {/* Towing Rate Modal (9-Step Sequence) */}
       <Modal

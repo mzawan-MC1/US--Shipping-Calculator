@@ -302,7 +302,7 @@ describe('Authoritative Calculator Operational Sequence (Scenarios A - L)', () =
       data: null,
       error: {
         message:
-          'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.',
+          'No active ocean freight tariff is configured for this route and shipping method. Please contact us for assistance.',
         details: '',
         hint: '',
         code: 'P0001',
@@ -325,7 +325,7 @@ describe('Authoritative Calculator Operational Sequence (Scenarios A - L)', () =
     };
 
     await expect(quotationService.calculateQuote(input)).rejects.toThrow(
-      'No active ocean freight tariff is configured for this route, vehicle category, powertrain and shipping method. Please contact us for assistance.'
+      'No active ocean freight tariff is configured for this route and shipping method. Please contact us for assistance.'
     );
   });
 
