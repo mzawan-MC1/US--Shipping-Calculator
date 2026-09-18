@@ -36,6 +36,7 @@ export interface CalculatorFormData {
   destinationPort: UaeDestinationPort;
   buyingPrice: number;
   includeInlandTowing?: boolean;
+  stateCode?: string;
   towFromLocation?: string;
   purchaseLocationId?: string;
   shippingMethod?: string;
@@ -162,11 +163,22 @@ export interface QuotationBreakdown {
   isIdempotentReplay?: boolean;
 }
 
+export interface EligibleState {
+  code: string;
+  name: string;
+  display_order: number;
+  locations_count: number;
+}
+
 export interface EligiblePickupLocation {
   id: string;
   name: string;
+  location_code?: string;
   state_code: string;
-  purchase_source_id: string;
+  city?: string;
+  zip_code?: string;
+  auction_company?: string;
+  purchase_source_id?: string | null;
   available_ports_count: number;
 }
 
@@ -240,7 +252,7 @@ export interface AttributePriceAdjustment {
 export interface VehicleCategoryCompatibility {
   id: string;
   vehicle_category_id: string;
-  target_type: 'powertrain' | 'vehicle_condition' | 'condition';
+  target_type: 'powertrain' | 'condition';
   target_id: string;
   is_active: boolean;
   created_at?: string;
@@ -310,6 +322,7 @@ export interface VinDecodeResult {
 }
 
 export interface CalculatorAvailabilityResponse {
+  eligible_states?: EligibleState[];
   eligible_pickup_locations: EligiblePickupLocation[];
   eligible_origin_ports: EligibleOriginPort[];
   eligible_destination_ports: EligibleDestinationPort[];

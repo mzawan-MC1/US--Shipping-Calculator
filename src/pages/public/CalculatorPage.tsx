@@ -22,6 +22,7 @@ import {
   PowertrainOption,
   VehicleConditionOption,
   PurchaseSourceOption,
+  StateOption,
   PORT_SLUG_TO_UUID,
 } from '../../services/referenceDataService';
 import {
@@ -81,6 +82,7 @@ const calculatorSchema = z
     // Step 2: Towing Details
     includeInlandTowing: z.boolean().default(true),
     purchaseSource: z.string().min(1, 'Purchase source is required'),
+    stateCode: z.string().optional(),
     purchaseLocationId: z.string().optional(),
     towFromLocation: z.string().optional(),
 
@@ -98,6 +100,13 @@ const calculatorSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.includeInlandTowing) {
+      if (!data.stateCode || data.stateCode.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Please select a US state for inland towing',
+          path: ['stateCode'],
+        });
+      }
       if (!data.purchaseLocationId || !data.towFromLocation || data.towFromLocation.trim().length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -137,6 +146,7 @@ export const CalculatorPage: React.FC = () => {
   const [powertrains, setPowertrains] = useState<PowertrainOption[]>([]);
   const [, setVehicleConditions] = useState<VehicleConditionOption[]>([]);
   const [purchaseSources, setPurchaseSources] = useState<PurchaseSourceOption[]>([]);
+  const [states, setStates] = useState<StateOption[]>([]);
 
   const [selectedDestCountry, setSelectedDestCountry] = useState<string>('ARE');
   const [isLoadingRefData, setIsLoadingRefData] = useState<boolean>(true);
@@ -179,6 +189,7 @@ export const CalculatorPage: React.FC = () => {
       lotNumber: '',
       includeInlandTowing: true,
       purchaseSource: 'copart',
+      stateCode: '',
       purchaseLocationId: '',
       towFromLocation: '',
       loadingPort: '10000000-0000-0000-0000-000000000003', // Houston Port
@@ -385,6 +396,7 @@ export const CalculatorPage: React.FC = () => {
           fetchedPowertrains,
           fetchedConditions,
           fetchedSources,
+          fetchedStates,
         ] = await Promise.all([
           referenceDataService.getCountries(),
           referenceDataService.getLoadingPorts(),
@@ -394,6 +406,7 @@ export const CalculatorPage: React.FC = () => {
           referenceDataService.getPowertrains(),
           referenceDataService.getVehicleConditions(),
           referenceDataService.getPurchaseSources(),
+          referenceDataService.getStates(),
         ]);
 
         if (isMounted) {
@@ -405,6 +418,7 @@ export const CalculatorPage: React.FC = () => {
           setPowertrains(fetchedPowertrains);
           setVehicleConditions(fetchedConditions);
           setPurchaseSources(fetchedSources);
+          setStates(fetchedStates);
         }
       } catch (err: unknown) {
         console.error('[Calculator] Failed to load reference data:', err);
@@ -760,20 +774,42 @@ export const CalculatorPage: React.FC = () => {
     ];
   }, [availability.eligible_conditions, isAr, t]);
 
-  // Filtered pickup locations based on search query
+  // Available states for selection
+  const availableStates = useMemo(() => {
+    if (availability.eligible_states && availability.eligible_states.length > 0) {
+      return availability.eligible_states;
+    }
+    return states.map((s) => ({
+      code: s.code,
+      name: s.name,
+      display_order: s.displayOrder,
+      locations_count: availability.eligible_pickup_locations.filter((l) => l.state_code === s.code).length,
+    }));
+  }, [availability.eligible_states, availability.eligible_pickup_locations, states]);
+
+  // Filtered pickup locations based on state, purchase source, and search query
   const filteredPickupLocations = useMemo(() => {
     let locs = availability.eligible_pickup_locations;
     if (formData.purchaseSource) {
       locs = locs.filter((l) => l.purchase_source_id === formData.purchaseSource);
     }
+    const stCode = formData.stateCode;
+    if (stCode) {
+      locs = locs.filter((l) => l.state_code.toUpperCase() === stCode.toUpperCase());
+    }
     if (locationSearchQuery.trim()) {
       const q = locationSearchQuery.toLowerCase();
       locs = locs.filter(
-        (l) => l.name.toLowerCase().includes(q) || l.state_code.toLowerCase().includes(q)
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.state_code.toLowerCase().includes(q) ||
+          (l.city && l.city.toLowerCase().includes(q)) ||
+          (l.location_code && l.location_code.toLowerCase().includes(q)) ||
+          (l.auction_company && l.auction_company.toLowerCase().includes(q))
       );
     }
     return locs;
-  }, [availability.eligible_pickup_locations, formData.purchaseSource, locationSearchQuery]);
+  }, [availability.eligible_pickup_locations, formData.purchaseSource, formData.stateCode, locationSearchQuery]);
 
   // WhatsApp Inquiry Link
   const whatsappInquiryLink = getWhatsAppLink(
@@ -792,7 +828,11 @@ export const CalculatorPage: React.FC = () => {
       isValid = await trigger(['vehicleType', 'powertrain', 'conditionId']);
     } else if (currentStep === 2) {
       if (formData.includeInlandTowing) {
-        isValid = await trigger(['purchaseSource', 'purchaseLocationId']);
+        isValid = await trigger(['stateCode', 'purchaseLocationId']);
+        if (!formData.stateCode) {
+          setValue('stateCode', '', { shouldValidate: true });
+          isValid = false;
+        }
         if (!formData.purchaseLocationId) {
           setValue('purchaseLocationId', '', { shouldValidate: true });
           isValid = false;
@@ -840,6 +880,7 @@ export const CalculatorPage: React.FC = () => {
         vin: data.vin,
         lotNumber: data.lotNumber,
         purchaseSource: data.purchaseSource,
+        stateCode: data.includeInlandTowing ? data.stateCode : undefined,
         loadingPort: selectedOriginPort ? selectedOriginPort.id : data.loadingPort,
         destinationPort: selectedDestPort ? selectedDestPort.id : data.destinationPort,
         shippingMethod: data.shippingMethod,
@@ -1451,121 +1492,253 @@ export const CalculatorPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Pickup Location Selection (Database-driven active towing brackets) */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                  {/* Step 2B: US State Selection */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                        {isAr ? '3. ساحة أو فرع الاستلام (الموقع المعتمد)' : '3. Pickup Location / Branch'}
+                        {isAr ? '3. اختر الولاية الأمريكية' : '3. Select US State'} <span className="text-rose-500">*</span>
                       </label>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        {filteredPickupLocations.length}{' '}
-                        {isAr ? 'موقع نشط بالتعرفة' : 'active locations'}
-                      </span>
-                    </div>
-
-                    {/* Search / Filter Input */}
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={locationSearchQuery}
-                        onChange={(e) => setLocationSearchQuery(e.target.value)}
-                        placeholder={
-                          isAr
-                            ? 'ابحث باسم المدينة أو الولاية (مثال: Dallas, Atlanta, TX)...'
-                            : 'Search by city, state, or branch name (e.g. Dallas, Atlanta, TX)...'
-                        }
-                        className="w-full bg-white border border-slate-200 rounded-xl px-9 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
-                      />
-                      {locationSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setLocationSearchQuery('')}
-                          className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
-                        >
-                          ✕
-                        </button>
+                      {formData.stateCode && (
+                        <span className="text-[11px] font-mono font-bold text-slate-500">
+                          {formData.stateCode}
+                        </span>
                       )}
                     </div>
-
-                    {/* Location Selection Grid */}
-                    {filteredPickupLocations.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                        {filteredPickupLocations.map((loc) => {
-                          const isSelected = formData.purchaseLocationId === loc.id;
-
-                          return (
-                            <Card
-                              key={loc.id}
-                              selected={isSelected}
-                              interactive
-                              onClick={() => {
-                                setValue('purchaseLocationId', loc.id, { shouldValidate: true });
-                                setValue('towFromLocation', `${loc.name}, ${loc.state_code}`, {
-                                  shouldValidate: true,
-                                });
-                              }}
-                              className="p-3 flex items-center justify-between text-start"
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <MapPin
-                                  className={`w-4 h-4 shrink-0 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
-                                />
-                                <div>
-                                  <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                                    {loc.name}
-                                  </h4>
-                                  <span className="text-[11px] text-slate-500">
-                                    {loc.state_code} • {loc.available_ports_count}{' '}
-                                    {isAr ? 'ميناء متاح' : 'ports linked'}
-                                  </span>
-                                </div>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-brand-orange-500 shrink-0" />}
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2 text-xs">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-bold">
-                              {isAr
-                                ? 'لا تتوفر تعرفة نشطة لهذا المزاد وفئة المركبة'
-                                : 'No Active Towing Tariffs for Selected Criteria'}
-                            </h4>
-                            <p className="mt-1 text-amber-800 leading-relaxed">
-                              {isAr
-                                ? 'لم يتم العثور على ساحة مزاد تدعم هذه الفئة حالياً. يمكنك تغيير المصدر أو طلب تسعير مخصص.'
-                                : 'No locations with active towing rates were found for this category and source. You can choose another auction or request a custom quote.'}
-                            </p>
-                          </div>
-                        </div>
-                        {whatsappInquiryLink && (
-                          <div className="pt-1">
-                            <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
-                              <Button
-                                type="button"
-                                variant="whatsapp"
-                                size="sm"
-                                startIcon={<MessageCircle className="w-3.5 h-3.5" />}
-                              >
-                                {isAr ? 'طلب تسعير سحب خاص عبر واتساب' : 'Request Custom Towing Quote'}
-                              </Button>
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {errors.purchaseLocationId && (
-                      <p className="text-xs font-semibold text-red-600 pt-1">
-                        {errors.purchaseLocationId.message}
+                    <select
+                      value={formData.stateCode || ''}
+                      onChange={(e) => {
+                        const newSt = e.target.value;
+                        setValue('stateCode', newSt, { shouldValidate: true });
+                        setValue('purchaseLocationId', '', { shouldValidate: false });
+                        setValue('towFromLocation', '', { shouldValidate: false });
+                        setAutoSelectedPort(null);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                    >
+                      <option value="">{isAr ? 'اختر الولاية...' : 'Select US State...'}</option>
+                      {availableStates.map((st) => (
+                        <option key={st.code} value={st.code}>
+                          {st.name} ({st.code}){st.locations_count > 0 ? ` • ${st.locations_count} ${isAr ? 'مواقع' : 'locations'}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.stateCode && (
+                      <p className="text-xs font-semibold text-red-600 mt-1">
+                        {errors.stateCode.message}
                       </p>
                     )}
                   </div>
+
+                  {/* Step 2C: Pickup Location Selection (Database-driven active towing brackets) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                        {isAr ? '4. ساحة أو فرع الاستلام (الموقع المعتمد)' : '4. Pickup Location / Branch'} <span className="text-rose-500">*</span>
+                      </label>
+                      {formData.stateCode && (
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          {filteredPickupLocations.length}{' '}
+                          {isAr ? 'موقع نشط بالتعرفة' : 'active locations'} in {formData.stateCode}
+                        </span>
+                      )}
+                    </div>
+
+                    {!formData.stateCode ? (
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-medium">
+                        {isAr ? 'يرجى اختيار الولاية أعلاه لعرض ساحات وفروع الاستلام المتاحة.' : 'Please select a US State above to view available pickup locations.'}
+                      </div>
+                    ) : (
+                      <>
+                        {/* Search / Filter Input */}
+                        {filteredPickupLocations.length > 3 && (
+                          <div className="relative">
+                            <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={locationSearchQuery}
+                              onChange={(e) => setLocationSearchQuery(e.target.value)}
+                              placeholder={
+                                isAr
+                                  ? 'ابحث باسم المدينة أو الفرع...'
+                                  : 'Filter by city, branch name, or auction...'
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-xl px-9 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            />
+                            {locationSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setLocationSearchQuery('')}
+                                className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Location Selection Grid */}
+                        {filteredPickupLocations.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                            {filteredPickupLocations.map((loc) => {
+                              const isSelected = formData.purchaseLocationId === loc.id;
+
+                              return (
+                                <Card
+                                  key={loc.id}
+                                  selected={isSelected}
+                                  interactive
+                                  onClick={() => {
+                                    setValue('purchaseLocationId', loc.id, { shouldValidate: true });
+                                    setValue('towFromLocation', `${loc.name}, ${loc.city || loc.state_code}`, {
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                  className="p-3 flex items-center justify-between text-start"
+                                >
+                                  <div className="flex items-start gap-2.5 min-w-0">
+                                    <MapPin
+                                      className={`w-4 h-4 shrink-0 mt-0.5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`}
+                                    />
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <h4 className="text-xs font-bold text-slate-900 leading-snug truncate">
+                                          {loc.name}
+                                        </h4>
+                                        {loc.auction_company && (
+                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700">
+                                            {loc.auction_company}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                        {loc.city && <span>{loc.city}, </span>}
+                                        <span>{loc.state_code}</span>
+                                        <span>•</span>
+                                        <span className="text-brand-orange-600 font-semibold">
+                                          {loc.available_ports_count} {isAr ? 'ميناء متصل' : 'connected port'}{loc.available_ports_count > 1 ? 's' : ''}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-brand-orange-500 shrink-0 ml-2" />}
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <h4 className="font-bold">
+                                  {isAr
+                                    ? `لا تتوفر ساحات استلام نشطة في ${formData.stateCode}`
+                                    : `No Active Pickup Locations in ${formData.stateCode}`}
+                                </h4>
+                                <p className="mt-1 text-amber-800 leading-relaxed">
+                                  {isAr
+                                    ? 'لم يتم العثور على ساحة مزاد تدعم هذه الفئة حالياً في هذه الولاية. يمكنك اختيار ولاية أخرى أو طلب تسعير مخصص.'
+                                    : 'No locations with active towing rates were found for this category in this state. You can choose another state or request a custom quote.'}
+                                </p>
+                              </div>
+                            </div>
+                            {whatsappInquiryLink && (
+                              <div className="pt-1">
+                                <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
+                                  <Button
+                                    type="button"
+                                    variant="whatsapp"
+                                    size="sm"
+                                    startIcon={<MessageCircle className="w-3.5 h-3.5" />}
+                                  >
+                                    {isAr ? 'طلب تسعير سحب خاص عبر واتساب' : 'Request Custom Towing Quote'}
+                                  </Button>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {errors.purchaseLocationId && (
+                          <p className="text-xs font-semibold text-red-600 pt-1">
+                            {errors.purchaseLocationId.message}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Step 2D: Connected US Loading Port & Towing Fee Badges */}
+                  {formData.purchaseLocationId && (
+                    <div className="space-y-3 pt-3 border-t border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                          {isAr ? '5. ميناء التحميل الأمريكي المتصل ورسوم السحب' : '5. Connected Loading Port & Towing Fee'} <span className="text-rose-500">*</span>
+                        </label>
+                        {availability.eligible_origin_ports.length === 1 && (
+                          <Badge variant="orange" size="sm">
+                            {isAr ? 'ميناء مخصص تلقائياً' : 'Auto-Assigned Port'}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {availability.eligible_origin_ports.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {availability.eligible_origin_ports.map((port) => {
+                            const isSelected =
+                              formData.loadingPort === port.id ||
+                              formData.loadingPort === port.code ||
+                              PORT_SLUG_TO_UUID[formData.loadingPort] === port.id;
+                            const displayName = isAr && port.name_ar ? port.name_ar : port.name;
+
+                            return (
+                              <Card
+                                key={port.id}
+                                selected={isSelected}
+                                interactive
+                                onClick={() => setValue('loadingPort', port.id, { shouldValidate: true })}
+                                className="p-3.5 flex items-center justify-between text-start"
+                              >
+                                <div className="flex items-start gap-3 min-w-0">
+                                  <Anchor className={`w-5 h-5 shrink-0 mt-0.5 ${isSelected ? 'text-brand-orange-500' : 'text-slate-400'}`} />
+                                  <div className="min-w-0">
+                                    <h4 className="text-xs font-bold text-slate-900 leading-snug truncate">
+                                      {displayName}
+                                    </h4>
+                                    <span className="text-[11px] text-slate-500 font-mono">
+                                      {port.code} • {port.state_or_city || 'USA'}
+                                    </span>
+                                    <div className="pt-1.5">
+                                      {port.towing_rate_type === 'range' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                          Est. Towing: ${port.towing_min_amount} – ${port.towing_max_amount}
+                                        </span>
+                                      ) : port.towing_rate_type === 'fixed' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                          Towing: ${port.towing_fixed_amount}
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                          Direct Port Delivery ($0.00)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {isSelected && <Check className="w-4 h-4 text-brand-orange-500 shrink-0 ml-2" />}
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                          {isAr
+                            ? 'لا توجد موانئ تحميل برسم سحب نشط لهذا الموقع وفئة المركبة. يرجى اختيار موقع آخر.'
+                            : 'No loading ports with active towing brackets are configured for this pickup location. Please choose another location or contact us.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2.5">

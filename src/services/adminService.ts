@@ -170,8 +170,13 @@ export interface AdminTowingRate {
   purchaseLocationId: string;
   loadingPortId: string;
   originLocation: string;
+  locationName?: string;
+  locationCode?: string;
   stateCode?: string;
+  city?: string;
+  auctionCompany?: string;
   loadingPort: string;
+  loadingPortCode?: string;
   vehicleCategoryId?: string;
   vehicleCategory: string;
   vehicleConditionId?: string;
@@ -208,14 +213,67 @@ export interface AdminPowertrain {
   isActive: boolean;
 }
 
+export interface AdminState {
+  code: string;
+  name: string;
+  countryCode: string;
+  displayOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  locationsCount?: number;
+}
+
 export interface AdminPurchaseLocation {
   id: string;
   name: string;
+  locationCode?: string;
   stateCode: string;
+  stateName?: string;
+  city?: string;
+  zipCode?: string;
   postalCode?: string;
-  purchaseSourceId: string;
+  auctionCompany?: string;
+  address?: string;
+  internalNotes?: string;
+  displayOrder: number;
+  purchaseSourceId?: string | null;
   defaultLoadingPortId?: string;
+  connectedPortsCount?: number;
   isActive: boolean;
+  isArchived: boolean;
+}
+
+export interface BulkRateAdjustmentFilters {
+  state_code?: string | null;
+  purchase_location_id?: string | null;
+  loading_port_id?: string | null;
+  vehicle_category_id?: string | null;
+  rate_type?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface BulkRateAdjustmentPayload {
+  adjustment_type: 'percentage_increase' | 'percentage_decrease' | 'fixed_increase' | 'fixed_decrease';
+  value: number;
+  effective_from?: string;
+  effective_to?: string | null;
+}
+
+export interface BulkRateAdjustmentPreviewItem {
+  id: string;
+  location_name: string;
+  location_code: string | null;
+  state_code: string;
+  port_name: string;
+  port_code: string;
+  vehicle_category_id: string | null;
+  rate_type: 'fixed' | 'range';
+  old_fixed: number | null;
+  new_fixed: number | null;
+  old_min: number | null;
+  new_min: number | null;
+  old_max: number | null;
+  new_max: number | null;
 }
 
 export interface AdminAdditionalChargeRule {
@@ -263,7 +321,7 @@ export interface AdminVehicleAttribute {
 export interface VehicleCategoryCompatibility {
   id: string;
   vehicle_category_id: string;
-  target_type: 'powertrain' | 'vehicle_condition' | 'condition';
+  target_type: 'powertrain' | 'condition';
   target_id: string;
   is_active: boolean;
   created_at?: string;
@@ -1249,6 +1307,9 @@ export const adminService = {
         purchase_locations!towing_rates_purchase_location_id_fkey (
           id,
           name,
+          location_code,
+          city,
+          auction_company,
           state_code
         ),
         ports!towing_rates_loading_port_id_fkey (
@@ -1278,7 +1339,14 @@ export const adminService = {
       effective_from: string;
       effective_to: string | null;
       is_active: boolean;
-      purchase_locations: { id: string; name: string; state_code: string } | null;
+      purchase_locations: {
+        id: string;
+        name: string;
+        location_code: string | null;
+        city: string | null;
+        auction_company: string | null;
+        state_code: string;
+      } | null;
       ports: { id: string; name: string; code: string } | null;
     }
 
@@ -1290,8 +1358,13 @@ export const adminService = {
       originLocation: t.purchase_locations?.name
         ? `${t.purchase_locations.name}, ${t.purchase_locations.state_code}`
         : 'State/Auction',
+      locationName: t.purchase_locations?.name,
+      locationCode: t.purchase_locations?.location_code || undefined,
+      city: t.purchase_locations?.city || undefined,
+      auctionCompany: t.purchase_locations?.auction_company || undefined,
       stateCode: t.purchase_locations?.state_code || undefined,
       loadingPort: t.ports?.name || 'Departure Port',
+      loadingPortCode: t.ports?.code || undefined,
       vehicleCategoryId: t.vehicle_category_id || undefined,
       vehicleCategory: t.vehicle_category_id ? t.vehicle_category_id.toUpperCase() : 'ALL CATEGORIES',
       vehicleConditionId: t.vehicle_condition_id || undefined,
@@ -1493,22 +1566,285 @@ export const adminService = {
     }));
   },
 
-  async getPurchaseLocations(): Promise<AdminPurchaseLocation[]> {
-    const { data, error } = await supabase
-      .from('purchase_locations')
+  async getStates(): Promise<AdminState[]> {
+    const { data: states, error } = await supabase
+      .from('states')
       .select('*')
+      .eq('is_archived', false)
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) throw new Error(error.message || 'Unable to load states.');
+
+    // Count non-archived locations per state
+    const { data: locs } = await supabase
+      .from('purchase_locations')
+      .select('state_code')
+      .eq('is_archived', false);
+
+    const locCountMap = new Map<string, number>();
+    (locs || []).forEach((l) => {
+      locCountMap.set(l.state_code, (locCountMap.get(l.state_code) || 0) + 1);
+    });
+
+    return (states || []).map((s) => ({
+      code: s.code,
+      name: s.name,
+      countryCode: s.country_code,
+      displayOrder: s.display_order,
+      isActive: Boolean(s.is_active),
+      isArchived: Boolean(s.is_archived),
+      locationsCount: locCountMap.get(s.code) || 0,
+    }));
+  },
+
+  async createState(state: {
+    code: string;
+    name: string;
+    countryCode?: string;
+    displayOrder?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; code: string }> {
+    const code = state.code.trim().toUpperCase();
+    if (!code || code.length > 5) {
+      throw new Error('State code is required (up to 5 characters).');
+    }
+    if (!state.name.trim()) {
+      throw new Error('State name is required.');
+    }
+
+    const { error } = await supabase.from('states').insert({
+      code,
+      name: state.name.trim(),
+      country_code: state.countryCode || 'USA',
+      display_order: state.displayOrder ?? 0,
+      is_active: state.isActive ?? true,
+      is_archived: false,
+    });
+
+    if (error) throw new Error(error.message || 'Unable to create state.');
+    return { success: true, code };
+  },
+
+  async updateState(
+    code: string,
+    updates: Partial<{
+      name: string;
+      countryCode: string;
+      displayOrder: number;
+      isActive: boolean;
+    }>
+  ): Promise<boolean> {
+    const payload: Database['public']['Tables']['states']['Update'] = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.countryCode !== undefined) payload.country_code = updates.countryCode;
+    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    payload.updated_at = new Date().toISOString();
+
+    const { error } = await supabase.from('states').update(payload).eq('code', code.toUpperCase());
+    if (error) throw new Error(error.message || 'Unable to update state.');
+    return true;
+  },
+
+  async deleteState(code: string, action: 'archive' | 'delete'): Promise<boolean> {
+    const { error } = await supabase.rpc('delete_state', {
+      p_code: code.toUpperCase(),
+      p_action: action,
+    });
+    if (error) throw new Error(error.message || `Unable to ${action} state.`);
+    return true;
+  },
+
+  async getPurchaseLocations(): Promise<AdminPurchaseLocation[]> {
+    const { data: locations, error } = await supabase
+      .from('purchase_locations')
+      .select(`
+        id,
+        name,
+        location_code,
+        state_code,
+        city,
+        zip_code,
+        postal_code,
+        auction_company,
+        address,
+        internal_notes,
+        display_order,
+        purchase_source_id,
+        default_loading_port_id,
+        is_active,
+        is_archived,
+        states!fk_purchase_locations_state (
+          name
+        )
+      `)
+      .eq('is_archived', false)
       .order('state_code', { ascending: true })
       .order('name', { ascending: true });
+
     if (error) throw new Error(error.message || 'Unable to load purchase locations.');
-    return (data || []).map((l) => ({
-      id: l.id,
-      name: l.name,
-      stateCode: l.state_code,
-      postalCode: l.postal_code || undefined,
-      purchaseSourceId: l.purchase_source_id,
-      defaultLoadingPortId: l.default_loading_port_id || undefined,
-      isActive: Boolean(l.is_active),
-    }));
+
+    // Count connected ports from active towing rates
+    const { data: rates } = await supabase
+      .from('towing_rates')
+      .select('purchase_location_id, loading_port_id')
+      .eq('is_active', true);
+
+    const portCountMap = new Map<string, Set<string>>();
+    (rates || []).forEach((r) => {
+      if (!portCountMap.has(r.purchase_location_id)) {
+        portCountMap.set(r.purchase_location_id, new Set());
+      }
+      portCountMap.get(r.purchase_location_id)!.add(r.loading_port_id);
+    });
+
+    return (locations || []).map((l) => {
+      const stateObj = l.states as { name?: string } | null;
+      return {
+        id: l.id,
+        name: l.name,
+        locationCode: l.location_code || undefined,
+        stateCode: l.state_code,
+        stateName: stateObj?.name || l.state_code,
+        city: l.city || undefined,
+        zipCode: l.zip_code || l.postal_code || undefined,
+        postalCode: l.postal_code || undefined,
+        auctionCompany: l.auction_company || undefined,
+        address: l.address || undefined,
+        internalNotes: l.internal_notes || undefined,
+        displayOrder: l.display_order ?? 0,
+        purchaseSourceId: l.purchase_source_id,
+        defaultLoadingPortId: l.default_loading_port_id || undefined,
+        connectedPortsCount: portCountMap.get(l.id)?.size ?? 0,
+        isActive: Boolean(l.is_active),
+        isArchived: Boolean(l.is_archived),
+      };
+    });
+  },
+
+  async createPurchaseLocation(loc: {
+    name: string;
+    locationCode?: string;
+    stateCode: string;
+    city?: string;
+    zipCode?: string;
+    auctionCompany?: string;
+    address?: string;
+    internalNotes?: string;
+    displayOrder?: number;
+    purchaseSourceId?: string | null;
+    defaultLoadingPortId?: string | null;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; id?: string }> {
+    if (!loc.name.trim()) throw new Error('Location name is required.');
+    if (!loc.stateCode.trim()) throw new Error('State is required.');
+
+    const locationCode =
+      loc.locationCode?.trim().toUpperCase() ||
+      `${loc.stateCode.trim().toUpperCase()}-${loc.name.trim().substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
+
+    const { data, error } = await supabase
+      .from('purchase_locations')
+      .insert({
+        name: loc.name.trim(),
+        location_code: locationCode,
+        state_code: loc.stateCode.trim().toUpperCase(),
+        city: loc.city?.trim() || null,
+        zip_code: loc.zipCode?.trim() || null,
+        postal_code: loc.zipCode?.trim() || null,
+        auction_company: loc.auctionCompany?.trim() || null,
+        address: loc.address?.trim() || null,
+        internal_notes: loc.internalNotes?.trim() || null,
+        display_order: loc.displayOrder ?? 0,
+        purchase_source_id: loc.purchaseSourceId || null,
+        default_loading_port_id: loc.defaultLoadingPortId || null,
+        is_active: loc.isActive ?? true,
+        is_archived: false,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message || 'Unable to create purchase location.');
+    return { success: true, id: data?.id };
+  },
+
+  async updatePurchaseLocation(
+    id: string,
+    updates: Partial<{
+      name: string;
+      locationCode: string;
+      stateCode: string;
+      city: string | null;
+      zipCode: string | null;
+      auctionCompany: string | null;
+      address: string | null;
+      internalNotes: string | null;
+      displayOrder: number;
+      purchaseSourceId: string | null;
+      defaultLoadingPortId: string | null;
+      isActive: boolean;
+    }>
+  ): Promise<boolean> {
+    const payload: Database['public']['Tables']['purchase_locations']['Update'] = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.locationCode !== undefined) payload.location_code = updates.locationCode.trim().toUpperCase();
+    if (updates.stateCode !== undefined) payload.state_code = updates.stateCode.trim().toUpperCase();
+    if (updates.city !== undefined) payload.city = updates.city?.trim() || null;
+    if (updates.zipCode !== undefined) {
+      payload.zip_code = updates.zipCode?.trim() || null;
+      payload.postal_code = updates.zipCode?.trim() || null;
+    }
+    if (updates.auctionCompany !== undefined) payload.auction_company = updates.auctionCompany?.trim() || null;
+    if (updates.address !== undefined) payload.address = updates.address?.trim() || null;
+    if (updates.internalNotes !== undefined) payload.internal_notes = updates.internalNotes?.trim() || null;
+    if (updates.displayOrder !== undefined) payload.display_order = updates.displayOrder;
+    if (updates.purchaseSourceId !== undefined) payload.purchase_source_id = updates.purchaseSourceId;
+    if (updates.defaultLoadingPortId !== undefined) payload.default_loading_port_id = updates.defaultLoadingPortId;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    payload.updated_at = new Date().toISOString();
+
+    const { error } = await supabase.from('purchase_locations').update(payload).eq('id', id);
+    if (error) throw new Error(error.message || 'Unable to update purchase location.');
+    return true;
+  },
+
+  async deletePurchaseLocation(id: string, action: 'archive' | 'delete'): Promise<boolean> {
+    const { error } = await supabase.rpc('delete_purchase_location', {
+      p_location_id: id,
+      p_action: action,
+    });
+    if (error) throw new Error(error.message || `Unable to ${action} purchase location.`);
+    return true;
+  },
+
+  async previewBulkRateAdjustment(
+    filters: BulkRateAdjustmentFilters,
+    adjustment: BulkRateAdjustmentPayload
+  ): Promise<BulkRateAdjustmentPreviewItem[]> {
+    const { data, error } = await supabase.rpc('preview_bulk_towing_adjustment', {
+      p_filters: filters as unknown as Json,
+      p_adjustment: adjustment as unknown as Json,
+    });
+    if (error) throw new Error(error.message || 'Unable to preview bulk rate adjustment.');
+    return (data || []) as unknown as BulkRateAdjustmentPreviewItem[];
+  },
+
+  async applyBulkRateAdjustment(
+    filters: BulkRateAdjustmentFilters,
+    adjustment: BulkRateAdjustmentPayload
+  ): Promise<{ success: boolean; updatedCount: number; message: string }> {
+    const { data, error } = await supabase.rpc('apply_bulk_towing_adjustment', {
+      p_filters: filters as unknown as Json,
+      p_adjustment: adjustment as unknown as Json,
+    });
+    if (error) throw new Error(error.message || 'Unable to apply bulk rate adjustment.');
+    const result = data as { success: boolean; updated_count: number; message: string };
+    return {
+      success: result.success,
+      updatedCount: result.updated_count,
+      message: result.message,
+    };
   },
 
   async getAdditionalChargeRules(): Promise<AdminAdditionalChargeRule[]> {
@@ -1829,7 +2165,7 @@ export const adminService = {
     return (data || []).map((c) => ({
       id: c.id,
       vehicle_category_id: c.vehicle_category_id,
-      target_type: c.target_type as 'powertrain' | 'vehicle_condition' | 'condition',
+      target_type: c.target_type as 'powertrain' | 'condition',
       target_id: c.target_id,
       is_active: Boolean(c.is_active),
       created_at: c.created_at,
@@ -1839,7 +2175,7 @@ export const adminService = {
 
   async setCategoryCompatibilities(
     categoryId: string,
-    targetType: 'powertrain' | 'vehicle_condition' | 'condition',
+    targetType: 'powertrain' | 'condition',
     targetIds: string[]
   ): Promise<boolean> {
     const { error: delError } = await supabase

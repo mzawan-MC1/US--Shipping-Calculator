@@ -744,36 +744,70 @@ export type Database = {
       }
       purchase_locations: {
         Row: {
+          address: string | null
+          auction_company: string | null
+          city: string | null
           created_at: string
           default_loading_port_id: string | null
+          display_order: number
           id: string
+          internal_notes: string | null
           is_active: boolean
+          is_archived: boolean
+          location_code: string | null
           name: string
           postal_code: string | null
-          purchase_source_id: string
+          purchase_source_id: string | null
           state_code: string
+          updated_at: string
+          zip_code: string | null
         }
         Insert: {
+          address?: string | null
+          auction_company?: string | null
+          city?: string | null
           created_at?: string
           default_loading_port_id?: string | null
+          display_order?: number
           id?: string
+          internal_notes?: string | null
           is_active?: boolean
+          is_archived?: boolean
+          location_code?: string | null
           name: string
           postal_code?: string | null
-          purchase_source_id: string
+          purchase_source_id?: string | null
           state_code: string
+          updated_at?: string
+          zip_code?: string | null
         }
         Update: {
+          address?: string | null
+          auction_company?: string | null
+          city?: string | null
           created_at?: string
           default_loading_port_id?: string | null
+          display_order?: number
           id?: string
+          internal_notes?: string | null
           is_active?: boolean
+          is_archived?: boolean
+          location_code?: string | null
           name?: string
           postal_code?: string | null
-          purchase_source_id?: string
+          purchase_source_id?: string | null
           state_code?: string
+          updated_at?: string
+          zip_code?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_purchase_locations_state"
+            columns: ["state_code"]
+            isOneToOne: false
+            referencedRelation: "states"
+            referencedColumns: ["code"]
+          },
           {
             foreignKeyName: "purchase_locations_default_loading_port_id_fkey"
             columns: ["default_loading_port_id"]
@@ -1395,6 +1429,47 @@ export type Database = {
           },
         ]
       }
+      states: {
+        Row: {
+          code: string
+          country_code: string
+          created_at: string
+          display_order: number
+          is_active: boolean
+          is_archived: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          country_code?: string
+          created_at?: string
+          display_order?: number
+          is_active?: boolean
+          is_archived?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          country_code?: string
+          created_at?: string
+          display_order?: number
+          is_active?: boolean
+          is_archived?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "states_country_code_fkey"
+            columns: ["country_code"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       surcharge_rules: {
         Row: {
           amount: number
@@ -1797,6 +1872,10 @@ export type Database = {
         Args: { p_role_id: string; p_staff_id: string }
         Returns: Json
       }
+      apply_bulk_towing_adjustment: {
+        Args: { p_adjustment: Json; p_filters: Json }
+        Returns: Json
+      }
       bootstrap_super_admin: { Args: { target_email: string }; Returns: Json }
       calculate_shipping_quote_v1: { Args: { input_json: Json }; Returns: Json }
       create_quotation_rule_v1: {
@@ -1813,6 +1892,14 @@ export type Database = {
         Returns: Json
       }
       delete_additional_charge_rule: { Args: { p_id: string }; Returns: Json }
+      delete_purchase_location: {
+        Args: { p_action: string; p_location_id: string }
+        Returns: Json
+      }
+      delete_state: {
+        Args: { p_action: string; p_code: string }
+        Returns: Json
+      }
       delete_vehicle_attribute: {
         Args: { p_id: string; p_type: string }
         Returns: Json
@@ -1831,6 +1918,10 @@ export type Database = {
       normalize_phone:
         | { Args: { raw_phone: string }; Returns: string }
         | { Args: { country_code: string; raw_phone: string }; Returns: string }
+      preview_bulk_towing_adjustment: {
+        Args: { p_adjustment: Json; p_filters: Json }
+        Returns: Json
+      }
       revise_quotation_rule_v1: {
         Args: {
           p_content_ar?: string

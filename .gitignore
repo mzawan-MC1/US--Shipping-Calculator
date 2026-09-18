@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules
 .pnp
 .pnp.js
@@ -34,3 +34,6 @@ Thumbs.db
 
 # Deployment archives
 *.zip
+
+# Supabase temp artifacts
+supabase/.temp/

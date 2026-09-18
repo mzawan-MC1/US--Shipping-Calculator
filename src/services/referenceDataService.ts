@@ -55,13 +55,25 @@ export interface PurchaseSourceOption {
   isActive: boolean;
 }
 
+export interface StateOption {
+  code: string;
+  name: string;
+  countryCode: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
 export interface PurchaseLocationOption {
   id: string;
   name: string;
+  locationCode?: string;
   stateCode: string;
+  city?: string;
+  zipCode?: string;
   postalCode?: string;
+  auctionCompany?: string;
   defaultLoadingPortId: string | null;
-  purchaseSourceId: string;
+  purchaseSourceId: string | null;
 }
 
 // Baseline port mappings for ID reference
@@ -286,15 +298,43 @@ export const referenceDataService = {
     }));
   },
 
-  async getPurchaseLocations(purchaseSourceId?: string): Promise<PurchaseLocationOption[]> {
+  async getStates(countryCode = 'USA'): Promise<StateOption[]> {
+    const { data, error } = await supabase
+      .from('states')
+      .select('code, name, country_code, display_order, is_active, is_archived')
+      .eq('is_active', true)
+      .eq('is_archived', false)
+      .eq('country_code', countryCode)
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('[ReferenceDataService] Failed to load states:', error);
+      throw new Error(error.message || 'Unable to load states.');
+    }
+
+    return (data || []).map((s) => ({
+      code: s.code,
+      name: s.name,
+      countryCode: s.country_code,
+      displayOrder: s.display_order,
+      isActive: s.is_active,
+    }));
+  },
+
+  async getPurchaseLocations(purchaseSourceId?: string, stateCode?: string): Promise<PurchaseLocationOption[]> {
     let query = supabase
       .from('purchase_locations')
       .select('*')
       .eq('is_active', true)
+      .eq('is_archived', false)
       .order('name');
 
     if (purchaseSourceId) {
       query = query.eq('purchase_source_id', purchaseSourceId);
+    }
+    if (stateCode) {
+      query = query.eq('state_code', stateCode);
     }
 
     const { data, error } = await query;
@@ -307,8 +347,12 @@ export const referenceDataService = {
     return (data || []).map((l) => ({
       id: l.id,
       name: l.name,
+      locationCode: l.location_code || undefined,
       stateCode: l.state_code,
+      city: l.city || undefined,
+      zipCode: l.zip_code || l.postal_code || undefined,
       postalCode: l.postal_code || undefined,
+      auctionCompany: l.auction_company || undefined,
       defaultLoadingPortId: l.default_loading_port_id,
       purchaseSourceId: l.purchase_source_id,
     }));

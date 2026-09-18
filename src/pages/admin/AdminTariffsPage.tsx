@@ -21,7 +21,14 @@ import {
   AdminVehicleAttribute,
   VehicleCategoryCompatibility,
   AttributePriceAdjustment,
+  AdminState,
 } from '../../services/adminService';
+import { PickupLocationsTable } from '../../components/admin/PickupLocationsTable';
+import { AddEditLocationModal } from '../../components/admin/AddEditLocationModal';
+import { BulkTowingAdjustmentModal } from '../../components/admin/BulkTowingAdjustmentModal';
+import { TowingRatesImportModal } from '../../components/admin/TowingRatesImportModal';
+import { LocationsImportModal } from '../../components/admin/LocationsImportModal';
+import { towingRatesBulkService } from '../../services/towingBulkService';
 import { RichTextEditor } from '../../components/ui/RichTextEditor';
 import { formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../features/auth/AuthContext';
@@ -47,6 +54,9 @@ import {
   Layers,
   Zap,
   Wrench,
+  Upload,
+  Download,
+  Building,
 } from 'lucide-react';
 
 export const AdminTariffsPage: React.FC = () => {
@@ -54,6 +64,8 @@ export const AdminTariffsPage: React.FC = () => {
   const canManagePricing = hasPermission('pricing.manage');
 
   const [activeTab, setActiveTab] = useState<'freight' | 'towing' | 'attributes' | 'surcharges' | 'rules' | 'exchange'>('freight');
+  const [towingSubTab, setTowingSubTab] = useState<'locations' | 'rates'>('rates');
+  const [states, setStates] = useState<AdminState[]>([]);
   const [freightRates, setFreightRates] = useState<AdminFreightRate[]>([]);
   const [towingRates, setTowingRates] = useState<AdminTowingRate[]>([]);
   const [routes, setRoutes] = useState<AdminRoute[]>([]);
@@ -63,6 +75,22 @@ export const AdminTariffsPage: React.FC = () => {
   const [powertrains, setPowertrains] = useState<AdminPowertrain[]>([]);
   const [purchaseLocations, setPurchaseLocations] = useState<AdminPurchaseLocation[]>([]);
   const [additionalCharges, setAdditionalCharges] = useState<AdminAdditionalChargeRule[]>([]);
+
+  // Towing Modals & Filter State
+  const [isBulkTowingModalOpen, setIsBulkTowingModalOpen] = useState(false);
+  const [isTowingImportModalOpen, setIsTowingImportModalOpen] = useState(false);
+  const [isLocationImportModalOpen, setIsLocationImportModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationToEdit, setLocationToEdit] = useState<AdminPurchaseLocation | null>(null);
+
+  const [towingStateFilter, setTowingStateFilter] = useState('ALL');
+  const [towingLocationFilter, setTowingLocationFilter] = useState('ALL');
+  const [towingPortFilter, setTowingPortFilter] = useState('ALL');
+  const [towingCategoryFilter, setTowingCategoryFilter] = useState('ALL');
+  const [towingRateTypeFilter, setTowingRateTypeFilter] = useState<'ALL' | 'fixed' | 'range'>('ALL');
+  const [towingStatusFilter, setTowingStatusFilter] = useState<'ALL' | 'active' | 'inactive'>('ALL');
+
+  const [towingFormStateCode, setTowingFormStateCode] = useState('NJ');
 
   // Vehicle Attributes & Adjustments State
   const [attributeSubTab, setAttributeSubTab] = useState<'categories' | 'powertrains' | 'conditions' | 'adjustments' | 'compatibilities'>('categories');
@@ -208,7 +236,7 @@ export const AdminTariffsPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr, cats, pts, conds, adjs, comps] = await Promise.all([
+      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr, cats, pts, conds, adjs, comps, stList] = await Promise.all([
         adminService.getFreightRates(),
         adminService.getTowingRates(),
         adminService.getExchangeRate(),
@@ -225,6 +253,7 @@ export const AdminTariffsPage: React.FC = () => {
         adminService.getVehicleAttributes('condition'),
         adminService.getAttributePriceAdjustments(),
         adminService.getCategoryCompatibilities(),
+        adminService.getStates(),
       ]);
       setFreightRates(f);
       setTowingRates(t);
@@ -243,12 +272,16 @@ export const AdminTariffsPage: React.FC = () => {
       setConditionAttributes(conds);
       setPriceAdjustments(adjs);
       setCompatibilities(comps);
+      setStates(stList);
 
       if (r.length > 0 && !freightFormRouteId) {
         setFreightFormRouteId(r[0].id);
       }
       if (pl.length > 0 && !towingFormLocationId) {
         setTowingFormLocationId(pl[0].id);
+      }
+      if (stList.length > 0 && !towingFormStateCode) {
+        setTowingFormStateCode(stList[0].code);
       }
       const loadingPorts = p.filter((x) => x.isLoadingPort);
       if (loadingPorts.length > 0 && !towingFormPortId) {
@@ -290,13 +323,48 @@ export const AdminTariffsPage: React.FC = () => {
   // Filtered towing rates
   const filteredTowingRates = useMemo(() => {
     return towingRates.filter((t) => {
+      const q = towingSearch.toLowerCase();
+      const matchesSearch =
+        !towingSearch ||
+        t.originLocation.toLowerCase().includes(q) ||
+        (t.city && t.city.toLowerCase().includes(q)) ||
+        (t.locationCode && t.locationCode.toLowerCase().includes(q)) ||
+        t.loadingPort.toLowerCase().includes(q) ||
+        (t.loadingPortCode && t.loadingPortCode.toLowerCase().includes(q)) ||
+        t.vehicleCategory.toLowerCase().includes(q);
+
+      const matchesState = towingStateFilter === 'ALL' || t.stateCode === towingStateFilter;
+      const matchesLocation = towingLocationFilter === 'ALL' || t.purchaseLocationId === towingLocationFilter;
+      const matchesPort = towingPortFilter === 'ALL' || t.loadingPortId === towingPortFilter;
+      const matchesCategory =
+        towingCategoryFilter === 'ALL' ||
+        (towingCategoryFilter === 'ALL_CATEGORIES'
+          ? !t.vehicleCategoryId
+          : t.vehicleCategoryId === towingCategoryFilter);
+      const matchesRateType = towingRateTypeFilter === 'ALL' || t.rateType === towingRateTypeFilter;
+      const matchesStatus =
+        towingStatusFilter === 'ALL' || (towingStatusFilter === 'active' ? t.isActive : !t.isActive);
+
       return (
-        t.originLocation.toLowerCase().includes(towingSearch.toLowerCase()) ||
-        t.loadingPort.toLowerCase().includes(towingSearch.toLowerCase()) ||
-        t.vehicleCategory.toLowerCase().includes(towingSearch.toLowerCase())
+        matchesSearch &&
+        matchesState &&
+        matchesLocation &&
+        matchesPort &&
+        matchesCategory &&
+        matchesRateType &&
+        matchesStatus
       );
     });
-  }, [towingRates, towingSearch]);
+  }, [
+    towingRates,
+    towingSearch,
+    towingStateFilter,
+    towingLocationFilter,
+    towingPortFilter,
+    towingCategoryFilter,
+    towingRateTypeFilter,
+    towingStatusFilter,
+  ]);
 
   // Freight Rate CRUD Handlers
   const handleOpenCreateFreight = () => {
@@ -403,7 +471,10 @@ export const AdminTariffsPage: React.FC = () => {
   const handleOpenCreateTowing = () => {
     setTowingModalMode('create');
     setEditingTowingId(null);
-    if (purchaseLocations.length > 0) setTowingFormLocationId(purchaseLocations[0].id);
+    const initialSt = states.length > 0 ? states[0].code : 'NJ';
+    setTowingFormStateCode(initialSt);
+    const matchingLocs = purchaseLocations.filter((l) => l.stateCode === initialSt);
+    setTowingFormLocationId(matchingLocs.length > 0 ? matchingLocs[0].id : '');
     const loadingPorts = ports.filter((x) => x.isLoadingPort);
     if (loadingPorts.length > 0) setTowingFormPortId(loadingPorts[0].id);
     setTowingFormCategoryId('sedan');
@@ -420,9 +491,15 @@ export const AdminTariffsPage: React.FC = () => {
   const handleOpenEditTowing = (t: AdminTowingRate) => {
     setTowingModalMode('edit');
     setEditingTowingId(t.id);
+    const loc = purchaseLocations.find((l) => l.id === t.purchaseLocationId);
+    if (loc) {
+      setTowingFormStateCode(loc.stateCode);
+    } else if (t.stateCode) {
+      setTowingFormStateCode(t.stateCode);
+    }
     setTowingFormLocationId(t.purchaseLocationId);
     setTowingFormPortId(t.loadingPortId);
-    setTowingFormCategoryId(t.vehicleCategoryId || 'sedan');
+    setTowingFormCategoryId(t.vehicleCategoryId || '');
     setTowingFormRateType(t.rateType);
     setTowingFormFixedAmount(t.fixedAmount ? t.fixedAmount.toString() : '450');
     setTowingFormMinAmount(t.minAmount ? t.minAmount.toString() : '350');
@@ -892,7 +969,7 @@ export const AdminTariffsPage: React.FC = () => {
       .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && c.target_type === 'powertrain')
       .map((c) => c.target_id);
     const cIds = compatibilities
-      .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && (c.target_type === 'vehicle_condition' || c.target_type === 'condition'))
+      .filter((c) => c.vehicle_category_id === selectedCategoryForCompat && c.target_type === 'condition')
       .map((c) => c.target_id);
     setCompatPowertrains(pIds);
     setCompatConditions(cIds);
@@ -903,7 +980,7 @@ export const AdminTariffsPage: React.FC = () => {
     setActionError(null);
     try {
       await adminService.setCategoryCompatibilities(selectedCategoryForCompat, 'powertrain', compatPowertrains);
-      await adminService.setCategoryCompatibilities(selectedCategoryForCompat, 'vehicle_condition', compatConditions);
+      await adminService.setCategoryCompatibilities(selectedCategoryForCompat, 'condition', compatConditions);
       setActionSuccess(`Compatibility rules saved for ${selectedCategoryForCompat}.`);
       await loadData();
     } catch (err: unknown) {
@@ -1418,141 +1495,381 @@ export const AdminTariffsPage: React.FC = () => {
 
           {/* TAB 2: INLAND TOWING */}
           {activeTab === 'towing' && (
-            <div className="space-y-4">
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="block font-bold">Inland Towing Tariff Notice:</strong>
-                  <span>
-                    Locations designated as <em>Range</em> indicate variable inland carrier rates.
-                    On customer quotes and invoices, these indicate that the final towing amount is
-                    subject to carrier confirmation upon vehicle pickup.
-                  </span>
+            <div className="space-y-6">
+              {/* Sub-tabs header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  <button
+                    onClick={() => setTowingSubTab('locations')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      towingSubTab === 'locations'
+                        ? 'bg-brand-navy-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Building className="w-3.5 h-3.5" />
+                    Pickup Locations ({purchaseLocations.length})
+                  </button>
+                  <button
+                    onClick={() => setTowingSubTab('rates')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      towingSubTab === 'rates'
+                        ? 'bg-brand-navy-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    Towing Rates ({towingRates.length})
+                  </button>
                 </div>
               </div>
 
-              {/* Towing search */}
-              <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search auction, state, or loading port..."
-                    value={towingSearch}
-                    onChange={(e) => setTowingSearch(e.target.value)}
-                    className="pl-9 text-xs"
-                  />
-                </div>
-              </div>
+              {/* Subtab 1: Pickup Locations */}
+              {towingSubTab === 'locations' && (
+                <PickupLocationsTable
+                  locations={purchaseLocations}
+                  states={states}
+                  canManagePricing={canManagePricing}
+                  onRefresh={loadData}
+                  onOpenAddLocation={() => {
+                    setLocationToEdit(null);
+                    setIsLocationModalOpen(true);
+                  }}
+                  onOpenEditLocation={(loc) => {
+                    setLocationToEdit(loc);
+                    setIsLocationModalOpen(true);
+                  }}
+                  onOpenImportModal={() => setIsLocationImportModalOpen(true)}
+                  onSetActionSuccess={setActionSuccess}
+                  onSetActionError={setActionError}
+                />
+              )}
 
-              <Card className="bg-white border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-start text-xs min-w-[760px]">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="py-3 px-4">Origin State / Auction</th>
-                        <th className="py-3 px-4">Loading Port</th>
-                        <th className="py-3 px-4">Vehicle Category</th>
-                        <th className="py-3 px-4">Pricing Mode</th>
-                        <th className="py-3 px-4">Towing Amount (USD)</th>
-                        <th className="py-3 px-4">Status</th>
-                        {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {filteredTowingRates.length === 0 ? (
-                        <tr>
-                          <td colSpan={canManagePricing ? 7 : 6} className="py-8 text-center text-slate-400 text-xs">
-                            No inland towing brackets found matching your criteria.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredTowingRates.map((t) => (
-                          <tr key={t.id} className="hover:bg-slate-50/50">
-                            <td className="py-3.5 px-4 font-bold text-brand-navy-950">
-                              {t.originLocation}
-                            </td>
-                            <td className="py-3.5 px-4 font-medium text-slate-800">
-                              {t.loadingPort}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <Badge variant="orange">{t.vehicleCategory}</Badge>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              {t.isRange ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  Estimated Range
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                  Fixed Amount
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 font-bold text-slate-900">
-                              {t.isRange ? (
-                                <div>
-                                  <span className="font-bold text-brand-navy-950">
-                                    {formatCurrency(t.minAmount)} – {formatCurrency(t.maxAmount)}
-                                  </span>
-                                  <span className="text-[10px] text-amber-700 block font-normal">
-                                    Subject to confirmation
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="font-bold text-brand-navy-950">{formatCurrency(t.fixedAmount)}</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              {t.isActive ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                  <XCircle className="w-3 h-3 text-rose-600" /> Inactive
-                                </span>
-                              )}
-                            </td>
-                            {canManagePricing && (
-                              <td className="py-3.5 px-4 text-end">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleToggleTowingStatus(t.id, t.isActive)}
-                                    className="text-[10px] py-1 px-2 font-bold"
-                                  >
-                                    {t.isActive ? 'Deactivate' : 'Activate'}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenEditTowing(t)}
-                                    className="p-1 text-slate-600 hover:text-slate-900"
-                                    title="Edit Towing Bracket"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteTowing(t.id)}
-                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                                    title="Delete Towing Bracket"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        ))
+              {/* Subtab 2: Towing Rates */}
+              {towingSubTab === 'rates' && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">Inland Towing Tariff Notice:</strong>
+                      <span>
+                        Locations designated as <em>Estimated Range</em> indicate variable inland carrier rates.
+                        On customer quotes and invoices, these indicate that the final towing amount is
+                        subject to carrier confirmation upon vehicle pickup.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Towing Rates Filter & Action Toolbar */}
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      {/* Search */}
+                      <div className="relative flex-1 min-w-[200px] max-w-sm">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Input
+                          type="text"
+                          placeholder="Search location, code, city, or port..."
+                          value={towingSearch}
+                          onChange={(e) => setTowingSearch(e.target.value)}
+                          className="pl-9 text-xs"
+                        />
+                      </div>
+
+                      {/* Action buttons */}
+                      {canManagePricing && (
+                        <div className="flex items-center gap-2">
+                          {/* Export buttons */}
+                          <div className="flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden text-xs">
+                            <span className="px-2.5 py-1.5 text-slate-500 font-semibold bg-slate-50 border-r border-slate-200 flex items-center gap-1">
+                              <Download className="w-3.5 h-3.5" /> Export:
+                            </span>
+                            <button
+                              onClick={() => towingRatesBulkService.exportRates(filteredTowingRates, 'csv')}
+                              className="px-2.5 py-1.5 hover:bg-slate-100 font-bold text-slate-700 transition"
+                              title="Export filtered rates to CSV"
+                            >
+                              CSV
+                            </button>
+                            <button
+                              onClick={() => towingRatesBulkService.exportRates(filteredTowingRates, 'xlsx')}
+                              className="px-2.5 py-1.5 hover:bg-slate-100 font-bold text-slate-700 border-l border-slate-200 transition"
+                              title="Export filtered rates to Excel"
+                            >
+                              Excel
+                            </button>
+                          </div>
+
+                          {/* Import Rates */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsTowingImportModalOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-brand-orange-500" />
+                            Import Rates
+                          </Button>
+
+                          {/* Bulk Adjustment */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsBulkTowingModalOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold text-brand-navy-950 border-slate-300"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 text-brand-orange-500" />
+                            Bulk Rate Adjustment
+                          </Button>
+
+                          {/* Add Towing Bracket */}
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleOpenCreateTowing}
+                            className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Towing Bracket
+                          </Button>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
+                    </div>
+
+                    {/* Filter controls row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-2 border-t border-slate-100">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">State</label>
+                        <select
+                          value={towingStateFilter}
+                          onChange={(e) => {
+                            setTowingStateFilter(e.target.value);
+                            setTowingLocationFilter('ALL');
+                          }}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All States ({states.length})</option>
+                          {states.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              {s.code} – {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Location</label>
+                        <select
+                          value={towingLocationFilter}
+                          onChange={(e) => setTowingLocationFilter(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All Locations</option>
+                          {(towingStateFilter === 'ALL'
+                            ? purchaseLocations
+                            : purchaseLocations.filter((l) => l.stateCode === towingStateFilter)
+                          ).map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.name} ({l.stateCode})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Loading Port</label>
+                        <select
+                          value={towingPortFilter}
+                          onChange={(e) => setTowingPortFilter(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All Loading Ports</option>
+                          {ports
+                            .filter((p) => p.isLoadingPort)
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.code})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
+                        <select
+                          value={towingCategoryFilter}
+                          onChange={(e) => setTowingCategoryFilter(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All Categories</option>
+                          <option value="ALL_CATEGORIES">All-Categories Tariffs</option>
+                          {vehicleCategories.map((vc) => (
+                            <option key={vc.id} value={vc.id}>
+                              {vc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pricing Mode</label>
+                        <select
+                          value={towingRateTypeFilter}
+                          onChange={(e) => setTowingRateTypeFilter(e.target.value as 'ALL' | 'fixed' | 'range')}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All Modes</option>
+                          <option value="fixed">Fixed Flat Rates</option>
+                          <option value="range">Estimated Ranges</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status</label>
+                        <select
+                          value={towingStatusFilter}
+                          onChange={(e) => setTowingStatusFilter(e.target.value as 'ALL' | 'active' | 'inactive')}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
+                        >
+                          <option value="ALL">All Statuses</option>
+                          <option value="active">Active Only</option>
+                          <option value="inactive">Inactive Only</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rates Table */}
+                  <Card className="bg-white border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-start text-xs min-w-[850px]">
+                        <thead>
+                          <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                            <th className="py-3 px-4">Origin Location</th>
+                            <th className="py-3 px-4">Loading Port</th>
+                            <th className="py-3 px-4">Vehicle Category</th>
+                            <th className="py-3 px-4">Pricing Mode</th>
+                            <th className="py-3 px-4">Towing Amount (USD)</th>
+                            <th className="py-3 px-4">Effective Dates</th>
+                            <th className="py-3 px-4">Status</th>
+                            {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                          {filteredTowingRates.length === 0 ? (
+                            <tr>
+                              <td colSpan={canManagePricing ? 8 : 7} className="py-12 text-center text-slate-400 text-xs">
+                                No inland towing brackets found matching your filter criteria.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredTowingRates.map((t) => (
+                              <tr key={t.id} className="hover:bg-slate-50/50">
+                                <td className="py-3.5 px-4 font-bold text-brand-navy-950">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800">
+                                      {t.stateCode || 'US'}
+                                    </span>
+                                    <span>{t.originLocation}</span>
+                                  </div>
+                                  {t.locationCode && (
+                                    <span className="block font-mono text-[10px] text-slate-400 font-normal">
+                                      {t.locationCode}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 font-medium text-slate-800 whitespace-nowrap">
+                                  <span>{t.loadingPort}</span>
+                                  {t.loadingPortCode && (
+                                    <span className="ml-1.5 font-mono text-[10px] text-slate-500 font-normal">
+                                      ({t.loadingPortCode})
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <Badge variant="orange">{t.vehicleCategory}</Badge>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  {t.isRange ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                      Estimated Range
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                      Fixed Flat Rate
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-slate-900">
+                                  {t.isRange ? (
+                                    <div>
+                                      <span className="font-bold text-brand-navy-950">
+                                        {formatCurrency(t.minAmount)} – {formatCurrency(t.maxAmount)}
+                                      </span>
+                                      <span className="text-[10px] text-amber-700 block font-normal">
+                                        Subject to carrier check
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="font-bold text-brand-navy-950">{formatCurrency(t.fixedAmount)}</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                                  <span>{t.effectiveFrom}</span>
+                                  <span className="text-slate-400 mx-1">→</span>
+                                  <span>{t.effectiveTo || 'Ongoing'}</span>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  {t.isActive ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      <XCircle className="w-3 h-3 text-rose-600" /> Inactive
+                                    </span>
+                                  )}
+                                </td>
+                                {canManagePricing && (
+                                  <td className="py-3.5 px-4 text-end whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleTowingStatus(t.id, t.isActive)}
+                                        className="text-[10px] py-1 px-2 font-bold"
+                                      >
+                                        {t.isActive ? 'Deactivate' : 'Activate'}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenEditTowing(t)}
+                                        className="p-1 text-slate-600 hover:text-slate-900"
+                                        title="Edit Towing Bracket"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteTowing(t.id)}
+                                        className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                        title="Delete Towing Bracket"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
                 </div>
-              </Card>
+              )}
             </div>
           )}
 
@@ -2563,42 +2880,92 @@ export const AdminTariffsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Towing Rate Modal */}
+      {/* Towing Rate Modal (9-Step Sequence) */}
       <Modal
         isOpen={isTowingModalOpen}
         onClose={() => setIsTowingModalOpen(false)}
-        title={towingModalMode === 'create' ? 'Add Inland Towing Bracket' : 'Edit Inland Towing Bracket'}
+        size="lg"
+        title={towingModalMode === 'create' ? 'Add Inland Towing Bracket (9-Step Configuration)' : 'Edit Inland Towing Bracket'}
       >
         <form onSubmit={handleSaveTowing} className="space-y-4 pt-2 text-xs">
+          {/* Step 1: US State */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              Origin Location (Auction / City) <span className="text-rose-500">*</span>
+              Step 1: US State <span className="text-rose-500">*</span>
             </label>
             <select
-              value={towingFormLocationId}
-              onChange={(e) => setTowingFormLocationId(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+              value={towingFormStateCode}
+              onChange={(e) => {
+                const newSt = e.target.value;
+                setTowingFormStateCode(newSt);
+                const locsInSt = purchaseLocations.filter((l) => l.stateCode === newSt);
+                setTowingFormLocationId(locsInSt.length > 0 ? locsInSt[0].id : '');
+              }}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
               required
             >
-              {purchaseLocations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name} ({loc.stateCode})
+              <option value="">Select US State</option>
+              {states.map((st) => (
+                <option key={st.code} value={st.code}>
+                  {st.name} ({st.code})
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Step 2: Pickup Location (Filtered by State, with inline + Add New Location) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-slate-700">
+                Step 2: Pickup Location (Auction / City) <span className="text-rose-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationToEdit(null);
+                  setIsLocationModalOpen(true);
+                }}
+                className="text-brand-orange-600 hover:text-brand-orange-700 font-bold text-[11px] flex items-center gap-1 transition"
+              >
+                <Plus className="w-3 h-3" /> Add New Location
+              </button>
+            </div>
+            <select
+              value={towingFormLocationId}
+              onChange={(e) => setTowingFormLocationId(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
+              required
+              disabled={!towingFormStateCode}
+            >
+              <option value="">Select Pickup Location</option>
+              {purchaseLocations
+                .filter((l) => !towingFormStateCode || l.stateCode === towingFormStateCode)
+                .map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} {loc.auctionCompany ? `[${loc.auctionCompany}]` : ''} {loc.city ? `(${loc.city})` : ''} {loc.locationCode ? `- ${loc.locationCode}` : ''}
+                  </option>
+                ))}
+            </select>
+            {purchaseLocations.filter((l) => !towingFormStateCode || l.stateCode === towingFormStateCode).length === 0 && towingFormStateCode && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                No pickup locations in {towingFormStateCode} yet. Click "+ Add New Location" above to create one.
+              </p>
+            )}
+          </div>
+
+          {/* Step 3 & Step 4: Loading Port & Vehicle Category */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                US Loading Port <span className="text-rose-500">*</span>
+                Step 3: US Loading Port <span className="text-rose-500">*</span>
               </label>
               <select
                 value={towingFormPortId}
                 onChange={(e) => setTowingFormPortId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
                 required
               >
+                <option value="">Select US Loading Port</option>
                 {ports
                   .filter((p) => p.isLoadingPort)
                   .map((p) => (
@@ -2610,13 +2977,15 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Vehicle Category</label>
+              <label className="block font-bold text-slate-700 mb-1">
+                Step 4: Vehicle Category
+              </label>
               <select
                 value={towingFormCategoryId}
                 onChange={(e) => setTowingFormCategoryId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
               >
-                <option value="">All Vehicle Categories</option>
+                <option value="">All Vehicle Categories (Universal)</option>
                 {vehicleCategories.map((vc) => (
                   <option key={vc.id} value={vc.id}>
                     {vc.name}
@@ -2626,11 +2995,12 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Step 5: Pricing Mode */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              Pricing Mode <span className="text-rose-500">*</span>
+              Step 5: Pricing Mode <span className="text-rose-500">*</span>
             </label>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="radio"
@@ -2656,10 +3026,11 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Step 6: Price */}
           {towingFormRateType === 'fixed' ? (
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Fixed Towing Fee (USD) <span className="text-rose-500">*</span>
+                Step 6: Fixed Towing Fee (USD) <span className="text-rose-500">*</span>
               </label>
               <Input
                 type="number"
@@ -2674,7 +3045,7 @@ export const AdminTariffsPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Min Towing Fee (USD) <span className="text-rose-500">*</span>
+                  Step 6a: Min Towing Fee (USD) <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   type="number"
@@ -2687,7 +3058,7 @@ export const AdminTariffsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Max Towing Fee (USD) <span className="text-rose-500">*</span>
+                  Step 6b: Max Towing Fee (USD) <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   type="number"
@@ -2701,9 +3072,12 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           )}
 
+          {/* Step 7 & 8: Effective Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective From</label>
+              <label className="block font-bold text-slate-700 mb-1">
+                Step 7: Effective From <span className="text-rose-500">*</span>
+              </label>
               <Input
                 type="date"
                 value={towingFormEffectiveFrom}
@@ -2712,7 +3086,9 @@ export const AdminTariffsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Effective To (Optional)</label>
+              <label className="block font-bold text-slate-700 mb-1">
+                Step 8: Effective Until (Optional)
+              </label>
               <Input
                 type="date"
                 value={towingFormEffectiveTo}
@@ -2721,6 +3097,7 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Step 9: Active Status */}
           <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"
@@ -2730,7 +3107,7 @@ export const AdminTariffsPage: React.FC = () => {
               className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
             />
             <label htmlFor="towingFormIsActive" className="font-bold text-slate-700">
-              Active Towing Bracket
+              Step 9: Active Towing Bracket (Available in Calculator)
             </label>
           </div>
 
@@ -3656,6 +4033,62 @@ export const AdminTariffsPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Pickup Location Add/Edit Modal */}
+      <AddEditLocationModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onSuccess={(newLocId) => {
+          loadData();
+          if (newLocId) {
+            setTowingFormLocationId(newLocId);
+          }
+        }}
+        locationToEdit={locationToEdit}
+        states={states}
+        initialStateCode={towingFormStateCode}
+      />
+
+      {/* Bulk Towing Rate Adjustment Modal */}
+      <BulkTowingAdjustmentModal
+        isOpen={isBulkTowingModalOpen}
+        onClose={() => setIsBulkTowingModalOpen(false)}
+        onSuccess={(msg) => {
+          setActionSuccess(msg);
+          loadData();
+        }}
+        states={states}
+        locations={purchaseLocations}
+        ports={ports}
+        categories={vehicleCategories}
+      />
+
+      {/* Towing Rates CSV / Excel Import Modal */}
+      <TowingRatesImportModal
+        isOpen={isTowingImportModalOpen}
+        onClose={() => setIsTowingImportModalOpen(false)}
+        onSuccess={(msg) => {
+          setActionSuccess(msg);
+          loadData();
+        }}
+        existingRates={towingRates}
+        locations={purchaseLocations}
+        ports={ports.filter((p) => p.isLoadingPort)}
+        states={states}
+      />
+
+      {/* Locations CSV / Excel Import Modal */}
+      <LocationsImportModal
+        isOpen={isLocationImportModalOpen}
+        onClose={() => setIsLocationImportModalOpen(false)}
+        onSuccess={(msg) => {
+          setActionSuccess(msg);
+          loadData();
+        }}
+        existingLocations={purchaseLocations}
+        states={states}
+      />
     </div>
   );
 };
+
