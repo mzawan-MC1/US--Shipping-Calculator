@@ -420,34 +420,20 @@ export const locationsBulkService = {
   getTemplateRows(): Record<string, unknown>[] {
     return [
       {
-        Location_Code: 'CP-NEWARK',
-        Name: 'Copart Newark',
         State_Code: 'NJ',
-        City: 'Newark',
-        Zip_Code: '07114',
-        Auction_Company: 'Copart',
-        Address: '200 Doremus Ave',
-        Active: 'TRUE',
+        Name: 'Copart Northgate',
       },
       {
-        Location_Code: 'IAAI-SAV-N',
-        Name: 'IAAI Savannah North',
+        State_Code: 'NJ',
+        Name: 'IAA Trenton',
+      },
+      {
         State_Code: 'GA',
-        City: 'Savannah',
-        Zip_Code: '31408',
-        Auction_Company: 'IAAI',
-        Address: '150 Crossroads Pkwy',
-        Active: 'TRUE',
+        Name: 'Copart Atlanta South',
       },
       {
-        Location_Code: 'MAN-HOU',
-        Name: 'Manheim Houston',
         State_Code: 'TX',
-        City: 'Houston',
-        Zip_Code: '77067',
-        Auction_Company: 'Manheim',
-        Address: '14450 Imperial Valley Dr',
-        Active: 'TRUE',
+        Name: 'Copart Dallas South',
       },
     ];
   },
@@ -464,16 +450,8 @@ export const locationsBulkService = {
 
   exportLocations(locations: AdminPurchaseLocation[], format: 'csv' | 'xlsx'): void {
     const data = locations.map((l) => ({
-      Location_Code: l.locationCode || '',
-      Name: l.name,
       State_Code: l.stateCode,
-      State_Name: l.stateName || l.stateCode,
-      City: l.city || '',
-      Zip_Code: l.zipCode || l.postalCode || '',
-      Auction_Company: l.auctionCompany || '',
-      Address: l.address || '',
-      Connected_Ports_Count: l.connectedPortsCount || 0,
-      Active: l.isActive ? 'TRUE' : 'FALSE',
+      Name: l.name,
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -497,7 +475,6 @@ export const locationsBulkService = {
     const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
 
     const stateMap = new Map(states.map((s) => [s.code.toUpperCase(), s]));
-    const locByCode = new Map(existingLocations.map((l) => [l.locationCode?.toUpperCase() || '', l]));
     const locByNameState = new Map(
       existingLocations.map((l) => [`${l.stateCode.toUpperCase()}|${l.name.trim().toUpperCase()}`, l])
     );
@@ -521,13 +498,6 @@ export const locationsBulkService = {
 
       const name = getVal(['name', 'locationname', 'location']);
       const stateCode = getVal(['statecode', 'state']).toUpperCase();
-      let locationCode = getVal(['locationcode']).toUpperCase();
-      const city = getVal(['city']);
-      const zipCode = getVal(['zipcode', 'zip', 'postalcode']);
-      const auctionCompany = getVal(['auctioncompany', 'auction', 'company']);
-      const address = getVal(['address', 'streetaddress']);
-      const activeStr = getVal(['active', 'isactive']).toLowerCase();
-      const isActive = activeStr === 'false' || activeStr === '0' || activeStr === 'no' ? false : true;
 
       if (!name) {
         errors.push('Location Name is required.');
@@ -538,11 +508,7 @@ export const locationsBulkService = {
         errors.push(`State Code "${stateCode}" is not recognized.`);
       }
 
-      if (!locationCode && name && stateCode) {
-        locationCode = `${stateCode}-${name.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
-      }
-
-      const dedupeKey = locationCode || `${stateCode}|${name.toUpperCase()}`;
+      const dedupeKey = `${stateCode}|${name.toUpperCase()}`;
       let status: LocationImportRow['status'] = 'new';
       let matchedLocationId: string | undefined;
 
@@ -553,21 +519,12 @@ export const locationsBulkService = {
         errors.push('Duplicate location within the uploaded file.');
       } else {
         seenInFile.add(dedupeKey);
-        const existing =
-          (locationCode ? locByCode.get(locationCode) : undefined) ||
-          locByNameState.get(`${stateCode}|${name.toUpperCase()}`);
+        const existing = locByNameState.get(dedupeKey);
 
         if (existing) {
           matchedLocationId = existing.id;
-          const isSame =
-            existing.name === name &&
-            existing.stateCode === stateCode &&
-            (existing.city || '') === (city || '') &&
-            (existing.zipCode || '') === (zipCode || '') &&
-            (existing.auctionCompany || '') === (auctionCompany || '') &&
-            existing.isActive === isActive;
-
-          status = isSame ? 'unchanged' : 'updated';
+          status = 'duplicate';
+          errors.push('Location already exists in this state (duplicate, skipped).');
         } else {
           status = 'new';
         }
@@ -575,14 +532,8 @@ export const locationsBulkService = {
 
       parsedRows.push({
         rowNumber,
-        locationCode: locationCode || undefined,
         name,
         stateCode,
-        city: city || undefined,
-        zipCode: zipCode || undefined,
-        auctionCompany: auctionCompany || undefined,
-        address: address || undefined,
-        isActive,
         status,
         errors,
         matchedLocationId,
@@ -592,10 +543,10 @@ export const locationsBulkService = {
     return {
       total: parsedRows.length,
       newCount: parsedRows.filter((r) => r.status === 'new').length,
-      updatedCount: parsedRows.filter((r) => r.status === 'updated').length,
-      unchangedCount: parsedRows.filter((r) => r.status === 'unchanged').length,
-      rejectedCount: parsedRows.filter((r) => r.status === 'rejected').length,
       duplicateCount: parsedRows.filter((r) => r.status === 'duplicate').length,
+      rejectedCount: parsedRows.filter((r) => r.status === 'rejected').length,
+      updatedCount: 0,
+      unchangedCount: 0,
       rows: parsedRows,
     };
   },
@@ -603,11 +554,8 @@ export const locationsBulkService = {
   downloadErrorReport(rejectedRows: LocationImportRow[], format: 'csv' | 'xlsx'): void {
     const data = rejectedRows.map((r) => ({
       Row: r.rowNumber,
-      Location_Code: r.locationCode || '',
-      Name: r.name,
       State_Code: r.stateCode,
-      City: r.city || '',
-      Auction_Company: r.auctionCompany || '',
+      Name: r.name,
       Errors: r.errors.join(' | '),
     }));
 
@@ -620,46 +568,28 @@ export const locationsBulkService = {
   },
 
   async commitImport(validRows: LocationImportRow[]): Promise<{ success: boolean; appliedCount: number }> {
-    const importable = validRows.filter((r) => r.status === 'new' || r.status === 'updated');
+    const importable = validRows.filter((r) => r.status === 'new');
     let appliedCount = 0;
 
     for (const r of importable) {
-      if (r.matchedLocationId) {
-        // Update existing location
-        const { error } = await supabase
-          .from('purchase_locations')
-          .update({
-            name: r.name,
-            location_code: r.locationCode,
-            state_code: r.stateCode,
-            city: r.city || null,
-            zip_code: r.zipCode || null,
-            postal_code: r.zipCode || null,
-            auction_company: r.auctionCompany || null,
-            address: r.address || null,
-            is_active: r.isActive,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', r.matchedLocationId);
+      const cleanName = r.name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+      const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const locationCode = `${r.stateCode}-${cleanName || 'LOC'}-${randomPart}`;
 
-        if (!error) appliedCount++;
-      } else {
-        // Insert new location
-        const { error } = await supabase.from('purchase_locations').insert({
-          name: r.name,
-          location_code: r.locationCode,
-          state_code: r.stateCode,
-          city: r.city || null,
-          zip_code: r.zipCode || null,
-          postal_code: r.zipCode || null,
-          auction_company: r.auctionCompany || null,
-          address: r.address || null,
-          is_active: r.isActive,
-          is_archived: false,
-        });
+      const { error } = await supabase.from('purchase_locations').insert({
+        name: r.name.trim(),
+        location_code: locationCode,
+        state_code: r.stateCode,
+        city: null,
+        zip_code: null,
+        postal_code: null,
+        auction_company: null,
+        address: null,
+        is_active: true,
+        is_archived: false,
+      });
 
-        if (!error) appliedCount++;
-      }
+      if (!error) appliedCount++;
     }
 
     return { success: true, appliedCount };

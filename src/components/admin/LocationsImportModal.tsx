@@ -77,7 +77,7 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const importableCount = summary ? summary.newCount + summary.updatedCount : 0;
+  const importableCount = summary ? summary.newCount : 0;
   const rejectedRows = summary ? summary.rows.filter((r) => r.status === 'rejected') : [];
 
   return (
@@ -92,7 +92,7 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
           <div>
             <span className="font-bold text-slate-800 block">Download Template</span>
             <span className="text-[11px] text-slate-500">
-              Headers include Location_Code, Name, State_Code, City, Zip_Code, Auction_Company.
+              Upload a CSV or Excel file with State_Code and Name. New pickup locations are created as active.
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -145,7 +145,7 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
                 {isAnalyzing ? 'Analyzing file...' : 'Choose a CSV or Excel file'}
               </span>
               <span className="text-slate-500 text-[11px]">
-                Supports .csv, .xlsx, .xls with up to 5,000 location records
+                Upload a CSV or Excel file with State_Code and Name. New pickup locations are created as active.
               </span>
             </label>
           </div>
@@ -164,30 +164,22 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
             </div>
 
             {/* Validation Metrics Cards */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
                 <span className="block text-[10px] text-slate-500 font-bold uppercase">Total</span>
                 <span className="text-base font-bold text-slate-800">{summary.total}</span>
               </div>
               <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-center">
-                <span className="block text-[10px] text-emerald-700 font-bold uppercase">New</span>
+                <span className="block text-[10px] text-emerald-700 font-bold uppercase">New (Active)</span>
                 <span className="text-base font-bold text-emerald-700">{summary.newCount}</span>
               </div>
-              <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-200 text-center">
-                <span className="block text-[10px] text-blue-700 font-bold uppercase">Updated</span>
-                <span className="text-base font-bold text-blue-700">{summary.updatedCount}</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
-                <span className="block text-[10px] text-slate-500 font-bold uppercase">Unchanged</span>
-                <span className="text-base font-bold text-slate-600">{summary.unchangedCount}</span>
+              <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-center">
+                <span className="block text-[10px] text-amber-700 font-bold uppercase">Duplicates (Skipped)</span>
+                <span className="text-base font-bold text-amber-700">{summary.duplicateCount}</span>
               </div>
               <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-200 text-center">
-                <span className="block text-[10px] text-rose-700 font-bold uppercase">Rejected</span>
+                <span className="block text-[10px] text-rose-700 font-bold uppercase">Rejected (Errors)</span>
                 <span className="text-base font-bold text-rose-700">{summary.rejectedCount}</span>
-              </div>
-              <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-center">
-                <span className="block text-[10px] text-amber-700 font-bold uppercase">Duplicates</span>
-                <span className="text-base font-bold text-amber-700">{summary.duplicateCount}</span>
               </div>
             </div>
 
@@ -230,11 +222,9 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
                   <tr>
                     <th className="p-2">Row</th>
                     <th className="p-2">Status</th>
-                    <th className="p-2">State</th>
-                    <th className="p-2">Code</th>
+                    <th className="p-2">State Code</th>
                     <th className="p-2">Location Name</th>
-                    <th className="p-2">Auction</th>
-                    <th className="p-2">Details</th>
+                    <th className="p-2">Notes / Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
@@ -242,10 +232,6 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
                     const badgeVariant =
                       row.status === 'new'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : row.status === 'updated'
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : row.status === 'unchanged'
-                        ? 'bg-slate-100 text-slate-600 border-slate-200'
                         : row.status === 'duplicate'
                         ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : 'bg-rose-50 text-rose-700 border-rose-200';
@@ -257,20 +243,22 @@ export const LocationsImportModal: React.FC<LocationsImportModalProps> = ({
                           <span
                             className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${badgeVariant}`}
                           >
-                            {row.status.toUpperCase()}
+                            {row.status === 'new'
+                              ? 'NEW'
+                              : row.status === 'duplicate'
+                              ? 'DUPLICATE'
+                              : 'REJECTED'}
                           </span>
                         </td>
                         <td className="p-2 font-mono font-bold text-slate-800">{row.stateCode}</td>
-                        <td className="p-2 font-mono text-slate-500">{row.locationCode || '—'}</td>
                         <td className="p-2 font-semibold text-brand-navy-950">{row.name}</td>
-                        <td className="p-2 text-slate-600">{row.auctionCompany || '—'}</td>
                         <td className="p-2 text-[11px] text-slate-500">
                           {row.errors.length > 0 ? (
-                            <span className="text-rose-600 font-medium">
+                            <span className={row.status === 'duplicate' ? 'text-amber-700 font-medium' : 'text-rose-600 font-medium'}>
                               {row.errors.join('; ')}
                             </span>
                           ) : (
-                            <span className="text-slate-400">Valid</span>
+                            <span className="text-emerald-600 font-medium">Ready to import (Active)</span>
                           )}
                         </td>
                       </tr>
