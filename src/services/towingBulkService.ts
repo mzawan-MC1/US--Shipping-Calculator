@@ -534,6 +534,7 @@ export const locationsBulkService = {
         rowNumber,
         name,
         stateCode,
+        isActive: true,
         status,
         errors,
         matchedLocationId,
