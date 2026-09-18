@@ -56,8 +56,6 @@ export const PickupLocationsTable: React.FC<PickupLocationsTableProps> = ({
         !search ||
         l.name.toLowerCase().includes(q) ||
         (l.locationCode && l.locationCode.toLowerCase().includes(q)) ||
-        (l.city && l.city.toLowerCase().includes(q)) ||
-        (l.zipCode && l.zipCode.includes(q)) ||
         (l.auctionCompany && l.auctionCompany.toLowerCase().includes(q));
 
       const matchesState = stateFilter === 'ALL' || l.stateCode === stateFilter;
@@ -109,7 +107,7 @@ export const PickupLocationsTable: React.FC<PickupLocationsTableProps> = ({
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
               type="text"
-              placeholder="Search location name, code, city, or ZIP..."
+              placeholder="Search location name, code, or auction..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 text-xs"
@@ -200,8 +198,6 @@ export const PickupLocationsTable: React.FC<PickupLocationsTableProps> = ({
                 <th className="py-3 px-4">State</th>
                 <th className="py-3 px-4">Location Name & Code</th>
                 <th className="py-3 px-4">Auction / Company</th>
-                <th className="py-3 px-4">City</th>
-                <th className="py-3 px-4">ZIP Code</th>
                 <th className="py-3 px-4">Connected Ports</th>
                 <th className="py-3 px-4">Status</th>
                 {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
@@ -210,7 +206,7 @@ export const PickupLocationsTable: React.FC<PickupLocationsTableProps> = ({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredLocations.length === 0 ? (
                 <tr>
-                  <td colSpan={canManagePricing ? 8 : 7} className="py-12 text-center text-slate-400 text-xs">
+                  <td colSpan={canManagePricing ? 6 : 5} className="py-12 text-center text-slate-400 text-xs">
                     No pickup locations found matching your filter criteria.
                   </td>
                 </tr>
@@ -242,14 +238,6 @@ export const PickupLocationsTable: React.FC<PickupLocationsTableProps> = ({
                         <Building className="w-3 h-3 text-amber-600" />
                         {l.auctionCompany || 'Private/Other'}
                       </span>
-                    </td>
-
-                    <td className="py-3.5 px-4 font-medium text-slate-700">
-                      {l.city || '—'}
-                    </td>
-
-                    <td className="py-3.5 px-4 font-mono text-slate-600">
-                      {l.zipCode || l.postalCode || '—'}
                     </td>
 
                     <td className="py-3.5 px-4">
