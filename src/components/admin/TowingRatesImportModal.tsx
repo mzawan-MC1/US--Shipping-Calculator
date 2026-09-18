@@ -246,7 +246,7 @@ export const TowingRatesImportModal: React.FC<TowingRatesImportModalProps> = ({
                     <th className="p-2">Status</th>
                     <th className="p-2">Location</th>
                     <th className="p-2">Port</th>
-                    <th className="p-2">Category</th>
+                    <th className="p-2">Mode</th>
                     <th className="p-2">Rate</th>
                     <th className="p-2">Details / Reason</th>
                   </tr>
@@ -276,10 +276,17 @@ export const TowingRatesImportModal: React.FC<TowingRatesImportModalProps> = ({
                         </td>
                         <td className="p-2 font-semibold text-slate-800">
                           {row.locationName} ({row.stateCode})
+                          {row.isNewLocation && (
+                            <span className="ml-1 text-[10px] text-amber-600 font-normal bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                              Auto-create
+                            </span>
+                          )}
                         </td>
                         <td className="p-2 text-slate-600">{row.portCode}</td>
                         <td className="p-2">
-                          {row.vehicleCategoryId ? row.vehicleCategoryId.toUpperCase() : 'ALL'}
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium capitalize">
+                            {row.rateType}
+                          </span>
                         </td>
                         <td className="p-2 font-bold text-brand-navy-950">
                           {row.rateType === 'fixed'

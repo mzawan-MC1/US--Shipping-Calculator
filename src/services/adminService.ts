@@ -266,7 +266,7 @@ export interface BulkRateAdjustmentPreviewItem {
   state_code: string;
   port_name: string;
   port_code: string;
-  vehicle_category_id: string | null;
+  vehicle_category_id?: string | null;
   rate_type: 'fixed' | 'range';
   old_fixed: number | null;
   new_fixed: number | null;

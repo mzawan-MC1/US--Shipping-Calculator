@@ -5,23 +5,21 @@ import { AdminTowingRate, AdminPurchaseLocation, AdminState } from './adminServi
 export interface TowingRateImportRow {
   rowNumber: number;
   stateCode: string;
-  locationCode?: string;
   locationName: string;
+  locationCode?: string;
   portCode: string;
   portName?: string;
-  vehicleCategoryId?: string;
   rateType: 'fixed' | 'range';
   fixedAmount?: number;
   minAmount?: number;
   maxAmount?: number;
-  effectiveFrom?: string;
-  effectiveTo?: string;
   isActive: boolean;
   status: 'new' | 'updated' | 'unchanged' | 'rejected' | 'duplicate';
   errors: string[];
   matchedLocationId?: string;
   matchedPortId?: string;
   matchedRateId?: string;
+  isNewLocation?: boolean;
 }
 
 export interface TowingRateImportSummary {
@@ -68,44 +66,32 @@ export const towingRatesBulkService = {
     return [
       {
         State_Code: 'NJ',
-        Location_Code: 'CP-NORTHGATE',
-        Location_Name: 'Copart Northgate',
+        Location_Name: 'Copart Newark',
         Port_Code: 'USNWK',
-        Vehicle_Category: 'sedan',
         Pricing_Mode: 'fixed',
         Fixed_Price: 120,
         Min_Price: '',
         Max_Price: '',
-        Effective_From: new Date().toISOString().split('T')[0],
-        Effective_To: '',
         Active: 'TRUE',
       },
       {
         State_Code: 'GA',
-        Location_Code: 'CP-ATL-S',
-        Location_Name: 'Copart Atlanta South',
+        Location_Name: 'IAAI Savannah North',
         Port_Code: 'USSAV',
-        Vehicle_Category: 'suv',
         Pricing_Mode: 'range',
         Fixed_Price: '',
         Min_Price: 200,
         Max_Price: 250,
-        Effective_From: new Date().toISOString().split('T')[0],
-        Effective_To: '',
         Active: 'TRUE',
       },
       {
         State_Code: 'TX',
-        Location_Code: 'CP-DAL-S',
         Location_Name: 'Copart Dallas South',
         Port_Code: 'USHOU',
-        Vehicle_Category: '',
         Pricing_Mode: 'fixed',
         Fixed_Price: 180,
         Min_Price: '',
         Max_Price: '',
-        Effective_From: new Date().toISOString().split('T')[0],
-        Effective_To: '',
         Active: 'TRUE',
       },
     ];
@@ -124,20 +110,12 @@ export const towingRatesBulkService = {
   exportRates(rates: AdminTowingRate[], format: 'csv' | 'xlsx'): void {
     const data = rates.map((r) => ({
       State_Code: r.stateCode || '',
-      Location_Code: r.locationCode || '',
-      Location_Name: r.locationName || r.originLocation.split(',')[0] || '',
-      City: r.city || '',
-      Auction_Company: r.auctionCompany || '',
+      Location_Name: r.locationName || (r.originLocation ? r.originLocation.split(',')[0].trim() : ''),
       Port_Code: r.loadingPortCode || '',
-      Port_Name: r.loadingPort,
-      Vehicle_Category: r.vehicleCategoryId || 'ALL',
       Pricing_Mode: r.rateType,
       Fixed_Price: r.rateType === 'fixed' ? r.fixedAmount : '',
       Min_Price: r.rateType === 'range' ? r.minAmount : '',
       Max_Price: r.rateType === 'range' ? r.maxAmount : '',
-      Currency: r.currency || 'USD',
-      Effective_From: r.effectiveFrom,
-      Effective_To: r.effectiveTo || '',
       Active: r.isActive ? 'TRUE' : 'FALSE',
     }));
 
@@ -164,7 +142,6 @@ export const towingRatesBulkService = {
     const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
 
     const stateMap = new Map(states.map((s) => [s.code.toUpperCase(), s]));
-    const locByCode = new Map(locations.map((l) => [l.locationCode?.toUpperCase() || '', l]));
     const locByNameState = new Map(
       locations.map((l) => [`${l.stateCode.toUpperCase()}|${l.name.trim().toUpperCase()}`, l])
     );
@@ -172,10 +149,7 @@ export const towingRatesBulkService = {
     const portByName = new Map(ports.map((p) => [p.name.toUpperCase(), p]));
 
     const existingRateKeyMap = new Map(
-      existingRates.map((r) => [
-        `${r.purchaseLocationId}|${r.loadingPortId}|${(r.vehicleCategoryId || '').toLowerCase()}`,
-        r,
-      ])
+      existingRates.map((r) => [`${r.purchaseLocationId}|${r.loadingPortId}`, r])
     );
 
     const seenInFile = new Set<string>();
@@ -197,11 +171,8 @@ export const towingRatesBulkService = {
       };
 
       const stateCode = getVal(['statecode', 'state']).toUpperCase();
-      const locationCode = getVal(['locationcode']).toUpperCase();
-      const locationName = getVal(['locationname', 'location', 'originlocation']);
+      const locationName = getVal(['locationname', 'location', 'originlocation', 'name']);
       const portInput = getVal(['portcode', 'port', 'loadingport']).toUpperCase();
-      const vehicleCategory = getVal(['vehiclecategory', 'category']).toLowerCase();
-      const categoryClean = vehicleCategory === 'all' || !vehicleCategory ? undefined : vehicleCategory;
       const pricingModeInput = getVal(['pricingmode', 'ratetype', 'mode']).toLowerCase();
       const rateType: 'fixed' | 'range' = pricingModeInput === 'range' ? 'range' : 'fixed';
 
@@ -213,8 +184,6 @@ export const towingRatesBulkService = {
       const minAmount = minPriceStr ? parseFloat(minPriceStr) : undefined;
       const maxAmount = maxPriceStr ? parseFloat(maxPriceStr) : undefined;
 
-      const effectiveFromInput = getVal(['effectivefrom', 'startdate']);
-      const effectiveToInput = getVal(['effectiveto', 'enddate']);
       const activeStr = getVal(['active', 'isactive']).toLowerCase();
       const isActive = activeStr === 'false' || activeStr === '0' || activeStr === 'no' ? false : true;
 
@@ -225,18 +194,18 @@ export const towingRatesBulkService = {
         errors.push(`State code "${stateCode}" does not exist in known states.`);
       }
 
-      // Match Location
-      let matchedLocation: AdminPurchaseLocation | undefined;
-      if (locationCode && locByCode.has(locationCode)) {
-        matchedLocation = locByCode.get(locationCode);
-      } else if (locationName && stateCode) {
-        matchedLocation = locByNameState.get(`${stateCode}|${locationName.toUpperCase()}`);
+      if (!locationName) {
+        errors.push('Location name is required.');
       }
 
-      if (!matchedLocation) {
-        errors.push(
-          `Location could not be matched by code "${locationCode}" or name "${locationName}" in state "${stateCode}". Please create the location first or verify the location code.`
-        );
+      // Match Location
+      let matchedLocation: AdminPurchaseLocation | undefined;
+      let isNewLocation = false;
+      if (stateCode && locationName) {
+        matchedLocation = locByNameState.get(`${stateCode}|${locationName.toUpperCase()}`);
+        if (!matchedLocation) {
+          isNewLocation = true;
+        }
       }
 
       // Match Port
@@ -265,8 +234,8 @@ export const towingRatesBulkService = {
         }
       }
 
-      // Check duplicates in file
-      const dedupeKey = `${matchedLocation?.id || locationCode || locationName}|${matchedPort?.id || portInput}|${categoryClean || ''}`;
+      // Check duplicates in file (deduplicate by State_Code | Location_Name | Port_Code)
+      const dedupeKey = `${stateCode}|${locationName.toUpperCase()}|${matchedPort?.code || portInput}`;
       let status: TowingRateImportRow['status'] = 'new';
       let matchedRateId: string | undefined;
 
@@ -274,24 +243,25 @@ export const towingRatesBulkService = {
         status = 'rejected';
       } else if (seenInFile.has(dedupeKey)) {
         status = 'duplicate';
-        errors.push('Duplicate entry for this location, port, and vehicle category within the uploaded file.');
+        errors.push('Duplicate entry for this location and loading port within the uploaded file.');
       } else {
         seenInFile.add(dedupeKey);
-        // Check if existing rate matches
-        const existingRate = existingRateKeyMap.get(
-          `${matchedLocation!.id}|${matchedPort!.id}|${(categoryClean || '').toLowerCase()}`
-        );
 
-        if (existingRate) {
-          matchedRateId = existingRate.id;
-          const isSamePrice =
-            existingRate.rateType === rateType &&
-            (rateType === 'fixed'
-              ? existingRate.fixedAmount === fixedAmount
-              : existingRate.minAmount === minAmount && existingRate.maxAmount === maxAmount) &&
-            existingRate.isActive === isActive;
+        if (matchedLocation && matchedPort) {
+          const existingRate = existingRateKeyMap.get(`${matchedLocation.id}|${matchedPort.id}`);
+          if (existingRate) {
+            matchedRateId = existingRate.id;
+            const isSamePrice =
+              existingRate.rateType === rateType &&
+              (rateType === 'fixed'
+                ? existingRate.fixedAmount === fixedAmount
+                : existingRate.minAmount === minAmount && existingRate.maxAmount === maxAmount) &&
+              existingRate.isActive === isActive;
 
-          status = isSamePrice ? 'unchanged' : 'updated';
+            status = isSamePrice ? 'unchanged' : 'updated';
+          } else {
+            status = 'new';
+          }
         } else {
           status = 'new';
         }
@@ -300,23 +270,21 @@ export const towingRatesBulkService = {
       parsedRows.push({
         rowNumber,
         stateCode,
-        locationCode: matchedLocation?.locationCode || locationCode || undefined,
         locationName: matchedLocation?.name || locationName,
+        locationCode: matchedLocation?.locationCode || undefined,
         portCode: matchedPort?.code || portInput,
         portName: matchedPort?.name,
-        vehicleCategoryId: categoryClean,
         rateType,
         fixedAmount,
         minAmount,
         maxAmount,
-        effectiveFrom: effectiveFromInput || new Date().toISOString().split('T')[0],
-        effectiveTo: effectiveToInput || undefined,
         isActive,
         status,
         errors,
         matchedLocationId: matchedLocation?.id,
         matchedPortId: matchedPort?.id,
         matchedRateId,
+        isNewLocation,
       });
     });
 
@@ -335,12 +303,13 @@ export const towingRatesBulkService = {
     const data = rejectedRows.map((r) => ({
       Row: r.rowNumber,
       State_Code: r.stateCode,
-      Location_Code: r.locationCode || '',
       Location_Name: r.locationName,
       Port_Code: r.portCode,
-      Category: r.vehicleCategoryId || 'ALL',
-      Rate_Type: r.rateType,
-      Price: r.rateType === 'fixed' ? r.fixedAmount : `${r.minAmount}-${r.maxAmount}`,
+      Pricing_Mode: r.rateType,
+      Fixed_Price: r.rateType === 'fixed' ? r.fixedAmount ?? '' : '',
+      Min_Price: r.rateType === 'range' ? r.minAmount ?? '' : '',
+      Max_Price: r.rateType === 'range' ? r.maxAmount ?? '' : '',
+      Active: r.isActive ? 'TRUE' : 'FALSE',
       Errors: r.errors.join(' | '),
     }));
 
@@ -356,8 +325,52 @@ export const towingRatesBulkService = {
     const importable = validRows.filter((r) => r.status === 'new' || r.status === 'updated');
     let appliedCount = 0;
 
+    // Cache of newly created locations during this import batch
+    const createdLocationMap = new Map<string, string>(); // "STATE|NAME" -> location_id
+
     for (const r of importable) {
-      if (!r.matchedLocationId || !r.matchedPortId) continue;
+      if (!r.matchedPortId) continue;
+
+      let locationId = r.matchedLocationId;
+
+      // Auto-create location if it does not exist
+      if (!locationId) {
+        const cacheKey = `${r.stateCode.toUpperCase()}|${r.locationName.trim().toUpperCase()}`;
+        if (createdLocationMap.has(cacheKey)) {
+          locationId = createdLocationMap.get(cacheKey)!;
+        } else {
+          // Auto-generate stable location_code (e.g. NJ-NEWARK-A1B2)
+          const nameSlug =
+            r.locationName
+              .trim()
+              .toUpperCase()
+              .replace(/[^A-Z0-9]/g, '')
+              .substring(0, 8) || 'LOC';
+          const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+          const autoLocationCode = `${r.stateCode.toUpperCase()}-${nameSlug}-${randomSuffix}`;
+
+          const { data: createdLoc, error: locErr } = await supabase
+            .from('purchase_locations')
+            .insert({
+              name: r.locationName.trim(),
+              state_code: r.stateCode.toUpperCase(),
+              location_code: autoLocationCode,
+              is_active: true,
+            })
+            .select('id')
+            .single();
+
+          if (locErr || !createdLoc) {
+            console.error('Failed to auto-create location:', locErr);
+            continue;
+          }
+
+          locationId = createdLoc.id;
+          createdLocationMap.set(cacheKey, locationId);
+        }
+      }
+
+      if (!locationId) continue;
 
       if (r.matchedRateId) {
         // Update existing rate
@@ -368,8 +381,8 @@ export const towingRatesBulkService = {
             fixed_amount: r.rateType === 'fixed' ? r.fixedAmount : null,
             min_amount: r.rateType === 'range' ? r.minAmount : null,
             max_amount: r.rateType === 'range' ? r.maxAmount : null,
-            effective_from: r.effectiveFrom || new Date().toISOString().split('T')[0],
-            effective_to: r.effectiveTo || null,
+            vehicle_category_id: null,
+            vehicle_condition_id: null,
             is_active: r.isActive,
             updated_at: new Date().toISOString(),
           })
@@ -379,15 +392,14 @@ export const towingRatesBulkService = {
       } else {
         // Insert new rate
         const { error } = await supabase.from('towing_rates').insert({
-          purchase_location_id: r.matchedLocationId,
+          purchase_location_id: locationId,
           loading_port_id: r.matchedPortId,
-          vehicle_category_id: r.vehicleCategoryId || null,
+          vehicle_category_id: null,
+          vehicle_condition_id: null,
           rate_type: r.rateType,
           fixed_amount: r.rateType === 'fixed' ? r.fixedAmount : null,
           min_amount: r.rateType === 'range' ? r.minAmount : null,
           max_amount: r.rateType === 'range' ? r.maxAmount : null,
-          effective_from: r.effectiveFrom || new Date().toISOString().split('T')[0],
-          effective_to: r.effectiveTo || null,
           is_active: r.isActive,
           currency: 'USD',
         });

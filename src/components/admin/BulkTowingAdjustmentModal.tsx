@@ -20,7 +20,7 @@ interface BulkTowingAdjustmentModalProps {
   states: AdminState[];
   locations: AdminPurchaseLocation[];
   ports: AdminPort[];
-  categories: AdminVehicleCategory[];
+  categories?: AdminVehicleCategory[];
 }
 
 export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps> = ({
@@ -30,13 +30,11 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
   states,
   locations,
   ports,
-  categories,
 }) => {
   // Filter settings
   const [filterState, setFilterState] = useState('');
   const [filterLocationId, setFilterLocationId] = useState('');
   const [filterPortId, setFilterPortId] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
   const [filterRateType, setFilterRateType] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('true');
 
@@ -45,8 +43,6 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
     'percentage_increase' | 'percentage_decrease' | 'fixed_increase' | 'fixed_decrease'
   >('percentage_increase');
   const [value, setValue] = useState('5');
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
-  const [effectiveTo, setEffectiveTo] = useState('');
 
   // Preview state
   const [previewList, setPreviewList] = useState<BulkRateAdjustmentPreviewItem[] | null>(null);
@@ -75,15 +71,12 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           state_code: filterState || null,
           purchase_location_id: filterLocationId || null,
           loading_port_id: filterPortId || null,
-          vehicle_category_id: filterCategory || null,
           rate_type: filterRateType || null,
           is_active: filterStatus === '' ? null : filterStatus === 'true',
         },
         {
           adjustment_type: adjustmentType,
           value: val,
-          effective_from: effectiveFrom,
-          effective_to: effectiveTo || null,
         }
       );
       setPreviewList(items);
@@ -110,15 +103,12 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           state_code: filterState || null,
           purchase_location_id: filterLocationId || null,
           loading_port_id: filterPortId || null,
-          vehicle_category_id: filterCategory || null,
           rate_type: filterRateType || null,
           is_active: filterStatus === '' ? null : filterStatus === 'true',
         },
         {
           adjustment_type: adjustmentType,
           value: val,
-          effective_from: effectiveFrom,
-          effective_to: effectiveTo || null,
         }
       );
 
@@ -143,8 +133,8 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           <div>
             <strong className="block font-bold">Safe Batch Update Engine:</strong>
             <span>
-              Adjusts active tariffs without altering historical quotation snapshots. Future quotes will
-              automatically use updated rates.
+              Adjusts active tariffs directly in place. Future quotes and calculations will
+              immediately reflect updated rates.
             </span>
           </div>
         </div>
@@ -155,7 +145,7 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           </div>
         )}
 
-        {/* Step 1: Filter Scope */}
+        {/* Filter Scope */}
         <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
           <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full bg-brand-navy-900 text-white text-[10px] flex items-center justify-center font-bold">
@@ -226,25 +216,6 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Vehicle Category</label>
-              <select
-                value={filterCategory}
-                onChange={(e) => {
-                  setFilterCategory(e.target.value);
-                  setPreviewList(null);
-                }}
-                className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
-              >
-                <option value="">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1">Pricing Mode</label>
               <select
                 value={filterRateType}
@@ -278,7 +249,7 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           </div>
         </div>
 
-        {/* Step 2: Adjustment Rules */}
+        {/* Adjustment Rules */}
         <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
           <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full bg-brand-orange-500 text-white text-[10px] flex items-center justify-center font-bold">
@@ -322,32 +293,6 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
               />
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Effective From</label>
-              <Input
-                type="date"
-                value={effectiveFrom}
-                onChange={(e) => {
-                  setEffectiveFrom(e.target.value);
-                  setPreviewList(null);
-                }}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Effective To (Optional)</label>
-              <Input
-                type="date"
-                value={effectiveTo}
-                onChange={(e) => {
-                  setEffectiveTo(e.target.value);
-                  setPreviewList(null);
-                }}
-              />
-            </div>
-          </div>
         </div>
 
         {/* Preview Button */}
@@ -365,7 +310,7 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
           </Button>
         </div>
 
-        {/* Step 3: Preview Results */}
+        {/* Preview Results */}
         {previewList !== null && (
           <div className="space-y-2 pt-1 border-t border-slate-100">
             <div className="flex items-center justify-between">
@@ -390,7 +335,7 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
                     <tr>
                       <th className="p-2.5">Location</th>
                       <th className="p-2.5">Port</th>
-                      <th className="p-2.5">Category</th>
+                      <th className="p-2.5">Mode</th>
                       <th className="p-2.5">Old Rate</th>
                       <th className="p-2.5 text-center">→</th>
                       <th className="p-2.5">New Rate</th>
@@ -404,8 +349,8 @@ export const BulkTowingAdjustmentModal: React.FC<BulkTowingAdjustmentModalProps>
                         </td>
                         <td className="p-2 font-medium text-slate-600">{item.port_code}</td>
                         <td className="p-2">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-bold">
-                            {item.vehicle_category_id ? item.vehicle_category_id.toUpperCase() : 'ALL'}
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium capitalize">
+                            {item.rate_type}
                           </span>
                         </td>
                         <td className="p-2 text-slate-500">

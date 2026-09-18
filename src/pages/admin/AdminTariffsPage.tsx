@@ -86,7 +86,6 @@ export const AdminTariffsPage: React.FC = () => {
   const [towingStateFilter, setTowingStateFilter] = useState('ALL');
   const [towingLocationFilter, setTowingLocationFilter] = useState('ALL');
   const [towingPortFilter, setTowingPortFilter] = useState('ALL');
-  const [towingCategoryFilter, setTowingCategoryFilter] = useState('ALL');
   const [towingRateTypeFilter, setTowingRateTypeFilter] = useState<'ALL' | 'fixed' | 'range'>('ALL');
   const [towingStatusFilter, setTowingStatusFilter] = useState<'ALL' | 'active' | 'inactive'>('ALL');
 
@@ -177,15 +176,10 @@ export const AdminTariffsPage: React.FC = () => {
   const [editingTowingId, setEditingTowingId] = useState<string | null>(null);
   const [towingFormLocationId, setTowingFormLocationId] = useState('');
   const [towingFormPortId, setTowingFormPortId] = useState('');
-  const [towingFormCategoryId, setTowingFormCategoryId] = useState<string>('sedan');
   const [towingFormRateType, setTowingFormRateType] = useState<'fixed' | 'range'>('range');
   const [towingFormFixedAmount, setTowingFormFixedAmount] = useState('450');
   const [towingFormMinAmount, setTowingFormMinAmount] = useState('350');
   const [towingFormMaxAmount, setTowingFormMaxAmount] = useState('550');
-  const [towingFormEffectiveFrom, setTowingFormEffectiveFrom] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [towingFormEffectiveTo, setTowingFormEffectiveTo] = useState('');
   const [towingFormIsActive, setTowingFormIsActive] = useState(true);
   const [isSavingTowing, setIsSavingTowing] = useState(false);
 
@@ -330,17 +324,11 @@ export const AdminTariffsPage: React.FC = () => {
         (t.city && t.city.toLowerCase().includes(q)) ||
         (t.locationCode && t.locationCode.toLowerCase().includes(q)) ||
         t.loadingPort.toLowerCase().includes(q) ||
-        (t.loadingPortCode && t.loadingPortCode.toLowerCase().includes(q)) ||
-        t.vehicleCategory.toLowerCase().includes(q);
+        (t.loadingPortCode && t.loadingPortCode.toLowerCase().includes(q));
 
       const matchesState = towingStateFilter === 'ALL' || t.stateCode === towingStateFilter;
       const matchesLocation = towingLocationFilter === 'ALL' || t.purchaseLocationId === towingLocationFilter;
       const matchesPort = towingPortFilter === 'ALL' || t.loadingPortId === towingPortFilter;
-      const matchesCategory =
-        towingCategoryFilter === 'ALL' ||
-        (towingCategoryFilter === 'ALL_CATEGORIES'
-          ? !t.vehicleCategoryId
-          : t.vehicleCategoryId === towingCategoryFilter);
       const matchesRateType = towingRateTypeFilter === 'ALL' || t.rateType === towingRateTypeFilter;
       const matchesStatus =
         towingStatusFilter === 'ALL' || (towingStatusFilter === 'active' ? t.isActive : !t.isActive);
@@ -350,7 +338,6 @@ export const AdminTariffsPage: React.FC = () => {
         matchesState &&
         matchesLocation &&
         matchesPort &&
-        matchesCategory &&
         matchesRateType &&
         matchesStatus
       );
@@ -361,7 +348,6 @@ export const AdminTariffsPage: React.FC = () => {
     towingStateFilter,
     towingLocationFilter,
     towingPortFilter,
-    towingCategoryFilter,
     towingRateTypeFilter,
     towingStatusFilter,
   ]);
@@ -477,13 +463,10 @@ export const AdminTariffsPage: React.FC = () => {
     setTowingFormLocationId(matchingLocs.length > 0 ? matchingLocs[0].id : '');
     const loadingPorts = ports.filter((x) => x.isLoadingPort);
     if (loadingPorts.length > 0) setTowingFormPortId(loadingPorts[0].id);
-    setTowingFormCategoryId('sedan');
     setTowingFormRateType('range');
     setTowingFormFixedAmount('450');
     setTowingFormMinAmount('350');
     setTowingFormMaxAmount('550');
-    setTowingFormEffectiveFrom(new Date().toISOString().split('T')[0]);
-    setTowingFormEffectiveTo('');
     setTowingFormIsActive(true);
     setIsTowingModalOpen(true);
   };
@@ -499,13 +482,10 @@ export const AdminTariffsPage: React.FC = () => {
     }
     setTowingFormLocationId(t.purchaseLocationId);
     setTowingFormPortId(t.loadingPortId);
-    setTowingFormCategoryId(t.vehicleCategoryId || '');
     setTowingFormRateType(t.rateType);
     setTowingFormFixedAmount(t.fixedAmount ? t.fixedAmount.toString() : '450');
     setTowingFormMinAmount(t.minAmount ? t.minAmount.toString() : '350');
     setTowingFormMaxAmount(t.maxAmount ? t.maxAmount.toString() : '550');
-    setTowingFormEffectiveFrom(t.effectiveFrom);
-    setTowingFormEffectiveTo(t.effectiveTo || '');
     setTowingFormIsActive(t.isActive);
     setIsTowingModalOpen(true);
   };
@@ -541,13 +521,11 @@ export const AdminTariffsPage: React.FC = () => {
         await adminService.createTowingRate({
           purchaseLocationId: towingFormLocationId,
           loadingPortId: towingFormPortId,
-          vehicleCategoryId: towingFormCategoryId || null,
+          vehicleCategoryId: null,
           rateType: towingFormRateType,
           fixedAmount: towingFormRateType === 'fixed' ? fixedAmt : undefined,
           minAmount: towingFormRateType === 'range' ? minAmt : undefined,
           maxAmount: towingFormRateType === 'range' ? maxAmt : undefined,
-          effectiveFrom: towingFormEffectiveFrom,
-          effectiveTo: towingFormEffectiveTo || undefined,
           isActive: towingFormIsActive,
         });
         setActionSuccess('Inland towing bracket created successfully.');
@@ -555,13 +533,12 @@ export const AdminTariffsPage: React.FC = () => {
         await adminService.updateTowingRate(editingTowingId, {
           purchaseLocationId: towingFormLocationId,
           loadingPortId: towingFormPortId,
-          vehicleCategoryId: towingFormCategoryId || null,
+          vehicleCategoryId: null,
+          vehicleConditionId: null,
           rateType: towingFormRateType,
           fixedAmount: towingFormRateType === 'fixed' ? fixedAmt : null,
           minAmount: towingFormRateType === 'range' ? minAmt : null,
           maxAmount: towingFormRateType === 'range' ? maxAmt : null,
-          effectiveFrom: towingFormEffectiveFrom,
-          effectiveTo: towingFormEffectiveTo || null,
           isActive: towingFormIsActive,
         });
         setActionSuccess('Inland towing bracket updated successfully.');
@@ -1636,7 +1613,7 @@ export const AdminTariffsPage: React.FC = () => {
                     </div>
 
                     {/* Filter controls row */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-2 border-t border-slate-100">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-2 border-t border-slate-100">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">State</label>
                         <select
@@ -1694,23 +1671,6 @@ export const AdminTariffsPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
-                        <select
-                          value={towingCategoryFilter}
-                          onChange={(e) => setTowingCategoryFilter(e.target.value)}
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700"
-                        >
-                          <option value="ALL">All Categories</option>
-                          <option value="ALL_CATEGORIES">All-Categories Tariffs</option>
-                          {vehicleCategories.map((vc) => (
-                            <option key={vc.id} value={vc.id}>
-                              {vc.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pricing Mode</label>
                         <select
                           value={towingRateTypeFilter}
@@ -1746,10 +1706,8 @@ export const AdminTariffsPage: React.FC = () => {
                           <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                             <th className="py-3 px-4">Origin Location</th>
                             <th className="py-3 px-4">Loading Port</th>
-                            <th className="py-3 px-4">Vehicle Category</th>
                             <th className="py-3 px-4">Pricing Mode</th>
                             <th className="py-3 px-4">Towing Amount (USD)</th>
-                            <th className="py-3 px-4">Effective Dates</th>
                             <th className="py-3 px-4">Status</th>
                             {canManagePricing && <th className="py-3 px-4 text-end">Actions</th>}
                           </tr>
@@ -1757,7 +1715,7 @@ export const AdminTariffsPage: React.FC = () => {
                         <tbody className="divide-y divide-slate-100 text-slate-700">
                           {filteredTowingRates.length === 0 ? (
                             <tr>
-                              <td colSpan={canManagePricing ? 8 : 7} className="py-12 text-center text-slate-400 text-xs">
+                              <td colSpan={canManagePricing ? 6 : 5} className="py-12 text-center text-slate-400 text-xs">
                                 No inland towing brackets found matching your filter criteria.
                               </td>
                             </tr>
@@ -1786,9 +1744,6 @@ export const AdminTariffsPage: React.FC = () => {
                                   )}
                                 </td>
                                 <td className="py-3.5 px-4">
-                                  <Badge variant="orange">{t.vehicleCategory}</Badge>
-                                </td>
-                                <td className="py-3.5 px-4">
                                   {t.isRange ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                       Estimated Range
@@ -1812,11 +1767,6 @@ export const AdminTariffsPage: React.FC = () => {
                                   ) : (
                                     <span className="font-bold text-brand-navy-950">{formatCurrency(t.fixedAmount)}</span>
                                   )}
-                                </td>
-                                <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                                  <span>{t.effectiveFrom}</span>
-                                  <span className="text-slate-400 mx-1">→</span>
-                                  <span>{t.effectiveTo || 'Ongoing'}</span>
                                 </td>
                                 <td className="py-3.5 px-4">
                                   {t.isActive ? (
@@ -2884,14 +2834,14 @@ export const AdminTariffsPage: React.FC = () => {
       <Modal
         isOpen={isTowingModalOpen}
         onClose={() => setIsTowingModalOpen(false)}
-        size="lg"
-        title={towingModalMode === 'create' ? 'Add Inland Towing Bracket (9-Step Configuration)' : 'Edit Inland Towing Bracket'}
+        size="md"
+        title={towingModalMode === 'create' ? 'Add Inland Towing Bracket' : 'Edit Inland Towing Bracket'}
       >
         <form onSubmit={handleSaveTowing} className="space-y-4 pt-2 text-xs">
-          {/* Step 1: US State */}
+          {/* US State */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              Step 1: US State <span className="text-rose-500">*</span>
+              US State <span className="text-rose-500">*</span>
             </label>
             <select
               value={towingFormStateCode}
@@ -2913,11 +2863,11 @@ export const AdminTariffsPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Step 2: Pickup Location (Filtered by State, with inline + Add New Location) */}
+          {/* Pickup Location */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block font-bold text-slate-700">
-                Step 2: Pickup Location (Auction / City) <span className="text-rose-500">*</span>
+                Pickup Location <span className="text-rose-500">*</span>
               </label>
               <button
                 type="button"
@@ -2953,52 +2903,32 @@ export const AdminTariffsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Step 3 & Step 4: Loading Port & Vehicle Category */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Step 3: US Loading Port <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={towingFormPortId}
-                onChange={(e) => setTowingFormPortId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
-                required
-              >
-                <option value="">Select US Loading Port</option>
-                {ports
-                  .filter((p) => p.isLoadingPort)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.code})
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Step 4: Vehicle Category
-              </label>
-              <select
-                value={towingFormCategoryId}
-                onChange={(e) => setTowingFormCategoryId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
-              >
-                <option value="">All Vehicle Categories (Universal)</option>
-                {vehicleCategories.map((vc) => (
-                  <option key={vc.id} value={vc.id}>
-                    {vc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Step 5: Pricing Mode */}
+          {/* US Loading Port */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              Step 5: Pricing Mode <span className="text-rose-500">*</span>
+              US Loading Port <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={towingFormPortId}
+              onChange={(e) => setTowingFormPortId(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-medium"
+              required
+            >
+              <option value="">Select US Loading Port</option>
+              {ports
+                .filter((p) => p.isLoadingPort)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.code})
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Pricing Mode */}
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Pricing Mode <span className="text-rose-500">*</span>
             </label>
             <div className="flex items-center gap-4 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
               <label className="flex items-center gap-1.5 cursor-pointer">
@@ -3026,11 +2956,11 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Step 6: Price */}
+          {/* Price */}
           {towingFormRateType === 'fixed' ? (
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Step 6: Fixed Towing Fee (USD) <span className="text-rose-500">*</span>
+                Fixed Towing Fee (USD) <span className="text-rose-500">*</span>
               </label>
               <Input
                 type="number"
@@ -3045,7 +2975,7 @@ export const AdminTariffsPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Step 6a: Min Towing Fee (USD) <span className="text-rose-500">*</span>
+                  Min Towing Fee (USD) <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   type="number"
@@ -3058,7 +2988,7 @@ export const AdminTariffsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Step 6b: Max Towing Fee (USD) <span className="text-rose-500">*</span>
+                  Max Towing Fee (USD) <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   type="number"
@@ -3072,32 +3002,7 @@ export const AdminTariffsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Step 7 & 8: Effective Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Step 7: Effective From <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="date"
-                value={towingFormEffectiveFrom}
-                onChange={(e) => setTowingFormEffectiveFrom(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Step 8: Effective Until (Optional)
-              </label>
-              <Input
-                type="date"
-                value={towingFormEffectiveTo}
-                onChange={(e) => setTowingFormEffectiveTo(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Step 9: Active Status */}
+          {/* Active Status */}
           <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"
@@ -3106,8 +3011,8 @@ export const AdminTariffsPage: React.FC = () => {
               onChange={(e) => setTowingFormIsActive(e.target.checked)}
               className="rounded border-slate-300 text-brand-orange-600 focus:ring-brand-orange-500"
             />
-            <label htmlFor="towingFormIsActive" className="font-bold text-slate-700">
-              Step 9: Active Towing Bracket (Available in Calculator)
+            <label htmlFor="towingFormIsActive" className="font-bold text-slate-700 cursor-pointer">
+              Active Towing Bracket (Available in Calculator)
             </label>
           </div>
 
