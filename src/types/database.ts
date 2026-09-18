@@ -1124,11 +1124,11 @@ export type Database = {
           effective_to: string | null
           id: string
           is_active: boolean
-          powertrain_id: string
+          powertrain_id: string | null
           route_id: string
           shipping_method_id: string
           updated_at: string
-          vehicle_category_id: string
+          vehicle_category_id: string | null
         }
         Insert: {
           base_amount: number
@@ -1138,11 +1138,11 @@ export type Database = {
           effective_to?: string | null
           id?: string
           is_active?: boolean
-          powertrain_id: string
+          powertrain_id?: string | null
           route_id: string
           shipping_method_id: string
           updated_at?: string
-          vehicle_category_id: string
+          vehicle_category_id?: string | null
         }
         Update: {
           base_amount?: number
@@ -1152,11 +1152,11 @@ export type Database = {
           effective_to?: string | null
           id?: string
           is_active?: boolean
-          powertrain_id?: string
+          powertrain_id?: string | null
           route_id?: string
           shipping_method_id?: string
           updated_at?: string
-          vehicle_category_id?: string
+          vehicle_category_id?: string | null
         }
         Relationships: [
           {

@@ -14,7 +14,6 @@ import {
   AdminPort,
   AdminVehicleCategory,
   AdminShippingMethod,
-  AdminPowertrain,
   AdminPurchaseLocation,
   AdminAdditionalChargeRule,
   AdminQuotationRule,
@@ -47,7 +46,6 @@ import {
   CheckCircle2,
   XCircle,
   Search,
-  Filter,
   Sliders,
   FileText,
   ArrowUp,
@@ -73,7 +71,6 @@ export const AdminTariffsPage: React.FC = () => {
   const [ports, setPorts] = useState<AdminPort[]>([]);
   const [vehicleCategories, setVehicleCategories] = useState<AdminVehicleCategory[]>([]);
   const [shippingMethods, setShippingMethods] = useState<AdminShippingMethod[]>([]);
-  const [powertrains, setPowertrains] = useState<AdminPowertrain[]>([]);
   const [purchaseLocations, setPurchaseLocations] = useState<AdminPurchaseLocation[]>([]);
   const [additionalCharges, setAdditionalCharges] = useState<AdminAdditionalChargeRule[]>([]);
 
@@ -218,7 +215,7 @@ export const AdminTariffsPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [f, t, e, r, p, vc, sm, pt, pl, ac, qr, cats, pts, conds, adjs, comps, stList] = await Promise.all([
+      const [f, t, e, r, p, vc, sm, pl, ac, qr, cats, pts, conds, adjs, comps, stList] = await Promise.all([
         adminService.getFreightRates(),
         adminService.getTowingRates(),
         adminService.getExchangeRate(),
@@ -226,7 +223,6 @@ export const AdminTariffsPage: React.FC = () => {
         adminService.getPorts(),
         adminService.getVehicleCategories(),
         adminService.getShippingMethods(),
-        adminService.getPowertrains(),
         adminService.getPurchaseLocations(),
         adminService.getAdditionalChargeRules(),
         adminService.getQuotationRules(),
@@ -245,7 +241,6 @@ export const AdminTariffsPage: React.FC = () => {
       setPorts(p);
       setVehicleCategories(vc);
       setShippingMethods(sm);
-      setPowertrains(pt);
       setPurchaseLocations(pl);
       setAdditionalCharges(ac);
       setQuotationRules(qr);
