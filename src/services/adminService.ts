@@ -2958,7 +2958,145 @@ export const adminService = {
       if (error) throw error;
     }
   },
+
+  // Email & SMTP Settings Management (Super Admin only via manage-smtp Edge Function)
+  async getEmailSettings(): Promise<{
+    settings: AdminEmailSmtpSettings;
+    notifications: AdminNotificationPreferences;
+  }> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: { action: 'get-settings' },
+    });
+    if (error) throw new Error(error.message || 'Failed to load email settings.');
+    if (data?.error) throw new Error(data.error);
+    return {
+      settings: data.settings,
+      notifications: data.notifications,
+    };
+  },
+
+  async saveEmailSettings(payload: {
+    settings: Partial<AdminEmailSmtpSettings> & { new_password?: string; clear_password?: boolean };
+    notifications: AdminNotificationPreferences;
+  }): Promise<{ success: boolean; message: string; has_password: boolean }> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: {
+        action: 'save-settings',
+        settings: payload.settings,
+        notifications: payload.notifications,
+      },
+    });
+    if (error) throw new Error(error.message || 'Failed to save email settings.');
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async sendTestEmail(recipientEmail: string): Promise<{ success: boolean; message: string }> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: {
+        action: 'send-test-email',
+        test_recipient: recipientEmail,
+      },
+    });
+    if (error) throw new Error(error.message || 'Failed to dispatch test email.');
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async getEmailTemplates(): Promise<AdminEmailTemplate[]> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: { action: 'get-templates' },
+    });
+    if (error) throw new Error(error.message || 'Failed to load email templates.');
+    if (data?.error) throw new Error(data.error);
+    return data.templates || [];
+  },
+
+  async saveEmailTemplate(template: {
+    template_key: string;
+    subject: string;
+    body_html: string;
+    body_text?: string;
+    is_active?: boolean;
+  }): Promise<{ success: boolean; message: string }> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: {
+        action: 'save-template',
+        template,
+      },
+    });
+    if (error) throw new Error(error.message || 'Failed to update email template.');
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async getEmailDeliveryLogs(
+    page = 1,
+    pageSize = 15
+  ): Promise<{ logs: AdminEmailDeliveryLog[]; total: number; page: number; pageSize: number }> {
+    const { data, error } = await supabase.functions.invoke('manage-smtp', {
+      body: {
+        action: 'get-delivery-logs',
+        page,
+        page_size: pageSize,
+      },
+    });
+    if (error) throw new Error(error.message || 'Failed to load delivery logs.');
+    if (data?.error) throw new Error(data.error);
+    return {
+      logs: data.logs || [],
+      total: data.total || 0,
+      page: data.page || page,
+      pageSize: data.page_size || pageSize,
+    };
+  },
 };
+
+export interface AdminEmailSmtpSettings {
+  provider: 'supabase' | 'custom_smtp';
+  from_email: string;
+  from_name: string;
+  reply_to: string;
+  admin_notification_email: string;
+  admin_cc: string;
+  admin_bcc: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  ssl_mode: 'tls' | 'ssl' | 'none';
+  has_password: boolean;
+}
+
+export interface AdminNotificationPreferences {
+  staff_invitations: boolean;
+  customer_account_magic_links: boolean;
+  customer_quotation_confirmation: boolean;
+  admin_quotation_notifications: boolean;
+}
+
+export interface AdminEmailTemplate {
+  template_key: string;
+  name: string;
+  description: string;
+  subject: string;
+  body_html: string;
+  body_text: string | null;
+  supported_placeholders: string[];
+  required_placeholders: string[];
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface AdminEmailDeliveryLog {
+  id: string;
+  email_type: string;
+  recipient_masked: string;
+  subject: string | null;
+  provider: string;
+  status: 'delivered' | 'sent' | 'failed' | 'queued';
+  error_summary: string | null;
+  created_at: string;
+}
 
 export interface AdminQuotationRule {
   id: string;

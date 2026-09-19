@@ -59,6 +59,9 @@ const AdminReportsPage = lazy(() =>
 const AdminSettingsPage = lazy(() =>
   import('../pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage }))
 );
+const AdminEmailSettingsPage = lazy(() =>
+  import('../pages/admin/AdminEmailSettingsPage').then((m) => ({ default: m.AdminEmailSettingsPage }))
+);
 const AdminActivityPage = lazy(() =>
   import('../pages/admin/AdminActivityPage').then((m) => ({ default: m.AdminActivityPage }))
 );
@@ -247,6 +250,16 @@ export const AppRoutes: React.FC = () => {
             <ProtectedRoute requiredPermission="settings.view">
               <AdminLayout>
                 <AdminSettingsPage />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings/email"
+          element={
+            <ProtectedRoute superAdminOnly>
+              <AdminLayout>
+                <AdminEmailSettingsPage />
               </AdminLayout>
             </ProtectedRoute>
           }

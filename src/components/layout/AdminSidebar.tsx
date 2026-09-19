@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  Mail,
 } from 'lucide-react';
 
 export interface AdminSidebarProps {
@@ -31,6 +32,7 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: string;
+  superAdminOnly?: boolean;
 }
 
 interface NavSection {
@@ -95,6 +97,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       title: 'SYSTEM',
       items: [
         { label: 'System Settings', path: '/admin/settings', icon: Settings, permission: 'settings.view' },
+        { label: 'Email & SMTP Settings', path: '/admin/settings/email', icon: Mail, superAdminOnly: true },
       ],
     },
   ];
@@ -182,9 +185,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto overscroll-contain">
         {sections.map((section) => {
           // Filter section items by RBAC
-          const visibleItems = section.items.filter(
-            (item) => !item.permission || hasPermission(item.permission)
-          );
+          const visibleItems = section.items.filter((item) => {
+            if (item.superAdminOnly && role !== 'super_admin') return false;
+            return !item.permission || hasPermission(item.permission);
+          });
 
           if (visibleItems.length === 0) return null;
 
