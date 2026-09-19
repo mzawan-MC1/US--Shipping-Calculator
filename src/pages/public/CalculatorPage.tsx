@@ -464,7 +464,6 @@ export const CalculatorPage: React.FC = () => {
           vehicleCategoryId: normalizedCategory,
           conditionId: formData.conditionId || 'operable',
           powertrainId: formData.powertrain || 'petrol',
-          purchaseSourceId: formData.purchaseSource || undefined,
           purchaseLocationId:
             formData.includeInlandTowing && formData.purchaseLocationId
               ? formData.purchaseLocationId
@@ -615,7 +614,6 @@ export const CalculatorPage: React.FC = () => {
     formData.vehicleType,
     formData.conditionId,
     formData.powertrain,
-    formData.purchaseSource,
     formData.purchaseLocationId,
     formData.includeInlandTowing,
     formData.loadingPort,
@@ -883,12 +881,9 @@ export const CalculatorPage: React.FC = () => {
     }));
   }, [availability.eligible_states, availability.eligible_pickup_locations, states]);
 
-  // Filtered pickup locations based on state, purchase source, and search query
+  // Filtered pickup locations based on state and search query
   const filteredPickupLocations = useMemo(() => {
     let locs = availability.eligible_pickup_locations;
-    if (formData.purchaseSource) {
-      locs = locs.filter((l) => l.purchase_source_id === formData.purchaseSource);
-    }
     const stCode = formData.stateCode;
     if (stCode) {
       locs = locs.filter((l) => l.state_code.toUpperCase() === stCode.toUpperCase());
@@ -905,7 +900,7 @@ export const CalculatorPage: React.FC = () => {
       );
     }
     return locs;
-  }, [availability.eligible_pickup_locations, formData.purchaseSource, formData.stateCode, locationSearchQuery]);
+  }, [availability.eligible_pickup_locations, formData.stateCode, locationSearchQuery]);
 
   // WhatsApp Inquiry Link
   const whatsappInquiryLink = getWhatsAppLink(
@@ -1587,13 +1582,6 @@ export const CalculatorPage: React.FC = () => {
                             compact
                             onClick={() => {
                               setValue('purchaseSource', src.id, { shouldValidate: true });
-                              if (
-                                selectedPurchaseLocation &&
-                                selectedPurchaseLocation.purchase_source_id !== src.id
-                              ) {
-                                setValue('purchaseLocationId', '', { shouldValidate: true });
-                                setValue('towFromLocation', '', { shouldValidate: true });
-                              }
                             }}
                             className="p-2.5 flex flex-col items-center justify-center text-center gap-1.5 min-h-[68px]"
                           >
@@ -1754,8 +1742,8 @@ export const CalculatorPage: React.FC = () => {
                                 </h4>
                                 <p className="mt-1 text-amber-800 leading-relaxed">
                                   {isAr
-                                    ? 'لم يتم العثور على ساحة مزاد تدعم هذه الفئة حالياً في هذه الولاية. يمكنك اختيار ولاية أخرى أو طلب تسعير مخصص.'
-                                    : 'No locations with active towing rates were found for this category in this state. You can choose another state or request a custom quote.'}
+                                    ? 'لا تتوفر أسعار سحب نشطة حالياً لهذه الولاية. يرجى اختيار ولاية أخرى أو طلب تسعير مخصص.'
+                                    : 'No active towing rates are currently configured for this state. Please choose another state or request a custom quote.'}
                                 </p>
                               </div>
                             </div>
