@@ -146,6 +146,8 @@ export interface QuotationBreakdown {
   towingDescription?: string;
   oceanAndTowingSubtotalMin?: number;
   oceanAndTowingSubtotalMax?: number;
+  transportSubtotalMin?: number;
+  transportSubtotalMax?: number;
   destinationClearanceSubtotal?: number;
   uaeGovernmentChargesSubtotalMin?: number;
   uaeGovernmentChargesSubtotalMax?: number;

@@ -137,6 +137,8 @@ export const quotationService = {
             customs_clearance_fee: number;
             port_additional_charges: number;
             destination_clearance_subtotal?: number;
+            transport_subtotal_min?: number;
+            transport_subtotal_max?: number;
             cif_value_min: number;
             cif_value_max: number;
             customs_duty_min: number;
@@ -208,9 +210,9 @@ export const quotationService = {
         oceanFreight: fin.subtotal_ocean_freight,
         oceanFreightBase: fin.ocean_freight_base ?? fin.subtotal_ocean_freight,
         oceanFreightAdjustments: fin.ocean_freight_adjustments ?? 0,
-        powertrainSurcharge: fin.surcharges_total,
+        powertrainSurcharge: 0,
         vehicleTypeSurcharge: 0,
-        oceanFreightTotal: fin.subtotal_ocean_freight + fin.surcharges_total,
+        oceanFreightTotal: fin.subtotal_ocean_freight,
         surchargesTotal: fin.surcharges_total,
         customsClearance: fin.customs_clearance_fee,
         destinationCharges: fin.port_additional_charges,
@@ -231,8 +233,10 @@ export const quotationService = {
         includeInlandTowing: towingRequested,
         towingLocationName: res.snapshot.towing?.location_name,
         towingDescription: res.snapshot.towing?.description,
-        oceanAndTowingSubtotalMin: fin.ocean_and_towing_subtotal_min ?? (fin.subtotal_ocean_freight + fin.towing_fee_min),
-        oceanAndTowingSubtotalMax: fin.ocean_and_towing_subtotal_max ?? (fin.subtotal_ocean_freight + fin.towing_fee_max),
+        oceanAndTowingSubtotalMin: (fin.transport_subtotal_min ?? (fin.subtotal_ocean_freight + fin.towing_fee_min)),
+        oceanAndTowingSubtotalMax: (fin.transport_subtotal_max ?? (fin.subtotal_ocean_freight + fin.towing_fee_max)),
+        transportSubtotalMin: (fin.transport_subtotal_min ?? (fin.subtotal_ocean_freight + fin.towing_fee_min)),
+        transportSubtotalMax: (fin.transport_subtotal_max ?? (fin.subtotal_ocean_freight + fin.towing_fee_max)),
         destinationClearanceSubtotal: fin.destination_clearance_subtotal ?? (fin.customs_clearance_fee + fin.port_additional_charges),
         uaeGovernmentChargesSubtotalMin: fin.uae_government_charges_subtotal_min ?? (fin.customs_duty_min + fin.import_vat_min),
         uaeGovernmentChargesSubtotalMax: fin.uae_government_charges_subtotal_max ?? (fin.customs_duty_max + fin.import_vat_max),

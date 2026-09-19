@@ -140,19 +140,14 @@ export const ResultsPage: React.FC = () => {
         : 'Port Delivery (Direct)'
     : 'Not requested ($0.00)';
 
-  const oceanAndTowingSubtotalFormatted = quote.isTowingRange && quote.includeInlandTowing
+  const transportSubtotalFormatted = quote.isTowingRange && quote.includeInlandTowing
     ? displayRangeOrAmount(
-        (quote.oceanAndTowingSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0))),
-        (quote.oceanAndTowingSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0)))
+        quote.transportSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0)),
+        quote.transportSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0))
       )
     : displayAmount(quote.oceanFreightTotal + (quote.includeInlandTowing ? (quote.towingFeeMin || 0) : 0));
 
-  const uaeGovChargesFormatted = quote.isTowingRange
-    ? displayRangeOrAmount(
-        quote.uaeGovernmentChargesSubtotalMin ?? ((quote.dutyMin || quote.customsDuty) + (quote.vatMin || quote.vat)),
-        quote.uaeGovernmentChargesSubtotalMax ?? ((quote.dutyMax || quote.customsDuty) + (quote.vatMax || quote.vat))
-      )
-    : displayAmount((quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat));
+  const uaeGovChargesFormatted = displayAmount((quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat));
 
   const whatsappMessage = `*${brandNameHeader} - OFFICIAL SHIPPING QUOTATION*
 📄 *Quote Ref:* ${quote.referenceNumber}
@@ -161,20 +156,22 @@ export const ResultsPage: React.FC = () => {
 🚢 *Route:* ${originDisplay.name} ➔ ${destDisplay.name}
 ⏱️ *Transit Time:* ${quote.estimatedTransitDaysMin && quote.estimatedTransitDaysMax ? `${quote.estimatedTransitDaysMin}-${quote.estimatedTransitDaysMax} Days` : `${quote.estimatedTransitDays} Days`}
 
-💵 *Standard Cost Breakdown:*
-1. Ocean Freight Tariff: $${quote.oceanFreight?.toLocaleString()}
-2. Inland Towing: ${towingSummary}
-3. ${quote.includeInlandTowing ? 'Ocean Freight & Towing Subtotal' : 'Ocean Freight Subtotal'}: ${oceanAndTowingSubtotalFormatted}
-4. Destination Clearance Charges:
+💵 *Cost Breakdown:*
+1. *Inland Towing:* ${towingSummary}
+2. *Ocean Freight:* $${quote.oceanFreightTotal?.toLocaleString()}
+3. *Transport Subtotal:* ${transportSubtotalFormatted}
+4. *Destination Clearance:*
    • Customs Clearance: $${(quote.customsClearance || 150)?.toLocaleString()}
    • Port Handling: $${(quote.destinationCharges || 200)?.toLocaleString()}
-   • Clearance Subtotal: $350.00
-5. UAE Government Statutory Charges:
+   • Subtotal: $${(quote.destinationClearanceSubtotal || ((quote.customsClearance || 150) + (quote.destinationCharges || 200)))?.toLocaleString()}
+5. *UAE Government Charges:*
    • Customs Duty (5%): $${(quote.dutyMax ?? quote.customsDuty)?.toLocaleString()}
-   • UAE Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
-   • Gov Charges Subtotal: ${uaeGovChargesFormatted}
+   • Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
+   • Subtotal: ${uaeGovChargesFormatted}
 6. *Total Estimated Shipping & Clearance:* ${totalFormatted} (${totalAedFormatted})
-7. *Declared Vehicle Price:* $${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD (Used for CIF & statutory duty/VAT only; never added to shipping total)
+
+📋 *Declared Vehicle Price:* $${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD
+_(Used only for CIF/duty/VAT calculation; not added to shipping total)_
 
 ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final towing charge is subject to confirmation based on exact vehicle condition, location access, and carrier availability.\n\n' : ''}ℹ️ *Note:* ${quote.disclaimer || 'Quotation valid for 14 days.'}
 
@@ -201,16 +198,17 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
         shippingMethodAr: isAr ? 'شحن بحري في حاويات' : undefined,
         transitTime: `${quote.estimatedTransitDaysMin || quote.estimatedTransitDays || 30}-${quote.estimatedTransitDaysMax || 45} ${isAr ? 'يوم' : 'Days'}`,
         declaredValueUsd: quote.input.buyingPrice,
-        oceanFreightUsd: quote.oceanFreight,
+        oceanFreightUsd: quote.oceanFreightTotal,
+        oceanFreightBaseUsd: quote.oceanFreightBase ?? quote.oceanFreight,
         towingFeeMin: quote.towingFeeMin || 0,
         towingFeeMax: quote.towingFeeMax || 0,
         isTowingRange: Boolean(quote.isTowingRange),
+        includeInlandTowing: quote.includeInlandTowing !== false,
         clearanceFeeUsd: quote.customsClearance,
         portHandlingFeeUsd: quote.destinationCharges,
-        surchargesUsd: (quote.powertrainSurcharge || 0) + (quote.vehicleTypeSurcharge || 0),
-        cifUsd: quote.cifMax || quote.cifMin || ((quote.input.buyingPrice || 0) + quote.oceanFreight),
-        customsDutyUsd: quote.customsDuty,
-        importVatUsd: quote.vat,
+        cifUsd: quote.cifMax || quote.cifMin || ((quote.input.buyingPrice || 0) + quote.oceanFreightTotal),
+        customsDutyUsd: quote.dutyMax ?? quote.customsDuty,
+        importVatUsd: quote.vatMax ?? quote.vat,
         totalUsdMin: quote.totalChargesUsdMin || quote.totalChargesUsd,
         totalUsdMax: quote.totalChargesUsdMax || quote.totalChargesUsd,
         totalAedMin: quote.totalChargesAedMin || convertUsdToAed(quote.totalChargesUsdMin || quote.totalChargesUsd),
@@ -218,6 +216,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
         exchangeRate: (quote.snapshot?.exchangeRate as number) || 3.6725,
         disclaimer: quote.disclaimer,
         rules: quote.rules,
+        lineItems: quote.lineItems,
       };
       await generateQuotationPdf(pdfData, branding);
       setDownloadSuccess(true);
@@ -476,7 +475,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
 
           {/* Cost Breakdown Table */}
           <Card className="p-5 sm:p-6 divide-y divide-slate-100">
-            {/* 1. Ocean Freight Tariff & 2. Inland Towing */}
+            {/* Header */}
             <div className="pb-3.5">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
@@ -486,101 +485,132 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                   {quote.input.shippingMethod ? quote.input.shippingMethod.replace(/_/g, ' ').toUpperCase() : 'CONSOLIDATED CONTAINER'}
                 </Badge>
               </div>
+            </div>
+
+            {/* 1. Inland Towing */}
+            {quote.includeInlandTowing && (
+              <div className="py-3.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
+                  1. {isAr ? 'النقل الداخلي' : 'Inland Towing'}
+                </h4>
+                <div className="space-y-2 text-xs text-slate-600">
+                  <div className="flex justify-between gap-2">
+                    <span className="break-words font-medium text-slate-800">
+                      Base Inland Towing ({(quote.towingLocationName && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.towingLocationName)) ? quote.towingLocationName : (quote.input.towFromLocation && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.input.towFromLocation) ? quote.input.towFromLocation : 'Pickup Location')} → {originDisplay.name}{quote.isTowingRange ? ' (Est. Range)' : ''})
+                    </span>
+                    <span className="font-semibold text-slate-900 shrink-0">
+                      {displayRangeOrAmount(quote.towingFeeBaseMin ?? quote.towingFeeMin, quote.towingFeeBaseMax ?? quote.towingFeeMax)}
+                    </span>
+                  </div>
+
+                  {/* Towing Surcharges */}
+                  {quote.lineItems
+                    ?.filter((item) => item.category === 'towing_adjustment')
+                    .map((adj, idx) => (
+                      <div key={`tow-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
+                        <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || 'Towing Surcharge')}</span>
+                        <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
+                      </div>
+                    ))}
+
+                  {/* Inland Towing Subtotal */}
+                  <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-100">
+                    <span>{isAr ? 'المجموع الفرعي للنقل الداخلي' : 'Inland Towing Subtotal'}</span>
+                    <span className="text-slate-900">
+                      {displayRangeOrAmount(quote.towingFeeMin, quote.towingFeeMax)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If towing not included, show a note */}
+            {!quote.includeInlandTowing && (
+              <div className="py-3.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
+                  1. {isAr ? 'النقل الداخلي' : 'Inland Towing'}
+                </h4>
+                <div className="text-xs text-slate-500 italic">
+                  {isAr ? 'النقل الداخلي: غير مطلوب ($0.00)' : 'Inland Towing: Not requested ($0.00)'}
+                </div>
+              </div>
+            )}
+
+            {/* 2. Ocean Freight */}
+            <div className="py-3.5">
+              <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
+                2. {isAr ? 'الشحن البحري' : 'Ocean Freight'}
+              </h4>
               <div className="space-y-2 text-xs text-slate-600">
-                {/* 1. Ocean Freight Tariff */}
                 <div className="flex justify-between gap-2">
                   <span className="break-words font-medium text-slate-800">
-                    1. Ocean Freight Base Tariff ({originDisplay.name} → {destDisplay.name})
+                    Ocean Freight Base Tariff ({originDisplay.name} → {destDisplay.name})
                   </span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayAmount(quote.oceanFreightBase ?? quote.oceanFreight)}
                   </span>
                 </div>
 
-                {/* Ocean Freight Adjustments */}
+                {/* Shipping Surcharges */}
                 {quote.lineItems
                   ?.filter((item) => item.category === 'shipping_adjustment')
                   .map((adj, idx) => (
                     <div key={`ship-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
-                      <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || adj.reason || (isAr ? 'تعديل الشحن البحري' : 'Ocean Freight Adjustment'))}</span>
+                      <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || 'Ocean Freight Adjustment')}</span>
                       <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
                     </div>
                   ))}
 
-                {/* 2. Inland Towing */}
-                <div className="flex justify-between gap-2">
-                  <span className="break-words">
-                    2. Inland Towing ({quote.includeInlandTowing
-                      ? `${(quote.towingLocationName && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.towingLocationName)) ? quote.towingLocationName : (quote.input.towFromLocation && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quote.input.towFromLocation) ? quote.input.towFromLocation : 'Pickup Location')} → ${originDisplay.name}${quote.isTowingRange ? ' (Estimated Range)' : ''}`
-                      : isAr ? 'النقل الداخلي: غير مطلوب ($0.00)' : 'Inland Towing: Not requested ($0.00)'})
-                  </span>
-                  <span className="font-semibold text-slate-900 shrink-0">
-                    {quote.includeInlandTowing
-                      ? displayRangeOrAmount(quote.towingFeeBaseMin ?? quote.towingFeeMin, quote.towingFeeBaseMax ?? quote.towingFeeMax)
-                      : displayAmount(0)}
-                  </span>
-                </div>
-
-                {/* Towing Adjustments */}
-                {quote.includeInlandTowing && quote.lineItems
-                  ?.filter((item) => item.category === 'towing_adjustment')
-                  .map((adj, idx) => (
-                    <div key={`tow-adj-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
-                      <span className="break-words">• {(isAr && adj.description_ar) ? adj.description_ar : (adj.description || adj.reason || (isAr ? 'تعديل النقل الداخلي' : 'Towing Adjustment'))}</span>
-                      <span className="font-medium shrink-0">{displayAmount(adj.amount_usd ?? 0)}</span>
-                    </div>
-                  ))}
-
-                {/* 3. Ocean Freight & Inland Towing Subtotal */}
+                {/* Ocean Freight Subtotal */}
                 <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-100">
-                  <span>
-                    3. {quote.includeInlandTowing
-                      ? (isAr ? 'المجموع الفرعي للشحن البحري والنقل الداخلي' : 'Ocean Freight & Inland Towing Subtotal')
-                      : (isAr ? 'المجموع الفرعي للشحن البحري' : 'Ocean Freight Subtotal')}
-                  </span>
-                  <span className="text-brand-orange-600">
-                    {quote.isTowingRange && quote.includeInlandTowing
-                      ? displayRangeOrAmount(
-                          (quote.oceanAndTowingSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0))),
-                          (quote.oceanAndTowingSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0)))
-                        )
-                      : displayAmount(quote.oceanFreightTotal + (quote.includeInlandTowing ? (quote.towingFeeMin || 0) : 0))}
+                  <span>{isAr ? 'المجموع الفرعي للشحن البحري' : 'Ocean Freight Subtotal'}</span>
+                  <span className="text-slate-900">
+                    {displayAmount(quote.oceanFreightTotal)}
                   </span>
                 </div>
               </div>
             </div>
 
+            {/* 3. Transport Subtotal */}
+            <div className="py-3.5">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+                  3. {isAr ? 'إجمالي النقل الفرعي' : 'Transport Subtotal'}
+                </h4>
+                <span className="text-sm font-black text-brand-orange-600">
+                  {quote.isTowingRange && quote.includeInlandTowing
+                    ? displayRangeOrAmount(
+                        quote.transportSubtotalMin ?? (quote.oceanFreightTotal + (quote.towingFeeMin || 0)),
+                        quote.transportSubtotalMax ?? (quote.oceanFreightTotal + (quote.towingFeeMax || 0))
+                      )
+                    : displayAmount(quote.oceanFreightTotal + (quote.includeInlandTowing ? (quote.towingFeeMin || 0) : 0))}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {isAr ? 'المجموع الفرعي للنقل الداخلي + الشحن البحري' : 'Inland Towing Subtotal + Ocean Freight Subtotal'}
+              </p>
+            </div>
+
             {/* 4. Destination Clearance Charges */}
             <div className="py-3.5">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
-                4. {t.customsClearanceTitle}
+                4. {isAr ? 'رسوم التخليص والموانئ' : 'Destination Clearance'}
               </h4>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">• Customs Clearance & Documentation</span>
+                  <span className="break-words">Customs Clearance & Documentation</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayAmount(quote.customsClearance || 150)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">• Port & Terminal Handling Charges</span>
+                  <span className="break-words">Port & Terminal Handling</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayAmount(quote.destinationCharges || 200)}
                   </span>
                 </div>
-
-                {/* Additional Surcharges from line items */}
-                {quote.lineItems
-                  ?.filter((item) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(item.category))
-                  .map((surch, idx) => (
-                    <div key={`add-surch-${idx}`} className="flex justify-between gap-2 pl-3 text-slate-700">
-                      <span className="break-words">• {surch.description || surch.category}</span>
-                      <span className="font-medium shrink-0">{displayAmount(surch.amount_usd ?? 0)}</span>
-                    </div>
-                  ))}
-
                 <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
-                  <span>• Destination Clearance Subtotal</span>
+                  <span>{isAr ? 'المجموع الفرعي لرسوم التخليص' : 'Destination Clearance Subtotal'}</span>
                   <span className="font-bold text-slate-900">
                     {displayAmount(quote.destinationClearanceSubtotal || ((quote.customsClearance || 150) + (quote.destinationCharges || 200)))}
                   </span>
@@ -591,46 +621,39 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
             {/* 5. UAE Government Statutory Charges */}
             <div className="py-3.5">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">
-                5. UAE Government Statutory Charges
+                5. {isAr ? 'الرسوم الحكومية الإماراتية' : 'UAE Government Statutory Charges'}
               </h4>
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">• Customs Duty (5% of CIF valuation)</span>
+                  <span className="break-words">UAE Customs Duty (5% of CIF)</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayRangeOrAmount(quote.dutyMin, quote.dutyMax, quote.customsDuty)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="break-words">• UAE Import VAT (5% of [CIF + Duty])</span>
+                  <span className="break-words">UAE Import VAT (5% of CIF + Duty)</span>
                   <span className="font-semibold text-slate-900 shrink-0">
                     {displayRangeOrAmount(quote.vatMin, quote.vatMax, quote.vat)}
                   </span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
-                  <span>• UAE Government Charges Subtotal</span>
+                  <span>{isAr ? 'المجموع الفرعي للرسوم الحكومية' : 'UAE Government Charges Subtotal'}</span>
                   <span className="font-bold text-slate-900">
-                    {quote.isTowingRange
-                      ? displayRangeOrAmount(
-                          quote.uaeGovernmentChargesSubtotalMin ?? ((quote.dutyMin || quote.customsDuty) + (quote.vatMin || quote.vat)),
-                          quote.uaeGovernmentChargesSubtotalMax ?? ((quote.dutyMax || quote.customsDuty) + (quote.vatMax || quote.vat))
-                        )
-                      : displayAmount(
-                          (quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat)
-                        )}
+                    {displayAmount((quote.dutyMax ?? quote.customsDuty) + (quote.vatMax ?? quote.vat))}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* 6. Total Estimated Shipping & Clearance (Excluding Vehicle Price) */}
+            {/* 6. Total Estimated Shipping & Clearance */}
             <div className="pt-4">
               <div className="p-4 sm:p-5 rounded-2xl bg-brand-navy-950 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-brand-orange-400 block">
-                    6. {isAr ? 'إجمالي تكاليف الشحن والتخليص المقدرة (باستثناء ثمن شراء المركبة)' : 'Total Estimated Shipping & Clearance (Excluding Vehicle Price)'} {quote.isTowingRange ? '• Estimated Range' : ''}
+                    6. {isAr ? 'إجمالي تكاليف الشحن والتخليص المقدرة' : 'Total Estimated Shipping & Clearance'} {quote.isTowingRange ? '• Estimated Range' : ''}
                   </span>
                   <span className="text-xs text-slate-400">
-                    {isAr ? 'جميع أجور الشحن البحري، النقل الداخلي، التخليص والرسوم الجمركية النظامية' : 'All ocean freight, towing, port handling, clearance, and statutory UAE duties'}
+                    {isAr ? 'إجمالي النقل + التخليص + الرسوم الحكومية' : 'Transport Subtotal + Destination Clearance + UAE Government Charges'}
                   </span>
                 </div>
                 <div className="text-start sm:text-end w-full sm:w-auto">
@@ -643,17 +666,17 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                 </div>
               </div>
 
-              {/* 7. Declared Vehicle Purchase Price Note */}
+              {/* Declared Vehicle Purchase Price Info Box */}
               <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
                 <Receipt className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-slate-800">
-                    7. Declared Vehicle Purchase Price: ${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD
+                    Declared Vehicle Purchase Price: ${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD
                   </span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {isAr
-                      ? 'قيمة شراء المركبة مستخدمة حصراً لاحتساب وعاء التقييم الجمركي (CIF) والرسوم/الضريبة، وليست مضافة إلى إجمالي تكلفة الشحن أعلاه.'
-                      : 'The vehicle purchase price is used solely for statutory CIF valuation and Customs Duty/VAT calculations; it is NEVER added into your shipping invoice total.'}
+                      ? 'تُستخدم حصراً لاحتساب الرسوم الجمركية وضريبة القيمة المضافة. غير مضافة إلى إجمالي الشحن والتخليص أعلاه.'
+                      : 'Used only for UAE customs duty and VAT calculation. It is not included in the shipping and clearance total.'}
                   </p>
                 </div>
               </div>

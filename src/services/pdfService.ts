@@ -28,6 +28,7 @@ export interface PdfQuotationData {
   clearanceFeeUsd?: number;
   portHandlingFeeUsd?: number;
   surchargesUsd?: number;
+  includeInlandTowing?: boolean;
   cifUsd?: number;
   customsDutyUsd: number;
   vatBaseUsd?: number;
@@ -354,58 +355,66 @@ export async function generateQuotationPdf(
       },
     });
   } else {
-    const towingCell = hasTowing
+    const hasTowingRequested = data.includeInlandTowing !== false && hasTowing;
+    const towingCell = hasTowingRequested
       ? data.isTowingRange
         ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)} (Estimated Range)`
         : `$${data.towingFeeMin.toFixed(2)} (Fixed Tariff)`
-      : 'Inland Towing: Not requested ($0.00)';
+      : 'Not requested ($0.00)';
 
-    const oceanAndTowingSubtotal = hasTowing && data.isTowingRange
-      ? `$${oceanAndTowingSubtotalMin.toFixed(2)} - $${oceanAndTowingSubtotalMax.toFixed(2)}`
-      : `$${oceanAndTowingSubtotalMax.toFixed(2)}`;
+    const transportSubtotalMin = data.oceanFreightUsd + (hasTowingRequested ? data.towingFeeMin : 0);
+    const transportSubtotalMax = data.oceanFreightUsd + (hasTowingRequested ? data.towingFeeMax : 0);
+    const transportSubtotal = hasTowingRequested && data.isTowingRange
+      ? `$${transportSubtotalMin.toFixed(2)} - $${transportSubtotalMax.toFixed(2)}`
+      : `$${transportSubtotalMax.toFixed(2)}`;
 
-    const tableBody: string[][] = [
-      ['1', '1. Ocean Freight Base Tariff (Origin Port to UAE Port)', `$${(data.oceanFreightBaseUsd ?? data.oceanFreightUsd).toFixed(2)}`],
-    ];
+    const tableBody: string[][] = [];
 
-    const shipAdjsEn = data.lineItems?.filter((i) => i.category === 'shipping_adjustment') || [];
-    shipAdjsEn.forEach((adj) => {
-      tableBody.push(['•', `  • ${adj.description || adj.reason || 'Ocean Freight Adjustment'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
-    });
-
-    tableBody.push(['2', '2. Inland Towing to Origin Departure Port', towingCell]);
+    // Section 1: Inland Towing
+    tableBody.push(['', '── SECTION 1: INLAND TOWING ──', '']);
+    tableBody.push(['', 'Base Inland Towing', towingCell]);
 
     const towAdjsEn = data.lineItems?.filter((i) => i.category === 'towing_adjustment') || [];
     towAdjsEn.forEach((adj) => {
-      tableBody.push(['•', `  • ${adj.description || adj.reason || 'Towing Winching / Condition Adjustment'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
+      tableBody.push(['', `  • ${adj.description || 'Towing Surcharge'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
     });
 
-    tableBody.push(
-      ['3', hasTowing ? '3. Ocean Freight & Inland Towing Subtotal' : '3. Ocean Freight Subtotal', oceanAndTowingSubtotal],
-      ['4a', '  • Customs Clearance & Port Documentation', `$${clearanceFee.toFixed(2)}`],
-      ['4b', '  • Port & Terminal Handling Charges', `$${portHandlingFee.toFixed(2)}`]
-    );
+    const towingSubtotal = hasTowingRequested && data.isTowingRange
+      ? `$${data.towingFeeMin.toFixed(2)} - $${data.towingFeeMax.toFixed(2)}`
+      : `$${(hasTowingRequested ? data.towingFeeMax : 0).toFixed(2)}`;
+    tableBody.push(['✓', 'Inland Towing Subtotal', towingSubtotal]);
 
-    const addSurchargesEn = data.lineItems?.filter((i) => !['base_ocean_freight', 'shipping_adjustment', 'base_inland_towing', 'towing_adjustment', 'customs_clearance_fee', 'port_handling_fee', 'customs_duty', 'import_vat'].includes(i.category)) || [];
-    addSurchargesEn.forEach((surch) => {
-      tableBody.push(['•', `  • ${surch.description || 'Additional Surcharge'}`, `$${(surch.amount_usd || 0).toFixed(2)}`]);
+    // Section 2: Ocean Freight
+    tableBody.push(['', '── SECTION 2: OCEAN FREIGHT ──', '']);
+    tableBody.push(['', 'Ocean Freight Base Tariff', `$${(data.oceanFreightBaseUsd ?? data.oceanFreightUsd).toFixed(2)}`]);
+
+    const shipAdjsEn = data.lineItems?.filter((i) => i.category === 'shipping_adjustment') || [];
+    shipAdjsEn.forEach((adj) => {
+      tableBody.push(['', `  • ${adj.description || 'Ocean Freight Adjustment'}`, `$${(adj.amount_usd || 0).toFixed(2)}`]);
     });
 
-    tableBody.push(
-      ['4', '4. Destination Clearance Subtotal', `$${clearanceSubtotal.toFixed(2)}`],
-      ['5a', '  • Statutory UAE Customs Duty (5% of CIF Valuation)', `$${data.customsDutyUsd.toFixed(2)}`],
-      ['5b', '  • Statutory UAE Import VAT (5% of [CIF + Duty])', `$${data.importVatUsd.toFixed(2)}`],
-      ['5', '5. UAE Government Charges Subtotal', `$${uaeGovSubtotal.toFixed(2)}`]
-    );
+    tableBody.push(['✓', 'Ocean Freight Subtotal', `$${data.oceanFreightUsd.toFixed(2)}`]);
 
-    if (surcharges > 0 && addSurchargesEn.length === 0) {
-      tableBody.push(['+', 'Vehicle Condition & Specialized Surcharges', `$${surcharges.toFixed(2)}`]);
-    }
+    // Section 3: Transport Subtotal
+    tableBody.push(['★', '── TRANSPORT SUBTOTAL ──', transportSubtotal]);
 
+    // Section 4: Destination Clearance
+    tableBody.push(['', '── SECTION 4: DESTINATION CLEARANCE ──', '']);
+    tableBody.push(['', 'Customs Clearance & Documentation', `$${clearanceFee.toFixed(2)}`]);
+    tableBody.push(['', 'Port & Terminal Handling', `$${portHandlingFee.toFixed(2)}`]);
+    tableBody.push(['✓', 'Destination Clearance Subtotal', `$${clearanceSubtotal.toFixed(2)}`]);
+
+    // Section 5: UAE Government Charges
+    tableBody.push(['', '── SECTION 5: UAE GOVERNMENT CHARGES ──', '']);
+    tableBody.push(['', 'UAE Customs Duty (5% of CIF)', `$${data.customsDutyUsd.toFixed(2)}`]);
+    tableBody.push(['', 'UAE Import VAT (5% of CIF + Duty)', `$${data.importVatUsd.toFixed(2)}`]);
+    tableBody.push(['✓', 'UAE Government Charges Subtotal', `$${uaeGovSubtotal.toFixed(2)}`]);
+
+    // Declared Vehicle Price info row
     if (data.declaredValueUsd && data.declaredValueUsd > 0) {
       tableBody.push([
-        '7',
-        '7. Declared Vehicle Purchase Price (For CIF valuation/duty only; excluded from shipping total)',
+        'ℹ',
+        'Declared Vehicle Price (CIF/duty/VAT calculation only; not in total)',
         `$${data.declaredValueUsd.toFixed(2)}`
       ]);
     }
@@ -413,7 +422,7 @@ export async function generateQuotationPdf(
     autoTable(doc, {
       startY: currentY,
       margin: { left: margin, right: margin },
-      head: [['#', 'Charge Description & Operational Valuation', 'Amount (USD)']],
+      head: [['', 'Description', 'Amount (USD)']],
       body: tableBody,
       theme: 'grid',
       headStyles: {
@@ -427,9 +436,32 @@ export async function generateQuotationPdf(
         textColor: [30, 41, 59],
       },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
+        0: { cellWidth: 10, halign: 'center', fontSize: 7 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 55, halign: 'right', fontStyle: 'bold' },
+        2: { cellWidth: 50, halign: 'right', fontStyle: 'bold' },
+      },
+      didParseCell: (hookData) => {
+        const rowText = hookData.row.raw as string[];
+        if (rowText && hookData.section === 'body') {
+          const marker = rowText[0];
+          const desc = rowText[1] || '';
+          // Bold subtotal rows
+          if (marker === '✓' || marker === '★') {
+            hookData.cell.styles.fontStyle = 'bold';
+            hookData.cell.styles.fillColor = [241, 245, 249]; // slate-100
+          }
+          // Section headers
+          if (desc.startsWith('──')) {
+            hookData.cell.styles.fontStyle = 'bold';
+            hookData.cell.styles.textColor = orangeColor;
+            hookData.cell.styles.fontSize = 7;
+          }
+          // Info row
+          if (marker === 'ℹ') {
+            hookData.cell.styles.textColor = grayColor;
+            hookData.cell.styles.fontStyle = 'italic';
+          }
+        }
       },
     });
   }
