@@ -285,8 +285,16 @@ export const staffService = {
       'content_manager',
       'viewer',
     ];
-    if (!validSystemRoles.includes(roleId) && !roleId.startsWith('custom_')) {
-      throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
+    if (!validSystemRoles.includes(roleId)) {
+      const { data: roleRow } = await supabase
+        .from('roles')
+        .select('id, is_active')
+        .eq('id', roleId)
+        .maybeSingle();
+
+      if (!roleRow || roleRow.is_active === false) {
+        throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
+      }
     }
 
     const { data, error } = await supabase.functions.invoke('invite-staff', {
@@ -359,8 +367,16 @@ export const staffService = {
       'content_manager',
       'viewer',
     ];
-    if (!validSystemRoles.includes(roleId) && !roleId.startsWith('custom_')) {
-      throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
+    if (!validSystemRoles.includes(roleId)) {
+      const { data: roleRow } = await supabase
+        .from('roles')
+        .select('id, is_active')
+        .eq('id', roleId)
+        .maybeSingle();
+
+      if (!roleRow || roleRow.is_active === false) {
+        throw new Error(`Invalid role: "${roleId}". Must be a valid system or custom role.`);
+      }
     }
 
     const { error } = await supabase.rpc('admin_update_staff_role', {
