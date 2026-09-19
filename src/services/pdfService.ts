@@ -163,7 +163,7 @@ export async function generateQuotationPdf(
 
   if (isAr) {
     if (logoData) {
-      const maxW = 45;
+      const maxW = 65;
       const maxH = 16;
       const ratio = Math.min(maxW / logoData.width, maxH / logoData.height);
       const logoW = Math.max(10, Math.round(logoData.width * ratio));
@@ -173,18 +173,6 @@ export async function generateQuotationPdf(
       } catch (e) {
         console.warn('[PDF] addImage failed:', e);
       }
-
-      const textStartX = pageWidth - margin - 6 - logoW - 4;
-      doc.setTextColor(255, 255, 255);
-      doc.setFont(fontName, 'normal');
-      doc.setFontSize(12);
-      const companyTitle = ar(branding.companyName || 'فاخر علم لشحن السيارات المستعملة ذ.م.م');
-      doc.text(companyTitle, textStartX, currentY + 10, { align: 'right' });
-
-      doc.setFontSize(7.5);
-      doc.setTextColor(255, 179, 128);
-      const tagline = ar(branding.tagline || 'خدمات الشحن واللوجستيات المتميزة من أمريكا للإمارات');
-      doc.text(tagline, textStartX, currentY + 16, { align: 'right' });
     } else {
       doc.setTextColor(255, 255, 255);
       doc.setFont(fontName, 'normal');
@@ -207,7 +195,7 @@ export async function generateQuotationPdf(
     doc.text(`Ref: ${data.referenceNumber}`, margin + 6, currentY + 16);
   } else {
     if (logoData) {
-      const maxW = 45;
+      const maxW = 65;
       const maxH = 16;
       const ratio = Math.min(maxW / logoData.width, maxH / logoData.height);
       const logoW = Math.max(10, Math.round(logoData.width * ratio));
@@ -217,18 +205,6 @@ export async function generateQuotationPdf(
       } catch (e) {
         console.warn('[PDF] addImage failed:', e);
       }
-
-      const textStartX = margin + 6 + logoW + 4;
-      doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      const companyTitle = (branding.companyName || 'FAKHER ALAM USED CARS SHIPPING LLC').toUpperCase();
-      doc.text(companyTitle, textStartX, currentY + 10);
-
-      doc.setFontSize(7.5);
-      doc.setTextColor(255, 179, 128);
-      const tagline = (branding.tagline || 'PREMIER AUTO LOGISTICS FROM US AUCTIONS TO UAE PORTS').toUpperCase();
-      doc.text(tagline, textStartX, currentY + 16);
     } else {
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
@@ -350,10 +326,10 @@ export async function generateQuotationPdf(
     doc.text(ar(`نظام الشحن: ${data.shippingMethodAr || data.shippingMethod}`), pageWidth - margin - 6, currentY + 17, { align: 'right' });
   } else {
     doc.text(`Vehicle Description: ${data.vehicleDetails}`, margin + 6, currentY + 6);
-    doc.text(`Maritime Route: ${data.originPort} ➔ ${data.destinationPort}`, margin + 6, currentY + 12);
+    doc.text(`Maritime Route: ${data.originPort} to ${data.destinationPort}`, margin + 6, currentY + 12);
     doc.text(`Shipping Method: ${data.shippingMethod}`, margin + 6, currentY + 17);
     const routeCol2X = margin + contentWidth * 0.6;
-    doc.text(`Est. Transit Time: ${data.transitTime || '28 - 35 Days'}`, routeCol2X, currentY + 12);
+    doc.text(`Est. Transit Time: ${data.transitTime || '28 - 35 Days'}`, routeCol2X, currentY + 17);
   }
 
   currentY += 26;
