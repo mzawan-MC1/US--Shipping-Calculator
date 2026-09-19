@@ -12,6 +12,8 @@ export interface StaffProfile {
   phone?: string | null;
   preferred_language?: string | null;
   notification_preferences?: { email?: boolean; browser?: boolean } | null;
+}
+
 export interface CustomerProfile {
   id: string;
   full_name: string;
