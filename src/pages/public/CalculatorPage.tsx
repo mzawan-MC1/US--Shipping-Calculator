@@ -580,17 +580,20 @@ export const CalculatorPage: React.FC = () => {
         }
 
         // Revalidate Shipping Method
-        if (res.eligible_shipping_methods.length > 0) {
-          const isMethodValid = res.eligible_shipping_methods.some(
+        const validMethods = (res.eligible_shipping_methods || []).filter(
+          (m) => typeof m.base_amount === 'number' && !isNaN(m.base_amount) && m.base_amount > 0
+        );
+        if (validMethods.length > 0) {
+          const isMethodValid = validMethods.some(
             (m) => m.id === formData.shippingMethod
           );
           if (!isMethodValid) {
-            const hasConsolidated = res.eligible_shipping_methods.some(
+            const hasConsolidated = validMethods.some(
               (m) => m.id === 'consolidated_container'
             );
             setValue(
               'shippingMethod',
-              hasConsolidated ? 'consolidated_container' : res.eligible_shipping_methods[0].id,
+              hasConsolidated ? 'consolidated_container' : validMethods[0].id,
               { shouldValidate: true }
             );
           }
@@ -682,11 +685,17 @@ export const CalculatorPage: React.FC = () => {
     };
   }, [availability.eligible_destination_ports, allDestPorts, formData.destinationPort]);
 
+  const validShippingMethods = useMemo(() => {
+    return (availability.eligible_shipping_methods || []).filter(
+      (m) => typeof m.base_amount === 'number' && !isNaN(m.base_amount) && m.base_amount > 0
+    );
+  }, [availability.eligible_shipping_methods]);
+
   const selectedShippingMethod = useMemo(() => {
     return (
-      availability.eligible_shipping_methods.find((m) => m.id === formData.shippingMethod) || null
+      validShippingMethods.find((m) => m.id === formData.shippingMethod) || null
     );
-  }, [availability.eligible_shipping_methods, formData.shippingMethod]);
+  }, [validShippingMethods, formData.shippingMethod]);
 
 
   // Check active route existence
@@ -1931,7 +1940,9 @@ export const CalculatorPage: React.FC = () => {
                             <div className="text-end">
                               {port.towing_rate_type === 'fixed' ? (
                                 <Badge variant="navy" size="sm">
-                                  ${port.towing_fixed_amount?.toLocaleString()} USD
+                                  {typeof port.towing_fixed_amount === 'number' && !isNaN(port.towing_fixed_amount)
+                                    ? `$${port.towing_fixed_amount.toLocaleString()} USD`
+                                    : '—'}
                                 </Badge>
                               ) : (
                                 <Badge variant="navy" size="sm">
@@ -2074,64 +2085,100 @@ export const CalculatorPage: React.FC = () => {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                   {isAr ? '3. نظام الشحن ونوع الحاوية' : '3. Shipping Method & Container Mode'}
                 </label>
-                <div className="grid grid-cols-1 gap-3">
-                  {availability.eligible_shipping_methods.map((method) => {
-                    const isSelected = formData.shippingMethod === method.id;
-                    const isDedicated = method.id === 'dedicated_container';
+                {validShippingMethods.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {validShippingMethods.map((method) => {
+                      const isSelected = formData.shippingMethod === method.id;
+                      const isDedicated = method.id === 'dedicated_container';
+                      const formattedRate =
+                        typeof method.base_amount === 'number' && !isNaN(method.base_amount) && method.base_amount > 0
+                          ? `$${method.base_amount.toLocaleString()} ${method.currency || 'USD'}`
+                          : null;
 
-                    return (
-                      <Card
-                        key={method.id}
-                        selected={isSelected}
-                        interactive
-                        onClick={() =>
-                          setValue('shippingMethod', method.id, { shouldValidate: true })
-                        }
-                        className="p-4 sm:p-5"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3.5">
-                            <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                isDedicated
-                                  ? 'bg-blue-100 text-blue-600'
-                                  : 'bg-orange-100 text-brand-orange-600'
-                              }`}
-                            >
-                              {isDedicated ? <Anchor className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm sm:text-base font-bold text-slate-900">
-                                  {method.name}
-                                </h4>
-                                {!isDedicated && (
-                                  <Badge variant="orange" size="sm">
-                                    {isAr ? 'الأكثر توفيراً وموصى به' : 'Recommended'}
-                                  </Badge>
-                                )}
+                      return (
+                        <Card
+                          key={method.id}
+                          selected={isSelected}
+                          interactive
+                          onClick={() =>
+                            setValue('shippingMethod', method.id, { shouldValidate: true })
+                          }
+                          className="p-4 sm:p-5"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3.5">
+                              <div
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                  isDedicated
+                                    ? 'bg-blue-100 text-blue-600'
+                                    : 'bg-orange-100 text-brand-orange-600'
+                                }`}
+                              >
+                                {isDedicated ? <Anchor className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
                               </div>
-                              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                                {isDedicated
-                                  ? t.shippingMethodDedicatedDesc
-                                  : t.shippingMethodConsolidatedDesc}
-                              </p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                                    {method.name}
+                                  </h4>
+                                  {!isDedicated && (
+                                    <Badge variant="orange" size="sm">
+                                      {isAr ? 'الأكثر توفيراً وموصى به' : 'Recommended'}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                  {isDedicated
+                                    ? t.shippingMethodDedicatedDesc
+                                    : t.shippingMethodConsolidatedDesc}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="text-end shrink-0">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                                {isAr ? 'الشحن البحري يبدأ من:' : 'Freight Tariff:'}
+                              </span>
+                              <strong className="text-sm sm:text-base font-black text-brand-navy-950">
+                                {formattedRate || (isAr ? 'تسعير مخصص' : 'Custom Quote')}
+                              </strong>
                             </div>
                           </div>
-
-                          <div className="text-end shrink-0">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                              {isAr ? 'الشحن البحري يبدأ من:' : 'Freight Tariff:'}
-                            </span>
-                            <strong className="text-sm sm:text-base font-black text-brand-navy-950">
-                              ${method.base_amount.toLocaleString()} {method.currency}
-                            </strong>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2 text-xs">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-bold">
+                          {isAr ? 'لا تتوفر أسعار شحن نشطة لهذا المسار' : 'No Active Freight Rates for this Route'}
+                        </h4>
+                        <p className="mt-1 text-amber-800 leading-relaxed">
+                          {isAr
+                            ? 'لا تتوفر تعرفة شحن نشطة حالياً بين المينائين المحددين. يمكنك تغيير الميناء أو طلب تسعير شحن مخصص.'
+                            : 'No active shipping freight rates are currently configured for this route. You can choose another port or request a custom quote.'}
+                        </p>
+                      </div>
+                    </div>
+                    {whatsappInquiryLink && (
+                      <div className="pt-1">
+                        <a href={whatsappInquiryLink} target="_blank" rel="noopener noreferrer">
+                          <Button
+                            type="button"
+                            variant="whatsapp"
+                            size="sm"
+                            startIcon={<MessageCircle className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'طلب تسعير شحن خاص عبر واتساب' : 'Request Custom Freight Quote'}
+                          </Button>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2351,7 +2398,9 @@ export const CalculatorPage: React.FC = () => {
                     <div>
                       <span className="text-slate-500 block">{isAr ? 'القيمة المصرح بها للمركبة:' : 'Declared Value:'}</span>
                       <strong className="text-emerald-700 font-black">
-                        ${formData.buyingPrice?.toLocaleString()} USD
+                        {typeof formData.buyingPrice === 'number' && !isNaN(formData.buyingPrice)
+                          ? `$${formData.buyingPrice.toLocaleString()} USD`
+                          : '—'}
                       </strong>
                     </div>
                     <div>
