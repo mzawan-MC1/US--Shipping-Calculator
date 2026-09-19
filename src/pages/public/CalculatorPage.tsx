@@ -688,13 +688,6 @@ export const CalculatorPage: React.FC = () => {
     );
   }, [availability.eligible_shipping_methods, formData.shippingMethod]);
 
-  const selectedPurchaseLocation = useMemo(() => {
-    if (!formData.purchaseLocationId) return null;
-    return (
-      availability.eligible_pickup_locations.find((l) => l.id === formData.purchaseLocationId) ||
-      null
-    );
-  }, [availability.eligible_pickup_locations, formData.purchaseLocationId]);
 
   // Check active route existence
   const activeRoute = useMemo(() => {
