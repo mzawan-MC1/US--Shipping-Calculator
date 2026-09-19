@@ -44,9 +44,14 @@ interface SmtpRequestBody {
 
 // AES-256-GCM Encryption / Decryption Utilities
 async function getEncryptionKey(): Promise<CryptoKey> {
-  const rawSecret = Deno.env.get("SMTP_ENCRYPTION_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "fallback-secret-seed-key-32-chars-long";
+  const rawSecret = Deno.env.get("SMTP_ENCRYPTION_KEY");
+  if (!rawSecret || rawSecret.trim().length < 16) {
+    throw new Error(
+      "Missing or invalid SMTP_ENCRYPTION_KEY environment secret. You must configure a dedicated SMTP_ENCRYPTION_KEY in Edge Function secrets."
+    );
+  }
   const enc = new TextEncoder();
-  const hash = await crypto.subtle.digest("SHA-256", enc.encode(rawSecret));
+  const hash = await crypto.subtle.digest("SHA-256", enc.encode(rawSecret.trim()));
   return await crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
@@ -381,56 +386,6 @@ serve(async (req: Request) => {
         }),
       ]);
 
-      // Optional Sync to Supabase Auth via Management API if token provided
-      const mgmtToken = Deno.env.get("SUPABASE_MANAGEMENT_API_ACCESS_TOKEN");
-      const projectRef = Deno.env.get("SUPABASE_PROJECT_REF") || supabaseUrl.replace("https://", "").split(".")[0];
-      let authSyncStatus: "not_configured" | "synced" | "failed" = "not_configured";
-
-      if (mgmtToken && projectRef) {
-        try {
-          let secretPass = "";
-          if (sanitizedSmtp.has_password) {
-            const { data: secRow } = await adminClient
-              .from("smtp_secrets")
-              .select("encrypted_value")
-              .eq("key", "smtp_password")
-              .maybeSingle();
-            if (secRow?.encrypted_value) {
-              secretPass = await decryptSecret(secRow.encrypted_value);
-            }
-          }
-
-          const patchPayload =
-            sanitizedSmtp.provider === "custom_smtp"
-              ? {
-                  smtp_admin_email: sanitizedSmtp.from_email,
-                  smtp_host: sanitizedSmtp.smtp_host,
-                  smtp_port: sanitizedSmtp.smtp_port,
-                  smtp_user: sanitizedSmtp.smtp_username,
-                  smtp_pass: secretPass || undefined,
-                  smtp_sender_name: sanitizedSmtp.from_name,
-                }
-              : {
-                  smtp_host: "",
-                  smtp_user: "",
-                  smtp_pass: "",
-                };
-
-          const patchRes = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${mgmtToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(patchPayload),
-          });
-
-          authSyncStatus = patchRes.ok ? "synced" : "failed";
-        } catch {
-          authSyncStatus = "failed";
-        }
-      }
-
       // Record Audit Event without credentials
       await adminClient.from("audit_events").insert({
         entity_table: "system_settings",
@@ -445,7 +400,6 @@ serve(async (req: Request) => {
           smtp_port: sanitizedSmtp.smtp_port,
           ssl_mode: sanitizedSmtp.ssl_mode,
           has_password: sanitizedSmtp.has_password,
-          auth_sync_status: authSyncStatus,
         },
       });
 
@@ -454,7 +408,6 @@ serve(async (req: Request) => {
           success: true,
           message: "Email and SMTP settings saved successfully.",
           has_password: sanitizedSmtp.has_password,
-          auth_sync_status: authSyncStatus,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

@@ -466,15 +466,31 @@ export const AdminEmailSettingsPage: React.FC = () => {
       {/* ============================================================== */}
       {activeTab === 'smtp' && (
         <div className="space-y-6">
+          {/* Supabase Auth SMTP separation notice */}
+          <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900 flex items-start gap-3 shadow-sm">
+            <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-blue-950 text-sm">
+                Application Email Delivery Configuration
+              </p>
+              <p className="leading-relaxed text-blue-900">
+                This page configures application transactional email delivery (customer quote confirmations, PDF receipts, admin notification alerts, and live test dispatches).
+              </p>
+              <p className="font-bold text-blue-950 pt-0.5">
+                Supabase Auth SMTP for staff invitations and magic-link emails must be configured separately in Supabase Dashboard.
+              </p>
+            </div>
+          </div>
+
           <form onSubmit={handleSaveSmtp} className="space-y-6">
             {/* Section A: Email Provider */}
             <Card className="p-6">
               <h3 className="text-sm font-bold text-brand-navy-950 mb-1 flex items-center gap-2">
                 <Server className="w-4 h-4 text-brand-orange-500" />
-                Email Delivery Provider
+                Application Email Delivery Provider
               </h3>
               <p className="text-xs text-slate-500 mb-4">
-                Choose whether transactional emails route through the default Supabase service or your custom SMTP server.
+                Choose whether application emails route through the default Supabase service or your custom SMTP server.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -809,9 +825,21 @@ export const AdminEmailSettingsPage: React.FC = () => {
               <Bell className="w-4 h-4 text-brand-orange-500" />
               Automated Notification Rules
             </h3>
-            <p className="text-xs text-slate-500 mb-6">
+            <p className="text-xs text-slate-500 mb-4">
               Enable or disable outbound email triggers across the customer lifecycle and staff administration workflows.
             </p>
+
+            <div className="mb-6 p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-blue-950">
+                  Authentication vs. Application Email Routing
+                </p>
+                <p className="mt-0.5 text-blue-800 leading-relaxed">
+                  Supabase Auth SMTP for staff invitations and magic-link emails must be configured separately in Supabase Dashboard. Toggles below control application event triggering.
+                </p>
+              </div>
+            </div>
 
             <div className="space-y-4 divide-y divide-slate-100">
               {/* Toggle 1: Staff Invitations */}

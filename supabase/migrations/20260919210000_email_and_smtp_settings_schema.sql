@@ -4,8 +4,9 @@
 BEGIN;
 
 -- 1. Server-Only Encrypted SMTP Secrets Table
--- This table stores encrypted credentials and has RLS enabled with NO policies for authenticated/anon.
--- Only the service_role key (used inside protected Supabase Edge Functions) can read/write to this table.
+-- This table stores encrypted credentials and has Row Level Security ENABLED and FORCED.
+-- Zero policies exist for anon or authenticated, completely blocking direct client-side SELECT, INSERT, UPDATE, DELETE.
+-- Only the service_role key (used inside protected Supabase Edge Functions) can access this table.
 CREATE TABLE IF NOT EXISTS public.smtp_secrets (
     key text PRIMARY KEY,
     encrypted_value text NOT NULL,
@@ -13,8 +14,11 @@ CREATE TABLE IF NOT EXISTS public.smtp_secrets (
 );
 
 ALTER TABLE public.smtp_secrets ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.smtp_secrets FROM PUBLIC, anon, authenticated;
-GRANT ALL ON public.smtp_secrets TO service_role;
+ALTER TABLE public.smtp_secrets FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.smtp_secrets FROM PUBLIC;
+REVOKE ALL ON TABLE public.smtp_secrets FROM anon;
+REVOKE ALL ON TABLE public.smtp_secrets FROM authenticated;
+GRANT ALL ON TABLE public.smtp_secrets TO service_role;
 
 -- 2. Email Delivery Logs Table
 -- Append-only audit record for outbound email delivery attempts with masked recipients and sanitized status.
