@@ -92,7 +92,7 @@ const calculatorSchema = z
     shippingMethod: z.string().min(1, 'Shipping method is required'),
 
     // Step 4: Value, Contact & Calculation
-    buyingPrice: z.number().min(100, 'Please enter a valid vehicle purchase price ($100 minimum)'),
+    buyingPrice: z.coerce.number().min(0.01, 'Please enter a valid vehicle purchase price ($0.01 minimum)'),
     customerName: z.string().min(2, 'Name is required (minimum 2 characters)'),
     customerPhone: z.string().min(7, 'Valid phone / WhatsApp number is required'),
     customerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
@@ -2197,8 +2197,9 @@ export const CalculatorPage: React.FC = () => {
                     <Input
                       label={t.buyingPriceLabel}
                       type="number"
-                      min={100}
-                      step={100}
+                      min="0.01"
+                      step="0.01"
+                      placeholder={t.buyingPricePlaceholder || 'e.g. 5000'}
                       startIcon={<DollarSign className="w-4 h-4" />}
                       error={errors.buyingPrice?.message}
                       helperText={
@@ -2206,8 +2207,11 @@ export const CalculatorPage: React.FC = () => {
                           ? 'تُستخدم لحساب القيمة المقدرة للرسوم الجمركية (5%) وضريبة القيمة المضافة بدولة الإمارات.'
                           : 'Used to estimate destination Customs Duty (5%) and UAE Import VAT (5%).'
                       }
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      value={field.value !== undefined && field.value !== null ? field.value : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? '' : parseFloat(val));
+                      }}
                     />
                   )}
                 />
@@ -2399,7 +2403,10 @@ export const CalculatorPage: React.FC = () => {
                       <span className="text-slate-500 block">{isAr ? 'القيمة المصرح بها للمركبة:' : 'Declared Value:'}</span>
                       <strong className="text-emerald-700 font-black">
                         {typeof formData.buyingPrice === 'number' && !isNaN(formData.buyingPrice)
-                          ? `$${formData.buyingPrice.toLocaleString()} USD`
+                          ? `$${formData.buyingPrice.toLocaleString('en-US', {
+                              minimumFractionDigits: formData.buyingPrice % 1 !== 0 ? 2 : 0,
+                              maximumFractionDigits: 2,
+                            })} USD`
                           : '—'}
                       </strong>
                     </div>

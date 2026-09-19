@@ -174,7 +174,7 @@ export const ResultsPage: React.FC = () => {
    • UAE Import VAT (5%): $${(quote.vatMax ?? quote.vat)?.toLocaleString()}
    • Gov Charges Subtotal: ${uaeGovChargesFormatted}
 6. *Total Estimated Shipping & Clearance:* ${totalFormatted} (${totalAedFormatted})
-7. *Declared Vehicle Price:* $${quote.input.buyingPrice?.toLocaleString()} USD (Used for CIF & statutory duty/VAT only; never added to shipping total)
+7. *Declared Vehicle Price:* $${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD (Used for CIF & statutory duty/VAT only; never added to shipping total)
 
 ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final towing charge is subject to confirmation based on exact vehicle condition, location access, and carrier availability.\n\n' : ''}ℹ️ *Note:* ${quote.disclaimer || 'Quotation valid for 14 days.'}
 
@@ -435,7 +435,12 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                   Declared Vehicle Value:
                 </span>
                 <strong className="text-slate-800">
-                  ${quote.input.buyingPrice?.toLocaleString()} USD
+                  ${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice)
+                    ? quote.input.buyingPrice.toLocaleString('en-US', {
+                        minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0,
+                        maximumFractionDigits: 2,
+                      })
+                    : '0'} USD
                 </strong>
               </div>
 
@@ -643,7 +648,7 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
                 <Receipt className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-slate-800">
-                    7. Declared Vehicle Purchase Price: ${quote.input.buyingPrice?.toLocaleString()} USD
+                    7. Declared Vehicle Purchase Price: ${typeof quote.input.buyingPrice === 'number' && !isNaN(quote.input.buyingPrice) ? quote.input.buyingPrice.toLocaleString('en-US', { minimumFractionDigits: quote.input.buyingPrice % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 }) : '0'} USD
                   </span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {isAr
