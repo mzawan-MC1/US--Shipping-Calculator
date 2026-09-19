@@ -18,7 +18,7 @@ export interface CustomerProfile {
   id: string;
   full_name: string;
   phone: string;
-  email: string;
+  email?: string | null;
   country?: string | null;
   city?: string | null;
   created_at?: string;
@@ -307,7 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : customerProfile
             ? {
                 fullName: customerProfile.full_name,
-                email: customerProfile.email,
+                email: customerProfile.email || '',
                 phone: customerProfile.phone,
               }
             : null,

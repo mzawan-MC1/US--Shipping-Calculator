@@ -175,6 +175,7 @@ export const CalculatorPage: React.FC = () => {
     handleSubmit,
     watch,
     setValue,
+    setError,
     trigger,
     formState: { errors },
   } = useForm<FormData>({

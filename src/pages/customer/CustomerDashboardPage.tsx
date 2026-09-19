@@ -15,19 +15,14 @@ import { generateQuotationPdf, PdfQuotationData } from '../../services/pdfServic
 import {
   User,
   Mail,
-  Phone,
   FileText,
   Download,
-  ExternalLink,
   LogOut,
   Calendar,
-  Truck,
   Ship,
   Sparkles,
   CheckCircle2,
-  AlertCircle,
   Clock,
-  ArrowRight,
 } from 'lucide-react';
 
 interface CustomerQuote {
@@ -46,9 +41,9 @@ interface CustomerQuote {
 }
 
 export const CustomerDashboardPage: React.FC = () => {
-  const { user, customerProfile, signOut, isCustomer } = useAuth();
+  const { user, customerProfile, signOut } = useAuth();
   const { branding } = useWebsiteSettings();
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const navigate = useNavigate();
   const isAr = language === 'ar';
 
@@ -67,9 +62,9 @@ export const CustomerDashboardPage: React.FC = () => {
 
     try {
       // First try calling get_customer_portal_data RPC
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_customer_portal_data');
-      if (!rpcErr && rpcData?.success && Array.isArray(rpcData.quotations)) {
-        setQuotes(rpcData.quotations);
+      const { data: rpcData, error: rpcErr } = await (supabase.rpc as any)('get_customer_portal_data');
+      if (!rpcErr && (rpcData as any)?.success && Array.isArray((rpcData as any).quotations)) {
+        setQuotes((rpcData as any).quotations);
         setIsLoadingQuotes(false);
         return;
       }
@@ -166,7 +161,6 @@ export const CustomerDashboardPage: React.FC = () => {
       const customer = snap?.customer;
       const vehicle = snap?.vehicle;
       const route = snap?.route;
-      const towing = snap?.towing;
 
       const pdfData: PdfQuotationData = {
         language: isAr ? 'ar' : 'en',
@@ -282,7 +276,7 @@ export const CustomerDashboardPage: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-[75vh] bg-slate-50 py-12 px-4 sm:px-6">
-        <Container size="sm">
+        <Container className="max-w-md mx-auto">
           <Card className="p-6 sm:p-8 bg-white border border-slate-200 shadow-md">
             <div className="text-center mb-6">
               <div className="w-12 h-12 rounded-2xl bg-brand-navy-950 text-brand-orange-500 flex items-center justify-center mx-auto mb-3 shadow-md">
@@ -321,7 +315,7 @@ export const CustomerDashboardPage: React.FC = () => {
             ) : (
               <form onSubmit={handleSendMagicLink} className="space-y-4">
                 {authError && (
-                  <Alert variant="danger" title={isAr ? 'خطأ' : 'Error'}>
+                  <Alert variant="error" title={isAr ? 'خطأ' : 'Error'}>
                     {authError}
                   </Alert>
                 )}
@@ -371,7 +365,7 @@ export const CustomerDashboardPage: React.FC = () => {
 
   return (
     <div className="min-h-[85vh] bg-slate-50 py-8 px-4 sm:px-6">
-      <Container size="lg" className="space-y-6">
+      <Container className="max-w-6xl mx-auto space-y-6">
         {/* Top Header Card */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 bg-brand-navy-950 text-white rounded-2xl shadow-lg">
           <div>
