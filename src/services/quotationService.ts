@@ -61,10 +61,13 @@ export const quotationService = {
       const idempotencyKey =
         input.idempotencyKey || `quote-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+      const isAnonymous = Boolean(input.isAnonymous);
+
       const rpcPayload = {
-        customer_name: input.customerName || 'Online Inquirer',
-        phone: input.customerPhone,
-        email: input.customerEmail || null,
+        is_anonymous: isAnonymous,
+        customer_name: isAnonymous ? (input.customerName || 'Guest Inquirer') : (input.customerName || 'Online Inquirer'),
+        phone: isAnonymous ? (input.customerPhone || '0000000') : input.customerPhone,
+        email: isAnonymous ? null : (input.customerEmail || null),
         country: input.country || null,
         city: input.city || null,
         make: input.make || null,
@@ -258,6 +261,7 @@ export const quotationService = {
         rules: res.snapshot.rules || [],
         snapshot: res.snapshot as unknown as Record<string, unknown>,
         isIdempotentReplay: res.is_idempotent_replay || false,
+        isAnonymous: isAnonymous || Boolean((res.snapshot as { is_anonymous?: boolean })?.is_anonymous),
       };
 
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(liveQuote));

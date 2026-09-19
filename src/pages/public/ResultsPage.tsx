@@ -202,6 +202,8 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
         oceanFreightBaseUsd: quote.oceanFreightBase ?? quote.oceanFreight,
         towingFeeMin: quote.towingFeeMin || 0,
         towingFeeMax: quote.towingFeeMax || 0,
+        towingFeeBaseMin: quote.towingFeeBaseMin ?? quote.towingFeeMin,
+        towingFeeBaseMax: quote.towingFeeBaseMax ?? quote.towingFeeMax,
         isTowingRange: Boolean(quote.isTowingRange),
         includeInlandTowing: quote.includeInlandTowing !== false,
         clearanceFeeUsd: quote.customsClearance,
@@ -337,6 +339,28 @@ ${quote.isTowingRange && quote.includeInlandTowing ? '⚠️ *Advisory:* Final t
             </button>
           </div>
         </div>
+
+        {/* Account Created & Quote Saved Success Banner */}
+        {new URLSearchParams(window.location.search).get('saved') === 'account_created' && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-3 shadow-sm animate-fadeIn">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <strong className="text-sm font-bold text-emerald-950 block">
+                {isAr ? 'تم حفظ عرض السعر الرسمي وإرسال رابط تفعيل حسابك!' : 'Official Quotation Saved & Account Activation Link Sent!'}
+              </strong>
+              <p className="text-emerald-800 leading-relaxed">
+                {isAr
+                  ? 'لقد تم إرسال رابط تسجيل الدخول الآمن إلى بريدك الإلكتروني. يمكنك دائماً تسجيل الدخول والاطلاع على عروضك المحفوظة وتحميل مستندات PDF عبر بوابة العميل.'
+                  : 'We have saved your quotation and emailed a secure magic link to your inbox. You can access all your saved quotes, track updates, and download official PDF documents anytime in your Customer Portal.'}
+              </p>
+            </div>
+            <Link to="/customer/dashboard" className="shrink-0 hidden sm:block">
+              <Button variant="outline" size="sm" className="bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-bold">
+                {isAr ? 'بوابة العميل' : 'My Account'}
+              </Button>
+            </Link>
+          </div>
+        )}
 
         {/* Main Quote Result Card */}
         <div className="space-y-5">

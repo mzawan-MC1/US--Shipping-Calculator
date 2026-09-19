@@ -12,17 +12,28 @@ export interface StaffProfile {
   phone?: string | null;
   preferred_language?: string | null;
   notification_preferences?: { email?: boolean; browser?: boolean } | null;
+export interface CustomerProfile {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  country?: string | null;
+  city?: string | null;
+  created_at?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
   session: Session | null;
   staffProfile: StaffProfile | null;
+  customerProfile: CustomerProfile | null;
   profile: { fullName: string; email: string; avatarUrl?: string | null; phone?: string | null } | null;
   role: string | null;
   permissions: string[];
   isLoading: boolean;
   isAuthenticated: boolean;
+  isStaff: boolean;
+  isCustomer: boolean;
   signIn: (
     email: string,
     password: string
@@ -40,8 +51,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [staffProfile, setStaffProfile] = useState<StaffProfile | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchCustomerData = useCallback(async (email?: string | null) => {
+    if (!isSupabaseConfigured || !supabase || !email) return;
+    try {
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('*')
+        .ilike('email', email.trim())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cust) {
+        setCustomerProfile(cust);
+      }
+    } catch (e) {
+      console.warn('[AuthContext] Error fetching customer data:', e);
+    }
+  }, []);
 
   const fetchStaffData = useCallback(async (userId: string) => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -77,12 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!profile) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
+        // User is not a staff member. Do not kick them out — they may be a customer using the portal.
         setStaffProfile(null);
         setPermissions([]);
-        throw new Error('Access denied: Account is not authorized as staff.');
+        return;
       }
 
       if (!profile.is_active) {
@@ -137,11 +166,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(initSession);
       setUser(initSession?.user ?? null);
       if (initSession?.user) {
-        fetchStaffData(initSession.user.id)
-          .catch((err) => {
-            console.warn('[AuthContext] Session invalid:', err.message);
-          })
-          .finally(() => setIsLoading(false));
+        Promise.all([
+          fetchStaffData(initSession.user.id).catch((err) => {
+            console.warn('[AuthContext] Staff check:', err.message);
+          }),
+          fetchCustomerData(initSession.user.email),
+        ]).finally(() => setIsLoading(false));
       } else {
         setIsLoading(false);
       }
@@ -154,12 +184,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
         try {
-          await fetchStaffData(newSession.user.id);
+          await Promise.all([
+            fetchStaffData(newSession.user.id).catch(() => {}),
+            fetchCustomerData(newSession.user.email),
+          ]);
         } catch (err: unknown) {
-          console.warn('[AuthContext] Auth state change invalid:', err);
+          console.warn('[AuthContext] Auth state change notice:', err);
         }
       } else {
         setStaffProfile(null);
+        setCustomerProfile(null);
         setPermissions([]);
       }
       setIsLoading(false);
@@ -168,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe();
     };
-  }, [fetchStaffData]);
+  }, [fetchStaffData, fetchCustomerData]);
 
   const signIn = async (
     email: string,
@@ -220,6 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isSupabaseConfigured || !supabase) {
       setUser(null);
       setStaffProfile(null);
+      setCustomerProfile(null);
       setPermissions([]);
       setIsLoading(false);
       return;
@@ -229,6 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setSession(null);
     setStaffProfile(null);
+    setCustomerProfile(null);
     setPermissions([]);
     setIsLoading(false);
   };
@@ -258,6 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         session,
         staffProfile,
+        customerProfile,
         profile: staffProfile
           ? {
               fullName: staffProfile.full_name,
@@ -265,11 +302,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatarUrl: staffProfile.avatar_url,
               phone: staffProfile.phone,
             }
-          : null,
+          : customerProfile
+            ? {
+                fullName: customerProfile.full_name,
+                email: customerProfile.email,
+                phone: customerProfile.phone,
+              }
+            : null,
         role: staffProfile?.role || null,
         permissions,
         isLoading,
         isAuthenticated: Boolean(user && staffProfile && staffProfile.is_active),
+        isStaff: Boolean(user && staffProfile && staffProfile.is_active),
+        isCustomer: Boolean(user && !staffProfile),
         signIn,
         signOut,
         updateProfile,

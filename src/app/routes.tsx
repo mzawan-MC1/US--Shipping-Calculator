@@ -19,6 +19,9 @@ const ResultsPage = lazy(() =>
 const ContactPage = lazy(() =>
   import('../pages/public/ContactPage').then((m) => ({ default: m.ContactPage }))
 );
+const CustomerDashboardPage = lazy(() =>
+  import('../pages/customer/CustomerDashboardPage').then((m) => ({ default: m.CustomerDashboardPage }))
+);
 const DesignSystemPage = lazy(() =>
   import('../pages/public/DesignSystemPage').then((m) => ({ default: m.DesignSystemPage }))
 );
@@ -120,6 +123,15 @@ export const AppRoutes: React.FC = () => {
             </PublicLayout>
           }
         />
+        <Route
+          path="/customer/dashboard"
+          element={
+            <PublicLayout>
+              <CustomerDashboardPage />
+            </PublicLayout>
+          }
+        />
+        <Route path="/dashboard" element={<Navigate to="/customer/dashboard" replace />} />
 
         {/* Design System (Strictly Dev-Only: Redirects to / in Production) */}
         <Route

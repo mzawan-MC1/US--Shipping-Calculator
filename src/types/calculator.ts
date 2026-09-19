@@ -53,6 +53,7 @@ export interface CalculatorFormData {
   listingUrl?: string;
   notes?: string;
   idempotencyKey?: string;
+  isAnonymous?: boolean;
 }
 
 export interface QuotationLineItem {
@@ -165,6 +166,7 @@ export interface QuotationBreakdown {
   rules?: QuotationRuleItem[];
   snapshot?: Record<string, unknown>;
   isIdempotentReplay?: boolean;
+  isAnonymous?: boolean;
 }
 
 export interface EligibleState {

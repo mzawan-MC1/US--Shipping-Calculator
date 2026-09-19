@@ -19,6 +19,7 @@ export const PublicHeader: React.FC = () => {
   const navLinks = [
     { label: t.navHome, path: '/' },
     { label: t.navCalculator, path: '/calculator' },
+    { label: isAr ? 'حسابي' : 'My Account', path: '/customer/dashboard' },
     { label: t.navContact, path: '/contact' },
     ...(isStaff ? [{ label: t.navAdmin, path: '/admin' }] : []),
   ];

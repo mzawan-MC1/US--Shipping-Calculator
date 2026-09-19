@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/Input';
 import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
 import { quotationService } from '../../services/quotationService';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { vinService } from '../../services/vinService';
 import {
   referenceDataService,
@@ -93,8 +94,8 @@ const calculatorSchema = z
 
     // Step 4: Value, Contact & Calculation
     buyingPrice: z.coerce.number().min(0.01, 'Please enter a valid vehicle purchase price ($0.01 minimum)'),
-    customerName: z.string().min(2, 'Name is required (minimum 2 characters)'),
-    customerPhone: z.string().min(7, 'Valid phone / WhatsApp number is required'),
+    customerName: z.string().optional(),
+    customerPhone: z.string().optional(),
     customerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
     notes: z.string().optional(),
   })
@@ -205,6 +206,7 @@ export const CalculatorPage: React.FC = () => {
   });
 
   const formData = watch();
+  const [calculationMode, setCalculationMode] = useState<'estimate' | 'save_quote'>('estimate');
 
   // VIN Decoding State
   const [isDecodingVin, setIsDecodingVin] = useState(false);
@@ -961,7 +963,42 @@ export const CalculatorPage: React.FC = () => {
     setSubmissionError(null);
     setDependencyNotice(null);
 
+    // If saving quote and creating account, validate customer fields
+    if (calculationMode === 'save_quote') {
+      if (!data.customerName || data.customerName.trim().length < 2) {
+        setError('customerName', {
+          type: 'manual',
+          message: isAr
+            ? 'الاسم الكامل مطلوب لحفظ عرض السعر وإنشاء الحساب (حرفان كحد أدنى).'
+            : 'Full name is required to save quotation and create your account.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      if (!data.customerPhone || data.customerPhone.trim().length < 7) {
+        setError('customerPhone', {
+          type: 'manual',
+          message: isAr
+            ? 'رقم الهاتف / واتساب مطلوب (7 أرقام كحد أدنى).'
+            : 'Valid phone / WhatsApp number is required (minimum 7 digits).',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      if (!data.customerEmail || !data.customerEmail.includes('@')) {
+        setError('customerEmail', {
+          type: 'manual',
+          message: isAr
+            ? 'البريد الإلكتروني مطلوب لإنشاء الحساب وإرسال رابط تسجيل الدخول الآمن.'
+            : 'Email address is required to create your account and send the secure login link.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     try {
+      const isAnon = calculationMode === 'estimate';
       const idempotencyKey = `quote-client-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const calcData: CalculatorFormData = {
         vehicleType: data.vehicleType,
@@ -981,15 +1018,35 @@ export const CalculatorPage: React.FC = () => {
         includeInlandTowing: data.includeInlandTowing,
         towFromLocation: data.includeInlandTowing ? data.towFromLocation : undefined,
         purchaseLocationId: data.includeInlandTowing ? data.purchaseLocationId : undefined,
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        customerEmail: data.customerEmail,
-        notes: data.notes,
+        customerName: isAnon ? 'Guest Inquirer' : (data.customerName || 'Customer'),
+        customerPhone: isAnon ? '0000000' : (data.customerPhone || '0000000'),
+        customerEmail: isAnon ? undefined : (data.customerEmail || undefined),
+        notes: isAnon ? undefined : data.notes,
         idempotencyKey,
+        isAnonymous: isAnon,
       };
 
       await quotationService.calculateQuote(calcData);
-      navigate('/results');
+
+      // If saving quote and creating account, send Supabase Auth magic link
+      if (!isAnon && data.customerEmail && isSupabaseConfigured && supabase) {
+        try {
+          await supabase.auth.signInWithOtp({
+            email: data.customerEmail.trim(),
+            options: {
+              emailRedirectTo: `${window.location.origin}/customer/dashboard`,
+              data: {
+                full_name: data.customerName?.trim(),
+                phone: data.customerPhone?.trim(),
+              },
+            },
+          });
+        } catch (authErr) {
+          console.warn('[CalculatorPage] Magic link notification:', authErr);
+        }
+      }
+
+      navigate(isAnon ? '/results' : '/results?saved=account_created');
     } catch (err: unknown) {
       console.error('[CalculatorPage] Submission error:', err);
       const errMsg = err instanceof Error ? err.message : '';
@@ -2217,75 +2274,199 @@ export const CalculatorPage: React.FC = () => {
                 />
               </div>
 
-              {/* Customer Contact Details */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                  {isAr ? 'بيانات التواصل لإرسال عرض السعر' : 'Customer Contact Details'}
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Controller
-                    control={control}
-                    name="customerName"
-                    render={({ field }) => (
-                      <Input
-                        label={t.customerNameLabel}
-                        placeholder={isAr ? 'مثال: محمد الهاشمي' : 'e.g. Mohammed Al Hashimi'}
-                        startIcon={<User className="w-4 h-4" />}
-                        error={errors.customerName?.message}
-                        {...field}
-                      />
-                    )}
-                  />
-
-                  <Controller
-                    control={control}
-                    name="customerPhone"
-                    render={({ field }) => (
-                      <Input
-                        label={t.customerPhoneLabel}
-                        placeholder="+971 50 123 4567"
-                        startIcon={<Phone className="w-4 h-4" />}
-                        error={errors.customerPhone?.message}
-                        helperText={
-                          isAr
-                            ? 'سنقوم بإرسال نسخة عرض السعر فوراً عبر واتساب.'
-                            : 'We will send your quote breakdown directly to WhatsApp.'
-                        }
-                        {...field}
-                      />
-                    )}
-                  />
+              {/* Two Clear Paths: Anonymous Estimate vs Saved Quotation/Account */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    {isAr ? 'اختر طريقة المتابعة:' : 'Select Calculation Mode:'}
+                  </span>
+                  <Badge variant={calculationMode === 'estimate' ? 'info' : 'warning'} size="sm">
+                    {calculationMode === 'estimate'
+                      ? (isAr ? 'فحص سريع بدون حساب' : 'Instant • No Account')
+                      : (isAr ? 'حفظ عرض السعر + تفعيل الحساب' : 'Official Quote + Dashboard')}
+                  </Badge>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                  <Controller
-                    control={control}
-                    name="customerEmail"
-                    render={({ field }) => (
-                      <Input
-                        label={t.customerEmailLabel}
-                        type="email"
-                        placeholder="name@example.com"
-                        startIcon={<Mail className="w-4 h-4" />}
-                        error={errors.customerEmail?.message}
-                        {...field}
-                      />
-                    )}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Path A: Check Estimated Price */}
+                  <button
+                    type="button"
+                    onClick={() => setCalculationMode('estimate')}
+                    className={`p-4 rounded-2xl border text-left transition-all relative ${
+                      calculationMode === 'estimate'
+                        ? 'border-brand-orange-500 bg-brand-orange-50/40 ring-2 ring-brand-orange-400/20 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            calculationMode === 'estimate'
+                              ? 'bg-brand-orange-500 text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <strong className="text-sm font-bold text-slate-900 block">
+                            {isAr ? 'فحص السعر التقديري' : 'Check Estimated Price'}
+                          </strong>
+                          <span className="text-[11px] font-semibold text-emerald-600 block">
+                            {isAr ? 'فوري • بدون بيانات تواصل' : 'Instant • Anonymous'}
+                          </span>
+                        </div>
+                      </div>
+                      {calculationMode === 'estimate' && (
+                        <div className="w-5 h-5 rounded-full bg-brand-orange-500 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                      {isAr
+                        ? 'احسب واعرض تفاصيل التكاليف والجمارك فوراً دون إدخال بياناتك أو إنشاء حساب.'
+                        : 'Calculate and view complete shipping, towing & customs breakdown instantly. No contact info or account created.'}
+                    </p>
+                  </button>
 
-                  <Controller
-                    control={control}
-                    name="notes"
-                    render={({ field }) => (
-                      <Input
-                        label={isAr ? 'ملاحظات إضافية (اختياري)' : 'Additional Notes (Optional)'}
-                        placeholder={isAr ? 'أي متطلبات خاصة...' : 'Any special instructions...'}
-                        {...field}
-                      />
-                    )}
-                  />
+                  {/* Path B: Save Quote & Create My Account */}
+                  <button
+                    type="button"
+                    onClick={() => setCalculationMode('save_quote')}
+                    className={`p-4 rounded-2xl border text-left transition-all relative ${
+                      calculationMode === 'save_quote'
+                        ? 'border-brand-orange-500 bg-brand-orange-50/40 ring-2 ring-brand-orange-400/20 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            calculationMode === 'save_quote'
+                              ? 'bg-brand-navy-950 text-brand-orange-500 shadow-sm'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <strong className="text-sm font-bold text-slate-900 block">
+                            {isAr ? 'حفظ العرض وإنشاء الحساب' : 'Save Quote & Create My Account'}
+                          </strong>
+                          <span className="text-[11px] font-semibold text-brand-orange-600 block">
+                            {isAr ? 'عرض رسمي • وصول للبوابة' : 'Official Quote • Portal Access'}
+                          </span>
+                        </div>
+                      </div>
+                      {calculationMode === 'save_quote' && (
+                        <div className="w-5 h-5 rounded-full bg-brand-orange-500 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                      {isAr
+                        ? 'حفظ عرض السعر واستلام رابط تسجيل دخول آمن عبر البريد للوصول إلى لوحة تحكم عروضك ومستندات PDF.'
+                        : 'Save your official quote and receive an email link to access your customer dashboard & PDF documents.'}
+                    </p>
+                  </button>
                 </div>
               </div>
+
+              {/* Conditional Customer Contact Details (Shown only for Path B: Save Quote) */}
+              {calculationMode === 'save_quote' ? (
+                <div className="p-4 sm:p-5 rounded-2xl border border-brand-orange-200 bg-white space-y-4 shadow-sm animate-fadeIn">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                      <User className="w-4 h-4 text-brand-orange-500" />
+                      {isAr ? 'بيانات العميل لحفظ عرض السعر وتفعيل الحساب' : 'Customer Profile & Account Details'}
+                    </h3>
+                    <span className="text-[11px] font-semibold text-brand-orange-600">
+                      {isAr ? 'مطلوب لحفظ العرض' : 'Required for official quote'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Controller
+                      control={control}
+                      name="customerName"
+                      render={({ field }) => (
+                        <Input
+                          label={`${t.customerNameLabel} *`}
+                          placeholder={isAr ? 'مثال: محمد الهاشمي' : 'e.g. Mohammed Al Hashimi'}
+                          startIcon={<User className="w-4 h-4" />}
+                          error={errors.customerName?.message}
+                          {...field}
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      control={control}
+                      name="customerPhone"
+                      render={({ field }) => (
+                        <Input
+                          label={`${t.customerPhoneLabel} *`}
+                          placeholder="+971 50 123 4567"
+                          startIcon={<Phone className="w-4 h-4" />}
+                          error={errors.customerPhone?.message}
+                          helperText={
+                            isAr
+                              ? 'سنقوم بإرسال نسخة عرض السعر فوراً عبر واتساب.'
+                              : 'We will send your quote breakdown directly to WhatsApp.'
+                          }
+                          {...field}
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <Controller
+                      control={control}
+                      name="customerEmail"
+                      render={({ field }) => (
+                        <Input
+                          label={`${t.customerEmailLabel} *`}
+                          type="email"
+                          placeholder="name@example.com"
+                          startIcon={<Mail className="w-4 h-4" />}
+                          error={errors.customerEmail?.message}
+                          helperText={
+                            isAr
+                              ? 'يُستخدم كهوية فريدة لحسابك لإرسال رابط تسجيل الدخول الآمن للبوابة.'
+                              : 'Used as your unique customer ID to email your portal sign-in link.'
+                          }
+                          {...field}
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      control={control}
+                      name="notes"
+                      render={({ field }) => (
+                        <Input
+                          label={isAr ? 'ملاحظات إضافية (اختياري)' : 'Additional Notes (Optional)'}
+                          placeholder={isAr ? 'أي متطلبات خاصة...' : 'Any special instructions...'}
+                          {...field}
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-100/90 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
+                  <Info className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>
+                    {isAr
+                      ? 'وضع الفحص التقديري السريع: لا يلزم إدخال أي بيانات شخصية، ولن يتم إنشاء حساب أو تخزين طلب.'
+                      : 'Anonymous Estimate Mode: No contact details or account created. Click below to view the immediate cost breakdown.'}
+                  </span>
+                </div>
+              )}
 
               {/* Authoritative 4-Section Review Card */}
               <Card className="p-5 sm:p-6 divide-y divide-slate-100 bg-white border border-slate-200">
@@ -2411,9 +2592,11 @@ export const CalculatorPage: React.FC = () => {
                       </strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">{isAr ? 'مقدم الطلب:' : 'Contact:'}</span>
+                      <span className="text-slate-500 block">{isAr ? 'الوضع المختار:' : 'Mode / Contact:'}</span>
                       <strong>
-                        {formData.customerName || 'Inquirer'} ({formData.customerPhone || 'Phone'})
+                        {calculationMode === 'estimate'
+                          ? (isAr ? 'فحص تقديري فوري (مجهول)' : 'Anonymous Estimate (No account)')
+                          : `${formData.customerName || 'Customer'} (${formData.customerPhone || 'Phone'})`}
                       </strong>
                     </div>
                   </div>
@@ -2467,7 +2650,9 @@ export const CalculatorPage: React.FC = () => {
                   direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
-                {t.btnCalculateShipping}
+                {calculationMode === 'estimate'
+                  ? (isAr ? 'حساب السعر التقديري' : 'Check Estimated Price')
+                  : (isAr ? 'حفظ عرض السعر وإنشاء الحساب' : 'Save Quote & Create My Account')}
               </Button>
             )}
           </div>
@@ -2517,7 +2702,9 @@ export const CalculatorPage: React.FC = () => {
                   direction === 'rtl' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />
                 }
               >
-                {t.btnCalculateShipping}
+                {calculationMode === 'estimate'
+                  ? (isAr ? 'حساب السعر التقديري' : 'Check Estimated Price')
+                  : (isAr ? 'حفظ عرض السعر وإنشاء الحساب' : 'Save Quote & Create My Account')}
               </Button>
             )}
           </div>
