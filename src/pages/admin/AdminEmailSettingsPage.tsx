@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Eye,
   Key,
+  Info,
 } from 'lucide-react';
 
 export const AdminEmailSettingsPage: React.FC = () => {
