@@ -82,7 +82,7 @@ function maskEmail(email: string): string {
   return `${local.slice(0, 2)}***${local.slice(-1)}@${domain}`;
 }
 
-// Basic SMTP Sender using standard Deno TCP Sockets
+// SMTP Sender with STARTTLS support for Deno Edge Functions
 async function sendRawSmtpEmail(config: {
   host: string;
   port: number;
@@ -96,81 +96,150 @@ async function sendRawSmtpEmail(config: {
   htmlBody: string;
 }): Promise<void> {
   const isDirectTls = config.sslMode === "ssl" || config.port === 465;
-  const timeoutMs = 15000;
+  const useStartTls = config.sslMode === "tls" && !isDirectTls;
+  const timeoutMs = 20000;
 
-  const conn = isDirectTls
-    ? await Deno.connectTls({ hostname: config.host, port: config.port })
-    : await Deno.connect({ hostname: config.host, port: config.port });
+  console.log(`[smtp] Connecting to ${config.host}:${config.port} mode=${config.sslMode} directTls=${isDirectTls} startTls=${useStartTls}`);
 
-  const reader = conn.readable.getReader();
-  const writer = conn.writable.getWriter();
-  const enc = new TextEncoder();
-  const dec = new TextDecoder();
+  // Helper: build a reader/writer pair from a connection
+  function makeIO(c: Deno.Conn) {
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    const r = c.readable.getReader();
+    const w = c.writable.getWriter();
 
-  async function readResponse(): Promise<string> {
-    const readPromise = (async () => {
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += dec.decode(value);
-        if (buffer.endsWith("\r\n")) break;
+    async function readResponse(): Promise<string> {
+      const readPromise = (async () => {
+        let buffer = "";
+        while (true) {
+          const { value, done } = await r.read();
+          if (done) break;
+          buffer += dec.decode(value);
+          // A complete SMTP response: last non-empty line has code + space (not dash)
+          const lines = buffer.split("\r\n");
+          for (let i = lines.length - 1; i >= 0; i--) {
+            if (lines[i].length >= 4 && lines[i][3] === " ") return buffer;
+            if (lines[i].length >= 4 && lines[i][3] === "-") break;
+          }
+          if (lines.length >= 2 && lines[lines.length - 1] === "" && lines[lines.length - 2].length >= 4 && lines[lines.length - 2][3] === " ") {
+            return buffer;
+          }
+        }
+        return buffer;
+      })();
+
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("SMTP socket read timeout")), timeoutMs)
+      );
+
+      return await Promise.race([readPromise, timeoutPromise]);
+    }
+
+    async function sendCommand(cmd: string): Promise<string> {
+      // Never log credentials
+      const safeCmd = cmd.startsWith("AUTH") ? "AUTH LOGIN" : (cmd.length > 60 ? cmd.substring(0, 60) + "..." : cmd);
+      if (!cmd.startsWith(btoa("").substring(0, 1))) {
+        console.log(`[smtp] >>> ${safeCmd}`);
       }
-      return buffer;
-    })();
+      await w.write(enc.encode(cmd + "\r\n"));
+      const resp = await readResponse();
+      console.log(`[smtp] <<< ${resp.substring(0, 120).trim()}`);
+      return resp;
+    }
 
-    const timeoutPromise = new Promise<string>((_, reject) =>
-      setTimeout(() => reject(new Error("SMTP socket read timeout")), timeoutMs)
-    );
-
-    return await Promise.race([readPromise, timeoutPromise]);
+    return { reader: r, writer: w, readResponse, sendCommand };
   }
 
-  async function sendCommand(cmd: string): Promise<string> {
-    await writer.write(enc.encode(cmd + "\r\n"));
-    return await readResponse();
+  let conn: Deno.Conn;
+  try {
+    conn = isDirectTls
+      ? await Deno.connectTls({ hostname: config.host, port: config.port })
+      : await Deno.connect({ hostname: config.host, port: config.port });
+  } catch (connErr) {
+    const msg = connErr instanceof Error ? connErr.message : String(connErr);
+    console.error(`[smtp] Connection failed: ${msg}`);
+    throw new Error(`SMTP connection to ${config.host}:${config.port} failed: ${msg}`);
   }
+
+  let io = makeIO(conn);
 
   try {
-    const greeting = await readResponse();
+    // Read greeting
+    const greeting = await io.readResponse();
+    console.log(`[smtp] Greeting: ${greeting.substring(0, 100).trim()}`);
     if (!greeting.startsWith("220")) {
       throw new Error(`SMTP Greeting failed: ${greeting.trim()}`);
     }
 
-    const ehloRes = await sendCommand(`EHLO shipping-calculator.app`);
+    // Initial EHLO
+    const ehloRes = await io.sendCommand("EHLO shipping-calculator.app");
     if (!ehloRes.startsWith("250")) {
       throw new Error(`SMTP EHLO failed: ${ehloRes.trim()}`);
     }
 
+    // STARTTLS upgrade (required for port 587 with Gmail, etc.)
+    if (useStartTls) {
+      console.log("[smtp] Initiating STARTTLS upgrade...");
+      const starttlsRes = await io.sendCommand("STARTTLS");
+      if (!starttlsRes.startsWith("220")) {
+        throw new Error(`SMTP STARTTLS rejected: ${starttlsRes.trim()}`);
+      }
+
+      // Release locks on the plaintext reader/writer before TLS upgrade
+      io.reader.releaseLock();
+      io.writer.releaseLock();
+
+      // Upgrade to TLS
+      try {
+        conn = await Deno.startTls(conn as Deno.TcpConn, { hostname: config.host });
+      } catch (tlsErr) {
+        const msg = tlsErr instanceof Error ? tlsErr.message : String(tlsErr);
+        console.error(`[smtp] TLS upgrade failed: ${msg}`);
+        throw new Error(`SMTP STARTTLS handshake with ${config.host} failed: ${msg}`);
+      }
+      console.log("[smtp] TLS upgrade successful");
+
+      // Rebuild IO on the new TLS connection
+      io = makeIO(conn);
+
+      // Re-EHLO after TLS upgrade (required by RFC 3207)
+      const ehlo2 = await io.sendCommand("EHLO shipping-calculator.app");
+      if (!ehlo2.startsWith("250")) {
+        throw new Error(`SMTP EHLO after STARTTLS failed: ${ehlo2.trim()}`);
+      }
+    }
+
     // Authenticate if credentials supplied
     if (config.username && config.password) {
-      const authRes = await sendCommand("AUTH LOGIN");
+      console.log("[smtp] Authenticating...");
+      const authRes = await io.sendCommand("AUTH LOGIN");
       if (!authRes.startsWith("334")) {
         throw new Error(`SMTP AUTH LOGIN rejected: ${authRes.trim()}`);
       }
 
-      const userRes = await sendCommand(btoa(config.username));
+      const userRes = await io.sendCommand(btoa(config.username));
       if (!userRes.startsWith("334")) {
         throw new Error(`SMTP Username rejected: ${userRes.trim()}`);
       }
 
-      const passRes = await sendCommand(btoa(config.password));
+      const passRes = await io.sendCommand(btoa(config.password));
       if (!passRes.startsWith("235")) {
         throw new Error(`SMTP Authentication failed. Check your username and password.`);
       }
+      console.log("[smtp] Authentication successful");
     }
 
-    const mailFromRes = await sendCommand(`MAIL FROM:<${config.from}>`);
+    const mailFromRes = await io.sendCommand(`MAIL FROM:<${config.from}>`);
     if (!mailFromRes.startsWith("250")) {
       throw new Error(`MAIL FROM failed: ${mailFromRes.trim()}`);
     }
 
-    const rcptRes = await sendCommand(`RCPT TO:<${config.to}>`);
+    const rcptRes = await io.sendCommand(`RCPT TO:<${config.to}>`);
     if (!rcptRes.startsWith("250") && !rcptRes.startsWith("251")) {
       throw new Error(`RCPT TO failed for ${config.to}: ${rcptRes.trim()}`);
     }
 
-    const dataPrompt = await sendCommand("DATA");
+    const dataPrompt = await io.sendCommand("DATA");
     if (!dataPrompt.startsWith("354")) {
       throw new Error(`DATA command failed: ${dataPrompt.trim()}`);
     }
@@ -188,16 +257,17 @@ async function sendRawSmtpEmail(config: {
       `.`,
     ].join("\r\n");
 
-    const dataRes = await sendCommand(emailData);
+    const dataRes = await io.sendCommand(emailData);
     if (!dataRes.startsWith("250")) {
       throw new Error(`Message body rejected: ${dataRes.trim()}`);
     }
 
-    await sendCommand("QUIT");
+    await io.sendCommand("QUIT");
+    console.log("[smtp] Email sent successfully");
   } finally {
     try {
-      reader.releaseLock();
-      writer.releaseLock();
+      io.reader.releaseLock();
+      io.writer.releaseLock();
       conn.close();
     } catch {
       // ignore socket cleanup error
@@ -417,9 +487,11 @@ serve(async (req: Request) => {
     // ACTION: send-test-email
     // -------------------------------------------------------------------------
     if (action === "send-test-email") {
+      console.log(`[send-test-email] Action received. test_recipient present: ${Boolean(body.test_recipient)}, callerUser.email present: ${Boolean(callerUser.email)}`);
       const recipient = (body.test_recipient || callerUser.email || "").trim().toLowerCase();
       if (!recipient || !recipient.includes("@")) {
-        return new Response(JSON.stringify({ error: "A valid recipient email address is required for testing." }), {
+        console.log(`[send-test-email] Invalid recipient: ${recipient ? "missing @" : "empty"}`);
+        return new Response(JSON.stringify({ error: "A valid recipient email address is required for testing.", code: "INVALID_RECIPIENT" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -434,6 +506,8 @@ serve(async (req: Request) => {
       const conf = (smtpData?.value as Record<string, unknown>) || {};
       const provider = (conf.provider as string) || "supabase";
 
+      console.log(`[send-test-email] Provider: ${provider}, recipient: ${maskEmail(recipient)}`);
+
       let errorSummary: string | null = null;
       let deliveryStatus: "delivered" | "failed" = "delivered";
 
@@ -443,8 +517,10 @@ serve(async (req: Request) => {
         const sslMode = (conf.ssl_mode as "tls" | "ssl" | "none") || "tls";
         const username = String(conf.smtp_username || "");
 
+        console.log(`[send-test-email] SMTP config: host=${host}, port=${port}, ssl=${sslMode}, username present=${Boolean(username)}`);
+
         if (!host) {
-          return new Response(JSON.stringify({ error: "SMTP Host must be configured before sending a test email." }), {
+          return new Response(JSON.stringify({ error: "SMTP Host must be configured before sending a test email.", code: "MISSING_SMTP_HOST" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -457,12 +533,15 @@ serve(async (req: Request) => {
           .eq("key", "smtp_password")
           .maybeSingle();
 
+        console.log(`[send-test-email] SMTP password present: ${Boolean(secretRow?.encrypted_value)}`);
+
         if (secretRow?.encrypted_value) {
           try {
             password = await decryptSecret(secretRow.encrypted_value);
-          } catch {
+          } catch (decErr) {
+            console.error(`[send-test-email] Decryption failed: ${decErr instanceof Error ? decErr.message : "unknown"}`);
             return new Response(
-              JSON.stringify({ error: "Failed to decrypt saved SMTP password. Please re-enter the password." }),
+              JSON.stringify({ error: "Failed to decrypt saved SMTP password. Please re-enter the password.", code: "DECRYPT_FAILED" }),
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
@@ -501,6 +580,7 @@ serve(async (req: Request) => {
         } catch (err: unknown) {
           deliveryStatus = "failed";
           errorSummary = err instanceof Error ? err.message : "SMTP connection failed";
+          console.error(`[send-test-email] SMTP send failed: ${errorSummary}`);
         }
       } else {
         // Supabase Auth Provider Test Email
@@ -552,6 +632,7 @@ serve(async (req: Request) => {
           JSON.stringify({
             success: false,
             error: errorSummary || "Failed to deliver test email.",
+            code: "SMTP_SEND_FAILED",
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -676,7 +757,8 @@ serve(async (req: Request) => {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : "Internal Server Error";
-    return new Response(JSON.stringify({ error: errorMsg }), {
+    console.error(`[manage-smtp] Unhandled error: ${errorMsg}`);
+    return new Response(JSON.stringify({ error: errorMsg, code: "INTERNAL_ERROR" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

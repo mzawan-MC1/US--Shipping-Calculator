@@ -2998,8 +2998,10 @@ export const adminService = {
         test_recipient: recipientEmail,
       },
     });
-    if (error) throw new Error(error.message || 'Failed to dispatch test email.');
+    // Check data.error first: on non-2xx responses, supabase client wraps the HTTP error
+    // generically but still puts the response body (with the real server error) in data.
     if (data?.error) throw new Error(data.error);
+    if (error) throw new Error(error.message || 'Failed to dispatch test email.');
     return data;
   },
 
