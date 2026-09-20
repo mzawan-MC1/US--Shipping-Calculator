@@ -97,155 +97,182 @@ async function sendRawSmtpEmail(config: {
 }): Promise<void> {
   const isDirectTls = config.sslMode === "ssl" || config.port === 465;
   const useStartTls = config.sslMode === "tls" && !isDirectTls;
-  const timeoutMs = 20000;
+  const timeoutMs = 25000;
 
   console.log(`[smtp] Connecting to ${config.host}:${config.port} mode=${config.sslMode} directTls=${isDirectTls} startTls=${useStartTls}`);
 
-  // Helper: build a reader/writer pair from a connection
-  function makeIO(c: Deno.Conn) {
-    const enc = new TextEncoder();
-    const dec = new TextDecoder();
-    const r = c.readable.getReader();
-    const w = c.writable.getWriter();
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
 
-    async function readResponse(): Promise<string> {
-      const readPromise = (async () => {
-        let buffer = "";
-        while (true) {
-          const { value, done } = await r.read();
-          if (done) break;
-          buffer += dec.decode(value);
-          // A complete SMTP response: last non-empty line has code + space (not dash)
-          const lines = buffer.split("\r\n");
-          for (let i = lines.length - 1; i >= 0; i--) {
-            if (lines[i].length >= 4 && lines[i][3] === " ") return buffer;
-            if (lines[i].length >= 4 && lines[i][3] === "-") break;
-          }
-          if (lines.length >= 2 && lines[lines.length - 1] === "" && lines[lines.length - 2].length >= 4 && lines[lines.length - 2][3] === " ") {
-            return buffer;
-          }
+  // Read a full SMTP response (may span multiple lines like "250-SIZE\r\n250 OK\r\n")
+  async function readSmtpResponse(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    let buffer = "";
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now();
+      const { value, done } = await Promise.race([
+        reader.read(),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("SMTP socket read timeout")), remaining)),
+      ]);
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+
+      // SMTP multi-line: continuation lines have "NNN-", final line has "NNN " (space).
+      // We must keep reading until we see a final line ending with \r\n.
+      const lines = buffer.split("\r\n");
+      // Ignore the last element (empty string or partial after split)
+      for (let i = 0; i < lines.length - 1; i++) {
+        // A final-response line: 3 digits + space
+        if (/^\d{3} /.test(lines[i])) {
+          return buffer;
         }
-        return buffer;
-      })();
-
-      const timeoutPromise = new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error("SMTP socket read timeout")), timeoutMs)
-      );
-
-      return await Promise.race([readPromise, timeoutPromise]);
-    }
-
-    async function sendCommand(cmd: string): Promise<string> {
-      // Never log credentials
-      const safeCmd = cmd.startsWith("AUTH") ? "AUTH LOGIN" : (cmd.length > 60 ? cmd.substring(0, 60) + "..." : cmd);
-      if (!cmd.startsWith(btoa("").substring(0, 1))) {
-        console.log(`[smtp] >>> ${safeCmd}`);
       }
-      await w.write(enc.encode(cmd + "\r\n"));
-      const resp = await readResponse();
-      console.log(`[smtp] <<< ${resp.substring(0, 120).trim()}`);
-      return resp;
     }
-
-    return { reader: r, writer: w, readResponse, sendCommand };
+    if (buffer.length === 0) throw new Error("SMTP socket read timeout: no data received");
+    return buffer;
   }
 
+  // Extract the 3-digit reply code from the first line
+  function replyCode(resp: string): string {
+    return resp.substring(0, 3);
+  }
+
+  // Send a command and read the response. `label` is for logging, `secret` suppresses command echo.
+  async function sendCommand(
+    writer: WritableStreamDefaultWriter<Uint8Array>,
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    cmd: string,
+    label: string,
+    secret = false,
+  ): Promise<string> {
+    if (!secret) {
+      console.log(`[smtp] >>> ${label}: ${cmd.length > 80 ? cmd.substring(0, 80) + "..." : cmd}`);
+    } else {
+      console.log(`[smtp] >>> ${label}: [REDACTED]`);
+    }
+    await writer.write(enc.encode(cmd + "\r\n"));
+    const resp = await readSmtpResponse(reader);
+    const code = replyCode(resp);
+    const firstLine = resp.split("\r\n")[0] || resp.trim();
+    console.log(`[smtp] <<< ${label}: ${code} (${firstLine.substring(4, 60).trim() || "OK"})`);
+    return resp;
+  }
+
+  // Open connection
   let conn: Deno.Conn;
   try {
     conn = isDirectTls
       ? await Deno.connectTls({ hostname: config.host, port: config.port })
       : await Deno.connect({ hostname: config.host, port: config.port });
+    console.log("[smtp] TCP connection established");
   } catch (connErr) {
     const msg = connErr instanceof Error ? connErr.message : String(connErr);
     console.error(`[smtp] Connection failed: ${msg}`);
     throw new Error(`SMTP connection to ${config.host}:${config.port} failed: ${msg}`);
   }
 
-  let io = makeIO(conn);
+  let reader = conn.readable.getReader();
+  let writer = conn.writable.getWriter();
 
   try {
-    // Read greeting
-    const greeting = await io.readResponse();
-    console.log(`[smtp] Greeting: ${greeting.substring(0, 100).trim()}`);
-    if (!greeting.startsWith("220")) {
-      throw new Error(`SMTP Greeting failed: ${greeting.trim()}`);
+    // 1. Read server greeting
+    console.log("[smtp] Waiting for greeting...");
+    const greeting = await readSmtpResponse(reader);
+    const greetCode = replyCode(greeting);
+    console.log(`[smtp] Greeting: ${greetCode} ${greeting.split("\r\n")[0]?.substring(4, 80) || ""}`);
+    if (greetCode !== "220") {
+      throw new Error(`SMTP greeting failed (${greetCode}): ${greeting.split("\r\n")[0]}`);
     }
 
-    // Initial EHLO
-    const ehloRes = await io.sendCommand("EHLO shipping-calculator.app");
+    // 2. EHLO
+    const ehloRes = await sendCommand(writer, reader, "EHLO shipping-calculator.app", "EHLO");
     if (!ehloRes.startsWith("250")) {
-      throw new Error(`SMTP EHLO failed: ${ehloRes.trim()}`);
+      throw new Error(`SMTP EHLO failed (${replyCode(ehloRes)}): ${ehloRes.split("\r\n")[0]}`);
     }
 
-    // STARTTLS upgrade (required for port 587 with Gmail, etc.)
+    // 3. STARTTLS upgrade (required for port 587 + Gmail, etc.)
     if (useStartTls) {
-      console.log("[smtp] Initiating STARTTLS upgrade...");
-      const starttlsRes = await io.sendCommand("STARTTLS");
-      if (!starttlsRes.startsWith("220")) {
-        throw new Error(`SMTP STARTTLS rejected: ${starttlsRes.trim()}`);
+      const starttlsRes = await sendCommand(writer, reader, "STARTTLS", "STARTTLS");
+      const stCode = replyCode(starttlsRes);
+      if (stCode !== "220") {
+        throw new Error(`SMTP STARTTLS rejected (${stCode}): ${starttlsRes.split("\r\n")[0]}`);
       }
+      console.log("[smtp] STARTTLS accepted, upgrading to TLS...");
 
-      // Release locks on the plaintext reader/writer before TLS upgrade
-      io.reader.releaseLock();
-      io.writer.releaseLock();
+      // Release locks before TLS upgrade
+      reader.releaseLock();
+      writer.releaseLock();
 
-      // Upgrade to TLS
       try {
         conn = await Deno.startTls(conn as Deno.TcpConn, { hostname: config.host });
       } catch (tlsErr) {
         const msg = tlsErr instanceof Error ? tlsErr.message : String(tlsErr);
-        console.error(`[smtp] TLS upgrade failed: ${msg}`);
+        console.error(`[smtp] TLS handshake failed: ${msg}`);
         throw new Error(`SMTP STARTTLS handshake with ${config.host} failed: ${msg}`);
       }
       console.log("[smtp] TLS upgrade successful");
 
-      // Rebuild IO on the new TLS connection
-      io = makeIO(conn);
+      // Rebuild reader/writer on the new TLS connection
+      reader = conn.readable.getReader();
+      writer = conn.writable.getWriter();
 
-      // Re-EHLO after TLS upgrade (required by RFC 3207)
-      const ehlo2 = await io.sendCommand("EHLO shipping-calculator.app");
+      // Re-EHLO after TLS (RFC 3207)
+      const ehlo2 = await sendCommand(writer, reader, "EHLO shipping-calculator.app", "EHLO-post-TLS");
       if (!ehlo2.startsWith("250")) {
-        throw new Error(`SMTP EHLO after STARTTLS failed: ${ehlo2.trim()}`);
+        throw new Error(`SMTP EHLO after STARTTLS failed (${replyCode(ehlo2)}): ${ehlo2.split("\r\n")[0]}`);
       }
     }
 
-    // Authenticate if credentials supplied
+    // 4. AUTH LOGIN
     if (config.username && config.password) {
-      console.log("[smtp] Authenticating...");
-      const authRes = await io.sendCommand("AUTH LOGIN");
-      if (!authRes.startsWith("334")) {
-        throw new Error(`SMTP AUTH LOGIN rejected: ${authRes.trim()}`);
+      const authRes = await sendCommand(writer, reader, "AUTH LOGIN", "AUTH");
+      const authCode = replyCode(authRes);
+      if (authCode !== "334") {
+        throw new Error(`SMTP AUTH LOGIN rejected (${authCode}): ${authRes.split("\r\n")[0]}`);
       }
+      console.log("[smtp] AUTH LOGIN: server ready for credentials");
 
-      const userRes = await io.sendCommand(btoa(config.username));
-      if (!userRes.startsWith("334")) {
-        throw new Error(`SMTP Username rejected: ${userRes.trim()}`);
+      // Send base64-encoded username
+      const b64User = btoa(config.username);
+      const userRes = await sendCommand(writer, reader, b64User, "AUTH-username", true);
+      const userCode = replyCode(userRes);
+      if (userCode !== "334") {
+        throw new Error(`SMTP AUTH username rejected (${userCode}): ${userRes.split("\r\n")[0]}`);
       }
+      console.log("[smtp] AUTH LOGIN: username accepted, sending password...");
 
-      const passRes = await io.sendCommand(btoa(config.password));
-      if (!passRes.startsWith("235")) {
-        throw new Error(`SMTP Authentication failed. Check your username and password.`);
+      // Send base64-encoded password
+      const b64Pass = btoa(config.password);
+      const passRes = await sendCommand(writer, reader, b64Pass, "AUTH-password", true);
+      const passCode = replyCode(passRes);
+      if (passCode !== "235") {
+        throw new Error(`SMTP AUTH failed (${passCode}): ${passRes.split("\r\n")[0]}. Check username and App Password.`);
       }
-      console.log("[smtp] Authentication successful");
+      console.log("[smtp] AUTH LOGIN: authentication successful");
     }
 
-    const mailFromRes = await io.sendCommand(`MAIL FROM:<${config.from}>`);
+    // 5. MAIL FROM
+    const mailFromRes = await sendCommand(writer, reader, `MAIL FROM:<${config.from}>`, "MAIL-FROM");
     if (!mailFromRes.startsWith("250")) {
-      throw new Error(`MAIL FROM failed: ${mailFromRes.trim()}`);
+      throw new Error(`MAIL FROM failed (${replyCode(mailFromRes)}): ${mailFromRes.split("\r\n")[0]}`);
     }
 
-    const rcptRes = await io.sendCommand(`RCPT TO:<${config.to}>`);
-    if (!rcptRes.startsWith("250") && !rcptRes.startsWith("251")) {
-      throw new Error(`RCPT TO failed for ${config.to}: ${rcptRes.trim()}`);
+    // 6. RCPT TO
+    const rcptRes = await sendCommand(writer, reader, `RCPT TO:<${config.to}>`, "RCPT-TO");
+    const rcptCode = replyCode(rcptRes);
+    if (rcptCode !== "250" && rcptCode !== "251") {
+      throw new Error(`RCPT TO failed (${rcptCode}) for ${config.to}: ${rcptRes.split("\r\n")[0]}`);
     }
 
-    const dataPrompt = await io.sendCommand("DATA");
+    // 7. DATA
+    const dataPrompt = await sendCommand(writer, reader, "DATA", "DATA");
     if (!dataPrompt.startsWith("354")) {
-      throw new Error(`DATA command failed: ${dataPrompt.trim()}`);
+      throw new Error(`DATA command failed (${replyCode(dataPrompt)}): ${dataPrompt.split("\r\n")[0]}`);
     }
 
+    // 8. Send message body ending with \r\n.\r\n
     const senderHeader = config.fromName ? `"${config.fromName}" <${config.from}>` : config.from;
-    const emailData = [
+    const messageBody = [
       `From: ${senderHeader}`,
       `To: ${config.to}`,
       `Subject: ${config.subject}`,
@@ -254,23 +281,28 @@ async function sendRawSmtpEmail(config: {
       `Date: ${new Date().toUTCString()}`,
       ``,
       config.htmlBody,
-      `.`,
     ].join("\r\n");
 
-    const dataRes = await io.sendCommand(emailData);
-    if (!dataRes.startsWith("250")) {
-      throw new Error(`Message body rejected: ${dataRes.trim()}`);
+    // Write body + terminating dot on its own line
+    await writer.write(enc.encode(messageBody + "\r\n.\r\n"));
+    console.log("[smtp] >>> DATA-body: [message sent, waiting for acceptance]");
+    const dataRes = await readSmtpResponse(reader);
+    const dataCode = replyCode(dataRes);
+    console.log(`[smtp] <<< DATA-result: ${dataCode} (${dataRes.split("\r\n")[0]?.substring(4, 60) || ""})`);
+    if (dataCode !== "250") {
+      throw new Error(`Message body rejected (${dataCode}): ${dataRes.split("\r\n")[0]}`);
     }
 
-    await io.sendCommand("QUIT");
+    // 9. QUIT
+    await sendCommand(writer, reader, "QUIT", "QUIT");
     console.log("[smtp] Email sent successfully");
   } finally {
     try {
-      io.reader.releaseLock();
-      io.writer.releaseLock();
+      reader.releaseLock();
+      writer.releaseLock();
       conn.close();
     } catch {
-      // ignore socket cleanup error
+      // ignore socket cleanup errors
     }
   }
 }

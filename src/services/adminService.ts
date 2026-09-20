@@ -2998,10 +2998,22 @@ export const adminService = {
         test_recipient: recipientEmail,
       },
     });
-    // Check data.error first: on non-2xx responses, supabase client wraps the HTTP error
-    // generically but still puts the response body (with the real server error) in data.
+    if (error) {
+      // FunctionsHttpError: error.context is the raw Response with the server's JSON body.
+      // We must read it to extract the actual error message.
+      let serverMsg = '';
+      try {
+        const ctx = (error as Record<string, unknown>).context;
+        if (ctx && typeof ctx === 'object' && 'json' in ctx && typeof (ctx as Response).json === 'function') {
+          const body = await (ctx as Response).json();
+          serverMsg = body?.error || '';
+        }
+      } catch {
+        // context may already be consumed or not available
+      }
+      throw new Error(serverMsg || error.message || 'Failed to dispatch test email.');
+    }
     if (data?.error) throw new Error(data.error);
-    if (error) throw new Error(error.message || 'Failed to dispatch test email.');
     return data;
   },
 
