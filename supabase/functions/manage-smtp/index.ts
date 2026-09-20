@@ -225,30 +225,37 @@ async function sendRawSmtpEmail(config: {
 
     // 4. AUTH LOGIN
     if (config.username && config.password) {
+      console.log(`[smtp] AUTH LOGIN: username ${config.username.length} chars, password ${config.password.length} chars`);
+
       const authRes = await sendCommand(writer, reader, "AUTH LOGIN", "AUTH");
       const authCode = replyCode(authRes);
       if (authCode !== "334") {
         throw new Error(`SMTP AUTH LOGIN rejected (${authCode}): ${authRes.split("\r\n")[0]}`);
       }
-      console.log("[smtp] AUTH LOGIN: server ready for credentials");
+      console.log("[smtp] AUTH LOGIN: 334 received, server ready for username");
 
       // Send base64-encoded username
       const b64User = btoa(config.username);
+      console.log(`[smtp] AUTH LOGIN: sending username (${b64User.length} base64 chars)`);
       const userRes = await sendCommand(writer, reader, b64User, "AUTH-username", true);
       const userCode = replyCode(userRes);
       if (userCode !== "334") {
         throw new Error(`SMTP AUTH username rejected (${userCode}): ${userRes.split("\r\n")[0]}`);
       }
-      console.log("[smtp] AUTH LOGIN: username accepted, sending password...");
+      console.log("[smtp] AUTH LOGIN: 334 received, username accepted, sending password...");
 
       // Send base64-encoded password
       const b64Pass = btoa(config.password);
+      console.log(`[smtp] AUTH LOGIN: sending password (${b64Pass.length} base64 chars)`);
       const passRes = await sendCommand(writer, reader, b64Pass, "AUTH-password", true);
       const passCode = replyCode(passRes);
       if (passCode !== "235") {
+        // Log the full multi-line 535 response for diagnostics
+        const fullResp = passRes.replace(/\r\n/g, " | ").trim();
+        console.error(`[smtp] AUTH LOGIN: FAILED (${passCode}). Full server response: ${fullResp}`);
         throw new Error(`SMTP AUTH failed (${passCode}): ${passRes.split("\r\n")[0]}. Check username and App Password.`);
       }
-      console.log("[smtp] AUTH LOGIN: authentication successful");
+      console.log("[smtp] AUTH LOGIN: 235 authentication successful");
     }
 
     // 5. MAIL FROM
@@ -455,6 +462,13 @@ serve(async (req: Request) => {
           : s.new_password.trim();
         console.log(`[save-settings] Gmail mode: ${isGmail}, password length after normalization: ${cleanPassword.length}`);
         const encrypted = await encryptSecret(cleanPassword);
+        // Round-trip verification: confirm decrypt recovers original
+        const verifyDecrypt = await decryptSecret(encrypted);
+        const roundTripOk = verifyDecrypt === cleanPassword;
+        console.log(`[save-settings] Encrypt round-trip OK: ${roundTripOk}, decrypted length: ${verifyDecrypt.length}`);
+        if (!roundTripOk) {
+          console.error(`[save-settings] CRITICAL: encrypt/decrypt round-trip mismatch! Stored password will be corrupt.`);
+        }
         await adminClient.from("smtp_secrets").upsert({
           key: "smtp_password",
           encrypted_value: encrypted,
@@ -576,6 +590,7 @@ serve(async (req: Request) => {
         if (secretRow?.encrypted_value) {
           try {
             password = await decryptSecret(secretRow.encrypted_value);
+            console.log(`[send-test-email] Decrypted password length (raw): ${password.length}`);
           } catch (decErr) {
             console.error(`[send-test-email] Decryption failed: ${decErr instanceof Error ? decErr.message : "unknown"}`);
             return new Response(
@@ -590,7 +605,13 @@ serve(async (req: Request) => {
         if (isGmailHost && password) {
           password = password.replace(/\s+/g, "");
         }
-        console.log(`[send-test-email] Gmail mode: ${isGmailHost}, password length after normalization: ${password.length}`);
+
+        // Safe diagnostics: length, ASCII validity, no secrets
+        const isAscii = password.length > 0 && [...password].every(c => {
+          const code = c.charCodeAt(0);
+          return code >= 32 && code <= 126;
+        });
+        console.log(`[send-test-email] Gmail mode: ${isGmailHost}, password length after normalization: ${password.length}, all printable ASCII: ${isAscii}, username length: ${username.length}`);
 
         try {
           await sendRawSmtpEmail({
