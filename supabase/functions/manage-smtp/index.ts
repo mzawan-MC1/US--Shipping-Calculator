@@ -448,7 +448,13 @@ serve(async (req: Request) => {
         await adminClient.from("smtp_secrets").delete().eq("key", "smtp_password");
         sanitizedSmtp.has_password = false;
       } else if (s.new_password && s.new_password.trim().length > 0) {
-        const encrypted = await encryptSecret(s.new_password.trim());
+        const isGmail = sanitizedSmtp.smtp_host.toLowerCase().includes("gmail.com");
+        // Gmail App Passwords are displayed as "xxxx xxxx xxxx xxxx" — strip ALL whitespace.
+        const cleanPassword = isGmail
+          ? s.new_password.replace(/\s+/g, "")
+          : s.new_password.trim();
+        console.log(`[save-settings] Gmail mode: ${isGmail}, password length after normalization: ${cleanPassword.length}`);
+        const encrypted = await encryptSecret(cleanPassword);
         await adminClient.from("smtp_secrets").upsert({
           key: "smtp_password",
           encrypted_value: encrypted,
@@ -578,6 +584,13 @@ serve(async (req: Request) => {
             );
           }
         }
+
+        // Gmail App Passwords: strip ALL whitespace (Google displays them as "xxxx xxxx xxxx xxxx")
+        const isGmailHost = host.toLowerCase().includes("gmail.com");
+        if (isGmailHost && password) {
+          password = password.replace(/\s+/g, "");
+        }
+        console.log(`[send-test-email] Gmail mode: ${isGmailHost}, password length after normalization: ${password.length}`);
 
         try {
           await sendRawSmtpEmail({
